@@ -7,26 +7,45 @@ use std::rc::Rc;
 
 use murmur_core::data::GameData;
 use murmur_shell::{Shell, ShellInput};
-use ratzilla::event::{KeyCode, KeyEvent};
 use ratzilla::ratatui::Terminal;
 use ratzilla::{DomBackend, WebRenderer};
+use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 
-fn main() -> Result<(), Box<dyn Error>> {
+/// On wasm a `main` that returns `Err` exits silently, so failures are
+/// promoted to panics for console_error_panic_hook to report.
+fn main() {
     console_error_panic_hook::set_once();
+    if let Err(err) = run() {
+        panic!("murmur-web failed to start: {err}");
+    }
+}
 
+fn run() -> Result<(), Box<dyn Error>> {
     let data = GameData::embedded().expect("embedded game data must be valid");
     let seed = js_sys::Date::now() as u64;
     let shell = Rc::new(RefCell::new(Shell::new(data, seed)));
 
     let backend = DomBackend::new()?;
-    let mut terminal = Terminal::new(backend)?;
+    let terminal = Terminal::new(backend)?;
 
+    // Keyboard input attaches at the document level rather than through
+    // Ratzilla's grid-focused listener, so the game responds immediately
+    // without the player having to click the page first.
     let input_shell = Rc::clone(&shell);
-    terminal.on_key_event(move |event| {
-        if let Some(input) = translate(&event) {
-            input_shell.borrow_mut().handle_input(input);
-        }
-    })?;
+    let on_key =
+        Closure::<dyn FnMut(web_sys::KeyboardEvent)>::new(move |event: web_sys::KeyboardEvent| {
+            if let Some(input) = translate(&event.key()) {
+                event.prevent_default();
+                input_shell.borrow_mut().handle_input(input);
+            }
+        });
+    web_sys::window()
+        .and_then(|w| w.document())
+        .ok_or("no document")?
+        .add_event_listener_with_callback("keydown", on_key.as_ref().unchecked_ref())
+        .map_err(|_| "failed to attach key listener")?;
+    on_key.forget();
 
     terminal.draw_web(move |frame| {
         let mut shell = shell.borrow_mut();
@@ -37,16 +56,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn translate(event: &KeyEvent) -> Option<ShellInput> {
-    match event.code {
-        KeyCode::Up => Some(ShellInput::Up),
-        KeyCode::Down => Some(ShellInput::Down),
-        KeyCode::Left => Some(ShellInput::Left),
-        KeyCode::Right => Some(ShellInput::Right),
-        KeyCode::Enter => Some(ShellInput::Enter),
-        KeyCode::Esc => Some(ShellInput::Esc),
-        KeyCode::Backspace => Some(ShellInput::Backspace),
-        KeyCode::Char(c) => Some(ShellInput::Char(c)),
-        _ => None,
+fn translate(key: &str) -> Option<ShellInput> {
+    match key {
+        "ArrowUp" => Some(ShellInput::Up),
+        "ArrowDown" => Some(ShellInput::Down),
+        "ArrowLeft" => Some(ShellInput::Left),
+        "ArrowRight" => Some(ShellInput::Right),
+        "Enter" => Some(ShellInput::Enter),
+        "Escape" => Some(ShellInput::Esc),
+        "Backspace" => Some(ShellInput::Backspace),
+        _ => {
+            let mut chars = key.chars();
+            match (chars.next(), chars.next()) {
+                (Some(c), None) => Some(ShellInput::Char(c)),
+                _ => None,
+            }
+        }
     }
 }
