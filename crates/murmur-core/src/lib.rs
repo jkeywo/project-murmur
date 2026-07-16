@@ -8,6 +8,8 @@
 //! on the source of an action.
 
 pub mod data;
+pub mod generator;
 pub mod geom;
 pub mod map;
 pub mod rng;
+pub mod world;
