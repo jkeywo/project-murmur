@@ -1,9 +1,11 @@
-//! Ratatui rendering for the non-gameplay interface modes.
+//! Ratatui rendering for the non-gameplay interface modes. These are
+//! interface modes only: they never advance simulation time.
 
+use murmur_core::world::{MissionFacts, MissionOutcome};
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph};
 
 const TITLE: &str = "P R O J E C T   M U R M U R";
@@ -20,7 +22,7 @@ fn centered(area: Rect, width: u16, height: u16) -> Rect {
 }
 
 pub fn draw_start(frame: &mut Frame) {
-    let area = centered(frame.area(), 62, 20);
+    let area = centered(frame.area(), 66, 22);
     let lines = vec![
         Line::styled(
             TITLE,
@@ -31,18 +33,23 @@ pub fn draw_start(frame: &mut Frame) {
         Line::raw(""),
         Line::raw("A social-stealth infiltration. One nightclub, one target."),
         Line::raw(""),
-        Line::raw("Blend in. Only guards escalate; only evidence betrays you."),
-        Line::raw("Succeed: eliminate the target, then leave by any exit."),
+        Line::raw("Blend in: your clothes decide where you belong."),
+        Line::raw("Guards notice trespass, weapons, bodies, and worse."),
+        Line::raw("Succeed: eliminate the target, then leave by any X exit."),
         Line::raw("Fail: your death, or an arrest you cannot talk out of."),
         Line::raw(""),
-        Line::styled("Keys", Style::default().add_modifier(Modifier::UNDERLINED)),
-        Line::raw("arrows move   .  wait      c crouch    o/k open/close door"),
-        Line::raw("g garrote     f  shoot     r draw/holster  p pickpocket"),
-        Line::raw("d disguise    B  carry/drop body   h hide body   ; look"),
-        Line::raw("Space pause/resume queue   Backspace undo   Esc clear"),
+        Line::styled("keys", Style::default().add_modifier(Modifier::UNDERLINED)),
+        Line::raw("arrows move    .  wait       c crouch     r draw/holster"),
+        Line::raw("o/k open/close door   g garrote   f shoot   p pickpocket"),
+        Line::raw("d change disguise   b carry/drop body   h hide body"),
+        Line::raw("; look (pauses queue)   Space pause/resume   [ ] speed"),
+        Line::raw("Backspace undo newest   Esc clear queue   Q abandon run"),
+        Line::raw(""),
+        Line::raw("Commands queue up (32 slots, always visible) and run"),
+        Line::raw("one per turn. A rejected command cancels the rest."),
         Line::raw(""),
         Line::styled(
-            "Enter: begin the mission        q: quit",
+            "Enter: tonight's briefing        q: quit",
             Style::default().fg(Color::LightGreen),
         ),
     ];
@@ -54,38 +61,101 @@ pub fn draw_start(frame: &mut Frame) {
     frame.render_widget(widget, area);
 }
 
-pub fn draw_placeholder_mission(frame: &mut Frame, seed: u64) {
-    let layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(1)])
-        .split(frame.area());
-    let body = Paragraph::new(vec![
+pub fn draw_briefing(frame: &mut Frame, facts: &MissionFacts, seed: u64) {
+    let area = centered(frame.area(), 72, 24);
+    let mut lines = vec![
+        Line::styled(
+            "MISSION BRIEFING",
+            Style::default()
+                .fg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Line::styled(
+            format!("contract {seed}"),
+            Style::default().fg(Color::DarkGray),
+        ),
         Line::raw(""),
-        Line::from(vec![
-            Span::raw("mission seed "),
-            Span::styled(format!("{seed}"), Style::default().fg(Color::Yellow)),
-        ]),
+        Line::from(format!("Target: {}", facts.target_name)),
+        Line::from(format!("Reason: the target {}", facts.target_reason)),
+        Line::from(format!(
+            "Likely locations: {}",
+            facts.target_locations.join(", ")
+        )),
         Line::raw(""),
-        Line::raw("The nightclub is still under construction."),
-        Line::raw("World generation arrives in the next vertical slice."),
+        Line::from(format!(
+            "Security: {} guards on shift; {} staff; about {} guests",
+            facts.guard_count, facts.staff_count, facts.civilian_count
+        )),
+        Line::from(format!(
+            "Restricted areas: {}",
+            facts.restricted_rooms.join(", ")
+        )),
+        Line::from(format!(
+            "Disguises seen on site: {}",
+            facts.available_disguises.join(", ")
+        )),
+        Line::from(format!(
+            "Places to hide a body: {} known containers",
+            facts.container_count
+        )),
+        Line::from(format!(
+            "Extraction: {}",
+            facts.extraction_exits.join(" or ")
+        )),
         Line::raw(""),
-        Line::raw("q: give up"),
-    ])
-    .alignment(Alignment::Center);
-    frame.render_widget(body, layout[0]);
+        Line::raw("You carry a garrote and a silenced pistol (6 rounds)."),
+        Line::raw("You enter as a guest, in civilian clothes."),
+        Line::raw(""),
+        Line::styled(
+            "Enter: go in        Esc: back",
+            Style::default().fg(Color::LightGreen),
+        ),
+    ];
+    if facts.target_locations.is_empty() {
+        lines[5] = Line::from("Likely locations: unknown");
+    }
+    let widget = Paragraph::new(lines).alignment(Alignment::Left).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray)),
+    );
+    frame.render_widget(widget, area);
 }
 
-pub fn draw_game_over(frame: &mut Frame, summary: &str) {
-    let area = centered(frame.area(), 56, 9);
+/// The precise reason a mission ended, per the outcome rules.
+pub fn outcome_summary(outcome: &MissionOutcome, target_name: &str) -> (&'static str, String) {
+    match outcome {
+        MissionOutcome::Extracted => (
+            "MISSION ACCOMPLISHED",
+            format!("{target_name} eliminated; you extracted cleanly."),
+        ),
+        MissionOutcome::PlayerKilled => ("MISSION FAILED", "You were killed.".to_string()),
+        MissionOutcome::Arrested => (
+            "MISSION FAILED",
+            "Arrested and dragged away; there is no talking out of this one.".to_string(),
+        ),
+    }
+}
+
+pub fn draw_game_over(frame: &mut Frame, headline: &str, summary: &str, turns: u32, seed: u64) {
+    let area = centered(frame.area(), 60, 11);
+    let color = if headline.contains("ACCOMPLISHED") {
+        Color::LightGreen
+    } else {
+        Color::LightRed
+    };
     let widget = Paragraph::new(vec![
         Line::styled(
-            "MISSION OVER",
-            Style::default()
-                .fg(Color::LightRed)
-                .add_modifier(Modifier::BOLD),
+            headline.to_string(),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
         Line::raw(summary.to_string()),
+        Line::raw(""),
+        Line::styled(
+            format!("{turns} turns   seed {seed}"),
+            Style::default().fg(Color::DarkGray),
+        ),
         Line::raw(""),
         Line::styled(
             "Enter: return to start        q: quit",

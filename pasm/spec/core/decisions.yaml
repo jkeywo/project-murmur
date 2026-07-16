@@ -97,3 +97,67 @@ entities:
         - The action-batch failure rules already distinguish completed from partially completed actions, implying actions that span turns.
         - Durations in data keep pacing tunable without code changes.
       references: [action-batch-failure-rules, body-and-container-rules, primitive-action-catalog]
+
+  - decision: two-cell-tile-rendering
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Two-Cell Tile Rendering
+      summary: Every map tile renders as two terminal cells. NPCs occupy both with glyph plus facing marker exactly as the foundation sketches them, and the doubled width squares up the tile aspect ratio.
+      references: [ascii-presentation, perception-model]
+
+  - decision: corridors-are-public-circulation
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Corridors Are Public Circulation
+      summary: Access zones apply to room interiors. Corridors, stairs, and doorways are public circulation space; legitimacy is evaluated where you stand, so trespass begins at the room boundary.
+      rationale:
+        - Gating hallways would force zone assignment onto generated circulation space and make upstairs traffic illegal for every guest, contradicting the venue fiction.
+      references: [access-and-disguise-rules, room-graph-and-metadata]
+
+  - decision: stairs-auto-transition
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Stairs Auto-Transition
+      summary: Stairwells occupy the dead-end tiles at both corridor ends; stepping onto a stairs tile carries the mover to the matching tile on the other storey. Move stays the only travel verb.
+      references: [primitive-action-catalog, room-graph-and-metadata]
+
+  - decision: bump-open-doors
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Bump-Open Doors
+      summary: Stepping into a closed door opens it when unlocked or when the mover can pass its lock, consuming the turn; explicit open and close actions remain for stealth control. A locked door without its key rejects the queued move.
+      references: [primitive-action-catalog, player-command-translator]
+
+  - decision: npc-implicit-working-keys
+    core:
+      status: accepted
+      confidence: confirmed
+      title: NPCs Hold Implicit Working Keys
+      summary: NPCs whose legitimate access covers a locked room pass its door as if keyed; only the stealable key items the player can acquire are simulated as inventory. The player always needs the physical key.
+      rationale:
+        - Staff schedules legitimately cross locked rooms; simulating every working key would add inventory noise without gameplay value.
+        - The reachability proof models the player, so key-dependency guarantees are unaffected.
+      references: [generated-reachability-proof, inventory-and-access-rules]
+
+  - decision: look-is-controller-inspection
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Look Is Controller-Level Inspection
+      summary: The catalog's look primitive is realised as the look-mode inspection cursor at the controller layer; it produces no simulation action and consumes no turn, matching the look-mode cursor contract.
+      references: [primitive-action-catalog, look-mode-cursor-contract]
+
+  - decision: action-catalog-extensions
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Action Catalog Extensions
+      summary: Two additions beyond the authored catalog were required to make accepted rules playable. Pickpocket is a primitive action (stealing from the living, looting the incapacitated), and draw/holster toggles the pistol between pocket and hands so the drawn-visible-illegal state exists.
+      rationale:
+        - Pickpocket rules and VIP invitation rules are accepted components that presuppose a theft action.
+        - The stealth rules distinguish a drawn pistol from a carried one; a state toggle action is the smallest mechanism that expresses it.
+      references: [pickpocket-rules, vip-invitation-rules, stealth-and-combat-rules, primitive-action-catalog]

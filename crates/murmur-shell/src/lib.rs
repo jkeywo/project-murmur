@@ -9,11 +9,18 @@
 //! frame. Nothing in here may influence simulation results — rendering
 //! cadence and input transport stay outside the deterministic core.
 
+pub mod mission;
+pub mod queue;
+mod render;
 mod screens;
 
 use murmur_core::data::GameData;
+use murmur_core::generator::generate;
 use murmur_core::rng::split_mix_64;
+use murmur_core::turn::TurnDriver;
 use ratatui::Frame;
+
+use mission::Mission;
 
 /// Backend-neutral input events. Platform binaries map their own key event
 /// types (crossterm, browser) onto this vocabulary.
@@ -29,13 +36,18 @@ pub enum ShellInput {
     Char(char),
 }
 
-/// Which interface mode the shell is in. Start, briefing, and game-over are
-/// interface modes only: they never advance simulation time.
-#[derive(Clone, Debug)]
+/// Which interface mode the shell is in. Start, briefing, and game-over
+/// are interface modes only: they never advance simulation time.
 pub enum Screen {
     Start,
-    Playing,
-    GameOver { summary: String },
+    Briefing(Box<Mission>),
+    Playing(Box<Mission>),
+    GameOver {
+        headline: &'static str,
+        summary: String,
+        turns: u32,
+        seed: u64,
+    },
 }
 
 /// The shared game shell driven by both delivery targets.
@@ -48,8 +60,8 @@ pub struct Shell {
 
 impl Shell {
     /// Creates a shell on the start screen. `initial_seed` seeds the first
-    /// mission; successive missions derive their seeds from it so a session
-    /// stays reproducible from one number.
+    /// mission; successive missions derive their seeds from it so a
+    /// session stays reproducible from one number.
     pub fn new(data: GameData, initial_seed: u64) -> Self {
         Self {
             data,
@@ -71,34 +83,48 @@ impl Shell {
         self.mission_seed
     }
 
-    /// True once the player asked to leave the program (native builds exit;
-    /// the web build ignores it).
+    /// True once the player asked to leave the program (native builds
+    /// exit; the web build ignores it).
     pub fn quit_requested(&self) -> bool {
         self.quit_requested
     }
 
     /// Handles one input event in the current screen.
     pub fn handle_input(&mut self, input: ShellInput) {
-        match &self.screen {
+        match &mut self.screen {
             Screen::Start => match input {
-                ShellInput::Enter => self.start_mission(),
+                ShellInput::Enter => self.begin_briefing(),
                 ShellInput::Char('q') => self.quit_requested = true,
                 _ => {}
             },
-            Screen::Playing => {
-                // Gameplay input lands with the command queue in a later
-                // vertical slice.
-                if let ShellInput::Char('q') = input {
-                    self.screen = Screen::GameOver {
-                        summary: "Mission abandoned.".to_string(),
+            Screen::Briefing(_) => match input {
+                ShellInput::Enter => {
+                    let Screen::Briefing(mission) =
+                        std::mem::replace(&mut self.screen, Screen::Start)
+                    else {
+                        unreachable!()
                     };
+                    self.screen = Screen::Playing(mission);
                 }
+                ShellInput::Esc => self.screen = Screen::Start,
+                _ => {}
+            },
+            Screen::Playing(mission) => {
+                if input == ShellInput::Char('Q') {
+                    let world = mission.world();
+                    self.screen = Screen::GameOver {
+                        headline: "MISSION ABANDONED",
+                        summary: "You walked away from the contract.".to_string(),
+                        turns: world.turn,
+                        seed: world.seed,
+                    };
+                    self.mission_seed = split_mix_64(self.mission_seed);
+                    return;
+                }
+                mission.handle_input(&self.data, input);
             }
             Screen::GameOver { .. } => match input {
-                ShellInput::Enter => {
-                    self.mission_seed = split_mix_64(self.mission_seed);
-                    self.screen = Screen::Start;
-                }
+                ShellInput::Enter => self.screen = Screen::Start,
                 ShellInput::Char('q') => self.quit_requested = true,
                 _ => {}
             },
@@ -108,8 +134,19 @@ impl Shell {
     /// Runs one cooperative batch of simulation work. Called once per
     /// platform frame; does nothing outside active gameplay.
     pub fn tick(&mut self) {
-        if let Screen::Playing = self.screen {
-            // The turn driver arrives with the simulation slices.
+        if let Screen::Playing(mission) = &mut self.screen {
+            mission.tick(&self.data);
+            if let Some(outcome) = mission.world().outcome.clone() {
+                let target_name = mission.world().actor(mission.world().target).name.clone();
+                let (headline, summary) = screens::outcome_summary(&outcome, &target_name);
+                self.screen = Screen::GameOver {
+                    headline,
+                    summary,
+                    turns: mission.world().turn,
+                    seed: mission.world().seed,
+                };
+                self.mission_seed = split_mix_64(self.mission_seed);
+            }
         }
     }
 
@@ -117,53 +154,193 @@ impl Shell {
     pub fn draw(&self, frame: &mut Frame) {
         match &self.screen {
             Screen::Start => screens::draw_start(frame),
-            Screen::Playing => screens::draw_placeholder_mission(frame, self.mission_seed),
-            Screen::GameOver { summary } => screens::draw_game_over(frame, summary),
+            Screen::Briefing(mission) => {
+                screens::draw_briefing(frame, &mission.world().facts, mission.world().seed)
+            }
+            Screen::Playing(mission) => render::draw_mission(frame, &self.data, mission),
+            Screen::GameOver {
+                headline,
+                summary,
+                turns,
+                seed,
+            } => screens::draw_game_over(frame, headline, summary, *turns, *seed),
         }
     }
 
-    fn start_mission(&mut self) {
-        // World generation arrives with the generator slice; until then the
-        // playing screen is a placeholder so the loop is visible end to end.
-        self.screen = Screen::Playing;
+    fn begin_briefing(&mut self) {
+        match generate(&self.data, self.mission_seed) {
+            Ok(world) => {
+                let driver = TurnDriver::new(world, &self.data);
+                let mission = Mission::new(driver, &self.data);
+                self.screen = Screen::Briefing(Box::new(mission));
+            }
+            Err(err) => {
+                // Extraordinarily unlikely (generation retries internally);
+                // derive a fresh seed rather than crashing the shell.
+                let _ = err;
+                self.mission_seed = split_mix_64(self.mission_seed);
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use murmur_core::actions::Command;
 
     fn shell() -> Shell {
         Shell::new(GameData::embedded().unwrap(), 1234)
     }
 
-    #[test]
-    fn starts_on_start_screen() {
-        let shell = shell();
-        assert!(matches!(shell.screen(), Screen::Start));
-        assert!(!shell.quit_requested());
+    fn start_mission(shell: &mut Shell) {
+        shell.handle_input(ShellInput::Enter); // briefing
+        assert!(matches!(shell.screen(), Screen::Briefing(_)));
+        shell.handle_input(ShellInput::Enter); // play
+        assert!(matches!(shell.screen(), Screen::Playing(_)));
+    }
+
+    fn mission(shell: &Shell) -> &Mission {
+        match shell.screen() {
+            Screen::Playing(mission) => mission,
+            _ => panic!("not playing"),
+        }
     }
 
     #[test]
-    fn enter_starts_a_mission_and_q_quits_from_start() {
+    fn full_screen_flow_start_briefing_playing() {
         let mut shell = shell();
-        shell.handle_input(ShellInput::Enter);
-        assert!(matches!(shell.screen(), Screen::Playing));
-
-        let mut quitting = self::tests::shell();
-        quitting.handle_input(ShellInput::Char('q'));
-        assert!(quitting.quit_requested());
+        assert!(matches!(shell.screen(), Screen::Start));
+        start_mission(&mut shell);
+        assert_eq!(mission(&shell).world().turn, 0);
     }
 
     #[test]
-    fn game_over_returns_to_start_with_a_fresh_seed() {
+    fn queue_capacity_is_visible_and_overflow_rejects() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        // Pause so nothing consumes, then stuff the queue past capacity.
+        shell.handle_input(ShellInput::Char(' '));
+        for _ in 0..40 {
+            shell.handle_input(ShellInput::Char('.'));
+        }
+        let mission = mission(&shell);
+        assert_eq!(mission.queue.len(), 32, "exactly 32 commands fit");
+        assert!(
+            mission
+                .log
+                .iter()
+                .any(|line| line.contains("queue full (32/32)")),
+            "overflow must be visible"
+        );
+    }
+
+    #[test]
+    fn escape_clears_and_backspace_removes_newest() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char(' ')); // pause
+        shell.handle_input(ShellInput::Char('.'));
+        shell.handle_input(ShellInput::Up);
+        assert_eq!(mission(&shell).queue.len(), 2);
+        shell.handle_input(ShellInput::Backspace);
+        assert_eq!(mission(&shell).queue.len(), 1);
+        assert_eq!(mission(&shell).queue.head(), Some(&Command::Wait));
+        shell.handle_input(ShellInput::Esc);
+        assert!(mission(&shell).queue.is_empty());
+    }
+
+    #[test]
+    fn paused_queue_consumes_nothing_until_resumed() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char(' ')); // pause
+        shell.handle_input(ShellInput::Char('.'));
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 0);
+        assert_eq!(mission(&shell).queue.len(), 1);
+        shell.handle_input(ShellInput::Char(' ')); // resume
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).queue.len(), 0);
+        assert_eq!(mission(&shell).world().turn, 1);
+    }
+
+    #[test]
+    fn look_mode_pauses_and_stays_paused_after_exit() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char(';'));
+        assert!(mission(&shell).queue.is_paused());
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Look(_)));
+        // Cursor moves without enqueueing player movement.
+        shell.handle_input(ShellInput::Up);
+        assert!(mission(&shell).queue.is_empty());
+        shell.handle_input(ShellInput::Esc);
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(
+            mission(&shell).queue.is_paused(),
+            "leaving look mode keeps the queue paused until explicit resume"
+        );
+    }
+
+    #[test]
+    fn rejected_command_cancels_the_queued_remainder() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        // Find a direction blocked by a wall.
+        let world = mission(&shell).world();
+        let from = world.player_actor().pos;
+        let blocked = murmur_core::geom::Dir4::ALL.into_iter().find(|d| {
+            matches!(
+                world.map.tile(from.step(*d)),
+                murmur_core::map::TileKind::Wall | murmur_core::map::TileKind::Void
+            )
+        });
+        let Some(blocked) = blocked else { return };
+        let input = match blocked {
+            murmur_core::geom::Dir4::North => ShellInput::Up,
+            murmur_core::geom::Dir4::South => ShellInput::Down,
+            murmur_core::geom::Dir4::East => ShellInput::Right,
+            murmur_core::geom::Dir4::West => ShellInput::Left,
+        };
+        shell.handle_input(ShellInput::Char(' ')); // pause to build a queue
+        shell.handle_input(input); // will be rejected
+        shell.handle_input(ShellInput::Char('.'));
+        shell.handle_input(ShellInput::Char('.'));
+        assert_eq!(mission(&shell).queue.len(), 3);
+        shell.handle_input(ShellInput::Char(' ')); // resume
+        for _ in 0..5 {
+            shell.tick();
+        }
+        let mission = mission(&shell);
+        assert_eq!(
+            mission.world().turn,
+            0,
+            "rejection consumes no turn and cancels the remainder"
+        );
+        assert!(mission.queue.is_empty());
+        assert!(
+            mission
+                .log
+                .iter()
+                .any(|line| line.contains("rejected") && line.contains("cancelled")),
+            "the cancellation reason must be reported"
+        );
+    }
+
+    #[test]
+    fn game_over_screen_returns_to_start_with_fresh_seed() {
         let mut shell = shell();
         let first_seed = shell.mission_seed();
-        shell.handle_input(ShellInput::Enter);
-        shell.handle_input(ShellInput::Char('q'));
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char('Q'));
         assert!(matches!(shell.screen(), Screen::GameOver { .. }));
+        assert_ne!(shell.mission_seed(), first_seed);
         shell.handle_input(ShellInput::Enter);
         assert!(matches!(shell.screen(), Screen::Start));
-        assert_ne!(shell.mission_seed(), first_seed);
     }
 }

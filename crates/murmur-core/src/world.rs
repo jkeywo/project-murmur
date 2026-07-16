@@ -216,9 +216,19 @@ impl Actor {
     }
 }
 
-/// A transient world event others can perceive (gunshots for the MVP).
+/// What kind of transient event an incident is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SoundIncident {
+pub enum IncidentKind {
+    /// Heard within `radius` regardless of line of sight.
+    Gunshot,
+    /// A kill in the open; perceived by sight like any other evidence.
+    Violence,
+}
+
+/// A transient world event others can perceive during the same turn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Incident {
+    pub kind: IncidentKind,
     pub pos: Pos,
     pub radius: i16,
     pub turn: u32,
@@ -267,8 +277,11 @@ pub struct World {
     pub target: ActorId,
     /// Tiles that count as extraction exits when stepped on.
     pub extraction_tiles: Vec<Pos>,
-    /// Sound incidents from the current turn's resolution.
-    pub incidents: Vec<SoundIncident>,
+    /// Incidents from the current turn's resolution.
+    pub incidents: Vec<Incident>,
+    /// Set once any NPC has witnessed the player committing violence;
+    /// guards then fight lethally instead of arresting.
+    pub player_violence_witnessed: bool,
     pub facts: MissionFacts,
     /// What the generated reachability proof established.
     pub proof: crate::generator::proof::ProofReport,

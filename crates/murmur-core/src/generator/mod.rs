@@ -83,6 +83,7 @@ fn try_generate(data: &GameData, seed: u64, attempt: u64) -> Result<World, Strin
         target: population.target,
         extraction_tiles: layout.extraction_tiles,
         incidents: Vec::new(),
+        player_violence_witnessed: false,
         facts,
         proof: report,
         outcome: None,

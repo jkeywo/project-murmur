@@ -293,6 +293,10 @@ pub struct Tuning {
     /// Relaxed NPCs prepare an action every `relaxed_cadence` turns,
     /// staggered by actor id; escalated NPCs act every turn.
     pub relaxed_cadence: u16,
+    /// Turns an investigator lingers at the spot they checked.
+    pub investigate_linger: u16,
+    /// Tiles of the player's own field of view.
+    pub player_vision_range: i16,
 
     pub durations: ActionDurations,
 }
