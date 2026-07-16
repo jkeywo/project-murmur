@@ -1,0 +1,69 @@
+// Population and behaviour parameters.
+// [spec] fixed NPC roles: civilians; bartender, cleaner, technician, and
+// manager staff; guards; and a target drawn from the staff model.
+(
+    roles: [
+        (
+            role: Civilian,
+            glyph: 'c',
+            count_min: 10, count_max: 14,
+            waypoint_kinds: [Social, Idle],
+            wait_min: 4, wait_max: 12,
+            disguise: Some("civilian"),
+            armed: false,
+        ),
+        (
+            role: Bartender,
+            glyph: 'b',
+            count_min: 1, count_max: 1,
+            waypoint_kinds: [Work],
+            wait_min: 10, wait_max: 20,
+            disguise: Some("staff"),
+            armed: false,
+        ),
+        (
+            role: Cleaner,
+            glyph: 'l',
+            count_min: 1, count_max: 2,
+            waypoint_kinds: [Work, Idle],
+            wait_min: 4, wait_max: 8,
+            disguise: Some("staff"),
+            armed: false,
+        ),
+        (
+            role: Technician,
+            glyph: 't',
+            count_min: 1, count_max: 1,
+            waypoint_kinds: [Work, Idle],
+            wait_min: 6, wait_max: 14,
+            disguise: Some("staff"),
+            armed: false,
+        ),
+        (
+            role: Manager,
+            glyph: 'm',
+            count_min: 1, count_max: 1,
+            waypoint_kinds: [Work, Idle],
+            wait_min: 8, wait_max: 16,
+            disguise: Some("manager"),
+            armed: false,
+        ),
+        (
+            role: Guard,
+            glyph: 'g',
+            count_min: 4, count_max: 6,
+            waypoint_kinds: [Patrol],
+            wait_min: 3, wait_max: 6,
+            disguise: Some("guard"),
+            armed: true,
+        ),
+    ],
+    vip_civilians_min: 2,
+    vip_civilians_max: 3,
+    target: (
+        glyph: 'T',
+        schedule_min: 4,
+        schedule_max: 6,
+        disguise: Some("staff"),
+    ),
+)

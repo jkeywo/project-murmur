@@ -1,0 +1,45 @@
+// The disguise permission matrix.
+// [spec] civilian: public, VIP only with invitation; staff: public + staff
+// plus authored partial private access; guard and manager: every MVP zone.
+// Every disguise declares its suspicious observers and whether a drawn
+// weapon is legal while wearing it.
+[
+    (
+        id: "civilian",
+        name: "civilian clothes",
+        zones: [Public],
+        extra_rooms: [],
+        vip_with_invitation: true,
+        suspicious_observers: [],
+        drawn_weapon_legal: false,
+    ),
+    (
+        id: "staff",
+        name: "staff uniform",
+        zones: [Public, Staff],
+        // Authored partial private access: staff may enter the manager's
+        // office (cleaning rounds) but not the security office.
+        extra_rooms: ["manager-office"],
+        vip_with_invitation: false,
+        suspicious_observers: [Manager],
+        drawn_weapon_legal: false,
+    ),
+    (
+        id: "guard",
+        name: "guard uniform",
+        zones: [Public, Vip, Staff, Private],
+        extra_rooms: [],
+        vip_with_invitation: false,
+        suspicious_observers: [Guard],
+        drawn_weapon_legal: true,
+    ),
+    (
+        id: "manager",
+        name: "manager's suit",
+        zones: [Public, Vip, Staff, Private],
+        extra_rooms: [],
+        vip_with_invitation: false,
+        suspicious_observers: [Guard, Manager],
+        drawn_weapon_legal: false,
+    ),
+]

@@ -1,0 +1,77 @@
+# Continuous integration and Pages release.
+#
+# Every push runs the required checks (format, lints, tests, PASM model
+# validation) and builds the WebAssembly artifact. A successful push to the
+# default branch deploys that artifact to GitHub Pages; failed checks never
+# deploy.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: Required checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy (native crates)
+        run: cargo clippy --workspace --exclude murmur-web --all-targets -- -D warnings
+      - name: Clippy (web crate, wasm32)
+        run: cargo clippy -p murmur-web --target wasm32-unknown-unknown -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --exclude murmur-web
+      - uses: astral-sh/setup-uv@v6
+      - name: PASM model validation
+        run: uv run pasm validate
+      - name: PASM implementation scan
+        run: uv run pasm scan --json > /dev/null
+
+  web:
+    name: Web artifact
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/trunk-action@v0.5
+        with:
+          version: "latest"
+      - name: Build WebAssembly site
+        run: trunk build --release --public-url /project-murmur/
+        working-directory: crates/murmur-web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: crates/murmur-web/dist
+
+  deploy:
+    name: Deploy GitHub Pages
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [checks, web]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

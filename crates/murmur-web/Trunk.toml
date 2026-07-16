@@ -1,0 +1,8 @@
+[build]
+target = "index.html"
+dist = "dist"
+release = true
+
+[serve]
+# Local preview only; CI passes --public-url for the Pages deployment.
+port = 8080

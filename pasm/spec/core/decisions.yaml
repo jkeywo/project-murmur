@@ -1,0 +1,99 @@
+entities:
+  - decision: rust-workspace-decomposition
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Rust Workspace Decomposition
+      summary: One Cargo workspace with murmur-core (pure deterministic simulation), murmur-shell (backend-neutral controller and ratatui presentation contract), murmur-native (Bevy plus bevy_ratatui terminal binary), and murmur-web (Ratzilla WebAssembly binary).
+      rationale:
+        - The simulation core must be identical for native, web, tests, and replay, so it carries no engine or terminal dependency.
+        - Both delivery targets must share one presentation contract; murmur-shell is that contract, leaving the binaries as thin event and frame bridges.
+      references: [project-murmur-runtime, native-console-delivery, web-delivery, ascii-presentation]
+    evidence:
+      - kind: decision-record
+        reference: Cargo.toml
+        summary: Workspace members and default-members exclude murmur-web from native builds because it only compiles for wasm32.
+
+  - decision: native-terminal-stack
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Native Terminal Stack
+      summary: The native executable is a Bevy 0.18 app that renders into a real terminal through bevy_ratatui 0.11 and ratatui 0.30. Bevy 0.18 rather than 0.19 because bevy_ratatui 0.11 pins bevy ^0.18.
+      rationale:
+        - Chosen by the project owner over a Bevy virtual-console window and over dropping Bevy for plain ratatui.
+        - Keeps the spec commitment to a native Bevy executable while playing in an actual terminal.
+      assumptions:
+        - bevy_ratatui will track future Bevy releases closely enough to upgrade later.
+      references: [native-console-delivery]
+    evidence:
+      - kind: decision-record
+        reference: crates/murmur-native/Cargo.toml
+        summary: Dependency pins recording the bevy 0.18 / bevy_ratatui 0.11 / ratatui 0.30 combination.
+
+  - decision: web-terminal-stack
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Web Terminal Stack
+      summary: The web build renders the same murmur-shell through Ratzilla 0.3 (ratatui 0.30 DOM backend) compiled to wasm32, without Bevy. The shared game runtime and presentation contract are murmur-core and murmur-shell, satisfying the web-delivery requirement.
+      rationale:
+        - Ratzilla shares ratatui 0.30 with the native stack, so every widget is written once.
+        - Omitting Bevy from the web binary avoids shipping an unused scheduler in the wasm payload; the Bevy commitment applies to the native executable.
+      references: [web-delivery, ascii-presentation]
+    evidence:
+      - kind: decision-record
+        reference: crates/murmur-web/src/main.rs
+        summary: Ratzilla event loop bridging browser key events onto the shared shell.
+
+  - decision: embedded-ron-game-data
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Embedded RON Game Data
+      summary: All gameplay tunables, the disguise permission matrix, item definitions, room templates, population, names, and briefing phrasing are authored RON files under data/ at the repository root, embedded at compile time and parsed with strict unknown-field rejection plus cross-file validation.
+      rationale:
+        - Embedding guarantees the native and web builds ship byte-identical data, which deterministic replay across targets requires.
+        - Strict parsing plus cross-validation makes a data typo fail in tests instead of misbehaving mid-mission.
+      references: [access-and-disguise-rules, disguise-permission-matrix, deterministic-mission-replay]
+    evidence:
+      - kind: decision-record
+        reference: crates/murmur-core/src/data.rs
+        summary: GameData loader, validation rules, and embedded sources.
+
+  - decision: deterministic-rng-and-integer-math
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Deterministic RNG and Integer Math
+      summary: The core carries its own PCG32 implementation with named streams (generation, resolution) forked from the mission seed, and all simulation geometry is integer-only. No floating point, platform randomness, or third-party RNG crates participate in simulation results.
+      rationale:
+        - Replay must reproduce results bit-for-bit on x86_64 and wasm32 across compiler and dependency upgrades; owning the generator removes every external drift source.
+        - Separate streams keep command rejection from consuming tie-breaker randomness, which the queue rejection rules require.
+      references: [deterministic-mission-replay, action-batch-failure-rules]
+    evidence:
+      - kind: decision-record
+        reference: crates/murmur-core/src/rng.rs
+        summary: PCG32 with reference-vector test pinning the exact output sequence.
+
+  - decision: four-way-movement-and-facing
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Four-Way Movement and Facing
+      summary: Movement and NPC facing are both restricted to the four cardinal directions. Vision cones are an integer ratio test around the facing axis, and the tile behind an actor is exactly one opposite step.
+      rationale:
+        - The authored facing markers are the four glyphs caret, greater-than, v, and less-than, which fixes facing at four directions.
+        - Matching movement to facing keeps garrote's behind-the-target requirement unambiguous and spares simultaneous resolution from diagonal crossing arbitration.
+      references: [perception-model, stealth-and-combat-rules, primitive-action-catalog]
+
+  - decision: multi-turn-action-durations
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Multi-Turn Action Durations
+      summary: Every primitive action has a data-driven duration in turns. Multi-turn actions occupy their actor and apply effects on the final turn; a step while carrying a body takes two turns, which realises the halved movement cadence.
+      rationale:
+        - The action-batch failure rules already distinguish completed from partially completed actions, implying actions that span turns.
+        - Durations in data keep pacing tunable without code changes.
+      references: [action-batch-failure-rules, body-and-container-rules, primitive-action-catalog]

@@ -1,0 +1,35 @@
+[project]
+name = "project-murmur-pasm"
+version = "0.1.0"
+description = "PASM architecture-model foundation for Project Murmur."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+pasm = "pasm.cli.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = [
+  "pasm",
+  "pasm.architecture",
+  "pasm.cli",
+  "pasm.core",
+  "pasm.domains",
+  "pasm.domains.game_design",
+  "pasm.implementation",
+  "pasm.integration",
+  "pasm.migration",
+  "pasm.scanners",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]

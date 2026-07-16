@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = [
+  "crates/murmur-core",
+  "crates/murmur-shell",
+  "crates/murmur-native",
+  "crates/murmur-web",
+]
+# murmur-web only builds for wasm32; keep it out of default native builds.
+default-members = [
+  "crates/murmur-core",
+  "crates/murmur-shell",
+  "crates/murmur-native",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+repository = "https://github.com/jkeywo/project-murmur"
+
+[workspace.dependencies]
+murmur-core = { path = "crates/murmur-core" }
+murmur-shell = { path = "crates/murmur-shell" }
+serde = { version = "1", features = ["derive"] }
+ron = "0.12"
+ratatui = { version = "0.30", default-features = false }
+
+[profile.release]
+# Web delivery cares about payload size; the sim is cheap enough that this
+# costs nothing perceptible natively.
+opt-level = "s"
+lto = true
+codegen-units = 1

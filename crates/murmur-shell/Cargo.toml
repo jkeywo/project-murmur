@@ -1,0 +1,13 @@
+[package]
+name = "murmur-shell"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+description = "Backend-neutral controller and ratatui presentation for Project Murmur."
+
+[dependencies]
+murmur-core = { workspace = true }
+ratatui = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

@@ -1,0 +1,44 @@
+// Simulation tuning. All gameplay numbers live here, not in code.
+// Values marked [spec] are fixed by the design foundation.
+(
+    queue_capacity: 32,          // [spec] exactly 32, always visible
+    batch_turns: 8,              // turns per cooperative batch before yielding
+    floor_width: 46,
+    floor_height: 26,
+    floor_count: 2,              // [spec] two-storey nightclub
+
+    pistol_rounds: 6,            // [spec] six generated rounds
+    pistol_range: 8,
+    gunshot_sound_radius: 14,
+    player_max_hp: 3,
+    guard_attack_damage: 1,
+
+    vision_range: 8,
+    vision_range_dim: 5,
+    cone_num: 3,                 // cone: perp * cone_den <= along * cone_num
+    cone_den: 2,                 // 3/2 ~= 112 degree total cone
+
+    suspicion_max: 100,
+    suspicion_suspicious_at: 30,
+    suspicion_investigate_at: 70,
+    gain_illegal_zone: 25,
+    gain_crouching: 15,
+    gain_disguise_recognised: 35,
+    suspicion_decay: 5,
+
+    relaxed_cadence: 2,          // [spec] relaxed NPCs act on alternating turns
+
+    durations: (
+        step: 1,
+        carry_step: 2,           // [spec] carrying a body halves movement cadence
+        garrote: 1,
+        shoot: 1,
+        change_disguise: 2,
+        carry_body: 1,
+        drop_body: 1,
+        hide_body: 2,
+        pickpocket: 1,
+        door: 1,
+        draw_holster: 1,
+    ),
+)

@@ -1,0 +1,16 @@
+[package]
+name = "murmur-web"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+description = "WebAssembly delivery of Project Murmur via Ratzilla."
+
+[dependencies]
+murmur-core = { workspace = true }
+murmur-shell = { workspace = true }
+ratzilla = "0.3"
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+
+[lints.rust]
+unsafe_code = "forbid"

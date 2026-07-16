@@ -1,0 +1,351 @@
+entities:
+  - system: project-murmur-runtime
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Project Murmur Runtime
+      summary: Future authoritative discrete-turn simulation for the ASCII social-stealth roguelike.
+      references: [turn-driver, world-model, action-resolver]
+
+  - component: world-model
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Generated World Model
+      summary: Generated two-storey nightclub layout, rooms, access zones, actors, objects, containers, and mission facts.
+      references: [nightclub-generator, access-and-disguise-rules, mission-briefing]
+
+  - component: nightclub-generator
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Nightclub Generator
+      summary: Room-graph-first generator for the MVP building, then corridors, population, routines, target, and generated briefing facts.
+      references: [mission-briefing]
+
+  - component: access-and-disguise-rules
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Access and Disguise Rules
+      summary: Data-driven relationship between disguise, access zone, suspicious observers, and illegal equipment.
+
+  - component: perception-model
+    core:
+      status: proposed
+      confidence: confirmed
+      title: NPC Perception Model
+      summary: Line of sight, facing cone, range, alertness, memory, and knowledge for non-player actors. The player has no facing.
+      references: [npc-controller, action-resolver]
+
+  - component: npc-controller
+    core:
+      status: proposed
+      confidence: confirmed
+      title: NPC Controller
+      summary: Controller-neutral AI slot that derives one primitive action from routine, state, memory, and world state for a future turn.
+      references: [prepared-action-store]
+
+  - component: player-command-queue
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Player Command Queue
+      summary: Bounded FIFO queue of controller commands. Queued commands are intentions, not prevalidated simulation actions.
+      references: [turn-driver, player-command-translator]
+
+  - component: player-command-translator
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Player Command Translator
+      summary: Pure, execution-time validation and translation of the queue head against the current world into one player ActionIntent or a command rejection.
+      references: [prepared-action-store, action-resolver]
+
+  - component: prepared-action-store
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Prepared Action Store
+      summary: Holds controller-neutral actions prepared for one specific future turn. A frozen batch does not distinguish human, AI, replay, or test source.
+      references: [turn-driver, action-resolver]
+
+  - component: turn-driver
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Turn Driver
+      summary: Repeatedly translates one valid queued player command, freezes it with prepared AI actions, resolves one turn, prepares the next AI actions, and cooperatively yields for input and presentation.
+      references: [action-resolver, player-command-queue, prepared-action-store]
+
+  - component: action-resolver
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Simultaneous Action Resolver
+      summary: Resolves a frozen action batch against one authoritative world state and distinguishes pre-turn command rejection from in-turn action failure.
+      references: [world-model, turn-driver]
+
+  - component: queue-control-surface
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Queue Control Surface
+      summary: Presentation and input boundary for visible capacity, explicit pause/resume, newest-command removal, and queue clearing. Look mode pauses consumption and requires explicit resume after exit.
+      references: [player-command-queue]
+
+  - component: mission-briefing
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Generated Mission Briefing
+      summary: Raw facts derived from the generated world, including target, security counts, disguises, restricted areas, containers, and exits; no hand-authored setting prose is required.
+      references: [world-model]
+
+  - component: ascii-presentation
+    core:
+      status: proposed
+      confidence: confirmed
+      title: ASCII Presentation
+      summary: Presentation-only terminal view with directional NPC indicators, latest completed state, command queue status, and configurable render cadence that never changes simulation results.
+      references: [queue-control-surface, world-model]
+
+  - component: mission-outcome-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Mission Outcome Rules
+      summary: The mission succeeds only when the generated target is dead and the player exits through any generated external extraction exit. It fails only on player death or irreversible guard arrest; detection, alarms, and combat remain playable states.
+      references: [world-model, turn-driver]
+
+  - component: generated-reachability-proof
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Generated Reachability Proof
+      summary: The generator must make every room physically reachable from every other room. A required key source is reachable without that key; a required disguise is obtainable from a scheduled or idle actor without that disguise. Areas with no valid disguise are exempt.
+      references: [nightclub-generator, access-and-disguise-rules]
+
+  - component: inventory-and-access-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Inventory and Access Rules
+      summary: The player has one worn-disguise slot, a carried-body state, two hands, and six general item slots. Access checks inspect worn clothing and, where required, carried items such as keys and invitations.
+      references: [access-and-disguise-rules, player-command-translator]
+
+  - component: disguise-acquisition-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Disguise Acquisition Rules
+      summary: Disguises come from an adjacent unconscious or dead NPC, or from a wardrobe generated to satisfy disguise availability and traffic constraints. Changing disguise is an explicit action.
+      references: [inventory-and-access-rules, generated-reachability-proof]
+
+  - component: vip-invitation-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: VIP Invitation Rules
+      summary: A persistent VIP invitation is a non-consumable carried item. Civilian access to VIP checks inventory for an invitation; invitations can be pickpocketed or looted from tagged VIP NPCs.
+      references: [inventory-and-access-rules, access-and-disguise-rules]
+
+  - component: pickpocket-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Pickpocket Rules
+      summary: Adjacent pickpocketing deterministically transfers a stealable item. It is an observed offence whenever a recognising NPC has line of sight during resolution; it has no hidden success chance.
+      references: [perception-model, action-resolver, vip-invitation-rules]
+
+  - component: npc-cadence-and-escalation
+    core:
+      status: accepted
+      confidence: confirmed
+      title: NPC Cadence and Escalation
+      summary: Relaxed NPCs act on staggered alternating-turn cadences. Suspicious, investigating, alerted, escorting, fleeing, and combat NPCs prepare actions every turn.
+      references: [npc-controller, prepared-action-store]
+
+  - component: alert-propagation-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Alert Propagation Rules
+      summary: A suspicious guard makes guards in line of sight suspicious. An alert guard makes guards and civilians in line of sight alert; civilians flee. Recipients receive only the source actor or incident location and choose their first response next turn, without learning the player location automatically.
+      references: [perception-model, npc-cadence-and-escalation]
+
+  - component: stealth-and-combat-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Stealth and Combat Rules
+      summary: Garrote requires adjacency behind the target, both hands free, and no carried body. A drawn silenced pistol is visible and illegal, has six generated rounds, kills a visible in-range target, and creates a local sound incident. Alert guards pursue and arrest; lethal guard combat follows player violence or resistance.
+      references: [perception-model, action-resolver, mission-outcome-rules]
+
+  - component: body-and-container-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Body and Container Rules
+      summary: Bodies are visible evidence unless hidden in an adjacent empty one-body container. Carrying a body occupies both hands, halves movement cadence, and prevents garrotting or pistol use. Dropping places the body on the current tile.
+      references: [stealth-and-combat-rules, world-model]
+
+  - component: action-batch-failure-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Action Batch Failure Rules
+      summary: Pre-turn command rejection is pure, costs no turn, keeps the same prepared AI actions, and cancels queued remainder. A valid action may still fail in simultaneous resolution; that turn passes and cancels queued remainder, while completed or partially completed actions continue the queue.
+      references: [player-command-translator, action-resolver, player-command-queue]
+
+  - component: deterministic-mission-replay
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Deterministic Mission Replay
+      summary: Mission seed determines layout, population, schedules, item placement, and tie-breaker randomness. Replaying accepted player commands against that seed reproduces the same turn-by-turn simulation result.
+      references: [nightclub-generator, turn-driver, action-resolver]
+
+  - component: start-screen
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Start Screen
+      summary: Initial non-gameplay screen that introduces the game's social-stealth premise, explains the objective and failure conditions briefly, lists current key bindings, and offers a start-mission action.
+      references: [mission-outcome-rules, ascii-presentation]
+
+  - component: game-over-screen
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Game Over Screen
+      summary: Non-gameplay terminal state that presents the precise mission-ending reason, such as target eliminated with extraction, player death, or arrest, and offers a return-to-start-screen action.
+      references: [mission-outcome-rules, start-screen]
+
+  - component: native-console-delivery
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Native Console Delivery
+      summary: Native Bevy executable with a console-oriented presentation backend for local development and desktop play.
+      references: [ascii-presentation]
+
+  - component: web-delivery
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Web Delivery
+      summary: WebAssembly build of the same game runtime and presentation contract, hosted as a static site on GitHub Pages.
+      references: [ascii-presentation, native-console-delivery]
+
+  - component: continuous-integration-and-pages-release
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Continuous Integration and Pages Release
+      summary: On every repository push, run required checks. A successful default-branch build automatically produces and publishes the WebAssembly static-site artifact to GitHub Pages; failed checks never deploy.
+      references: [web-delivery, deterministic-mission-replay]
+
+  - component: room-graph-and-metadata
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Room Graph and Metadata
+      summary: The generator builds rooms before tiles and corridors. Every room records its access level, lighting, exits, cover objects, body containers, and routine waypoints across the fixed two-storey nightclub.
+      references: [nightclub-generator, generated-reachability-proof, perception-model]
+
+  - component: npc-role-routine-and-state-model
+    core:
+      status: accepted
+      confidence: confirmed
+      title: NPC Role, Routine, and State Model
+      summary: Civilians wander, drink, dance, panic, and flee; staff roles are bartender, cleaner, technician, and manager; guards patrol, investigate, escort, arrest, and fight. Each NPC carries routine, current state, memory, knowledge, facing, and alertness. The target uses the staff model with a richer generated schedule.
+      references: [npc-controller, room-graph-and-metadata]
+
+  - component: generated-routine-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Generated Routine Rules
+      summary: Routines are generated from the room graph and role waypoints rather than hand-authored encounter scripts. They may move, wait for a turn count, interact socially, and repeat.
+      references: [nightclub-generator, npc-role-routine-and-state-model]
+
+  - component: disguise-permission-matrix
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Disguise Permission Matrix
+      summary: Civilian clothing permits public areas and VIP only with an invitation; staff uniform permits public and staff areas plus authored partial private access; guard and manager disguises permit every MVP zone. Every disguise also declares suspicious observers and illegal equipment.
+      references: [access-and-disguise-rules, vip-invitation-rules]
+
+  - component: detection-and-suspicion-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Detection and Suspicion Rules
+      summary: Guards can notice illegal access, visible weapons, bodies, unconscious people, and gunshots. Suspicion increases over time. Blood and a missing target are explicitly deferred detection inputs.
+      references: [perception-model, alert-propagation-rules, stealth-and-combat-rules]
+
+  - component: primitive-action-catalog
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Primitive Action Catalog
+      summary: MVP primitive gameplay actions are move, wait, look, toggle crouch, garrote, shoot, carry body, drop body, hide body, change disguise, open door, and close door. Commands that refer to actors or objects carry stable domain IDs and resolve them only at execution time.
+      references: [player-command-translator, action-resolver, body-and-container-rules]
+
+  - component: queued-travel-command
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Queued Travel Command
+      summary: A controller-level TravelTo position command may derive one current-state movement action at a time, recalculate around changed obstructions, and use ordinary queue validation. It is not itself a simulation action.
+      references: [player-command-queue, player-command-translator]
+
+  - component: queue-input-contract
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Queue Input Contract
+      summary: Input events are retained while resolution is busy and appended FIFO between cooperative batches. Escape clears the queue, Backspace removes its newest command, and Space pauses or resumes consumption. Capacity is exactly 32 commands and must be visible; additional input is rejected visibly without dropping queued commands.
+      references: [queue-control-surface, player-command-queue]
+
+  - component: queued-command-repetition
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Queued Command Repetition
+      summary: The controller may compact repeated commands as a command plus remaining count, while preserving exactly the same one-command-per-turn execution semantics and cancellation behaviour.
+      references: [player-command-queue, queue-input-contract]
+
+  - component: look-mode-cursor-contract
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Look Mode Cursor Contract
+      summary: Entering look mode pauses queue consumption without clearing it. Movement input controls a detached inspection cursor rather than enqueuing player movement; exiting look mode remains paused until explicit resume.
+      references: [queue-control-surface, queue-input-contract]
+
+  - component: crouch-and-low-cover-rules
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Crouch and Low Cover Rules
+      summary: Crouch is a toggleable player state that permits movement, lowers the player's line of sight, and blocks sight through low cover objects such as desks. Crouching is inherently suspicious when observed.
+      references: [primitive-action-catalog, perception-model, detection-and-suspicion-rules]
+
+  - component: generated-mission-facts
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Generated Mission Facts
+      summary: The briefing reports target identity and likely locations, target-elimination reason, security population counts, available disguises, restricted areas, known container counts, and valid extraction exits as facts from the generated mission.
+      references: [mission-briefing, nightclub-generator, mission-outcome-rules]
+
+  - component: vertical-slice-roadmap
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Vertical Slice Roadmap
+      summary: Intended implementation order is tile engine and FOV; nightclub generation; zones and access; NPC movement and routines; vision and facing; suspicion; target generation; disguises; body handling; garrote; pistol; briefing; then mission outcomes.
+      references: [room-graph-and-metadata, primitive-action-catalog, mission-outcome-rules]

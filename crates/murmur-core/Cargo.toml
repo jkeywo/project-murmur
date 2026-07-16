@@ -1,0 +1,13 @@
+[package]
+name = "murmur-core"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+description = "Deterministic discrete-turn simulation core for Project Murmur."
+
+[dependencies]
+serde = { workspace = true }
+ron = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

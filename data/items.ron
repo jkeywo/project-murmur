@@ -1,0 +1,47 @@
+// Carriable items. Keys and invitations are ordinary inventory items.
+[
+    (
+        id: "silenced-pistol",
+        name: "silenced pistol",
+        glyph: '/',
+        unlocks: None,
+        invitation: false,
+        weapon: true,
+        pickpocketable: false,
+        carried_by: None,          // the player starts with it
+        placed_in: None,
+    ),
+    (
+        id: "vip-invitation",
+        name: "VIP invitation",
+        glyph: '!',
+        unlocks: None,
+        invitation: true,
+        weapon: false,
+        pickpocketable: true,
+        carried_by: None,          // handed to tagged VIP civilians
+        placed_in: None,
+    ),
+    (
+        id: "office-key",
+        name: "manager's office key",
+        glyph: '-',
+        unlocks: Some("manager-office"),
+        invitation: false,
+        weapon: false,
+        pickpocketable: true,
+        carried_by: Some(Manager),
+        placed_in: None,
+    ),
+    (
+        id: "security-key",
+        name: "security office key",
+        glyph: '-',
+        unlocks: Some("security-office"),
+        invitation: false,
+        weapon: false,
+        pickpocketable: true,
+        carried_by: Some(Guard),
+        placed_in: None,
+    ),
+]
