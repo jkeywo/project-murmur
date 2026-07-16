@@ -1557,6 +1557,7 @@ name = "murmur-web"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "critical-section",
  "js-sys",
  "murmur-core",
  "murmur-shell",

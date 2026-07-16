@@ -11,6 +11,10 @@ murmur-shell = { workspace = true }
 ratzilla = "0.3"
 js-sys = "0.3"
 console_error_panic_hook = "0.1"
+# ratatui-core relies on the critical-section crate, which needs a provider
+# on wasm32-unknown-unknown; the std implementation is the right one for a
+# single-threaded browser main thread.
+critical-section = { version = "1", features = ["std"] }
 
 [lints.rust]
 unsafe_code = "forbid"
