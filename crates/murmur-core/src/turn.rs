@@ -36,6 +36,8 @@ impl PreparedActionStore {
 pub struct TurnDriver {
     world: World,
     store: PreparedActionStore,
+    /// Every accepted command, in order — the replay record.
+    accepted: Vec<Command>,
 }
 
 /// What one driver step produced.
@@ -54,11 +56,28 @@ impl TurnDriver {
         Self {
             world,
             store: PreparedActionStore { actions },
+            accepted: Vec::new(),
         }
     }
 
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// Mutable world access for scenario setup in tests and tools. Not a
+    /// gameplay API: play mutates the world only through commands.
+    pub fn world_mut(&mut self) -> &mut World {
+        &mut self.world
+    }
+
+    /// Consumes the driver, yielding the final world.
+    pub fn into_world(self) -> World {
+        self.world
+    }
+
+    /// The accepted-command record for deterministic replay.
+    pub fn accepted_commands(&self) -> &[Command] {
+        &self.accepted
     }
 
     /// True while a multi-turn player action is still resolving; the queue
@@ -96,6 +115,7 @@ impl TurnDriver {
             intent,
             remaining,
         });
+        self.accepted.push(*command);
         Ok(self.step(data))
     }
 

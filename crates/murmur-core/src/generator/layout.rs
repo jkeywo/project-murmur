@@ -35,7 +35,9 @@ pub struct Layout {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutError(pub String);
 
-/// Corridor row for a floor of the given interior height.
+/// First corridor row for a floor of the given interior height. The spine
+/// is two tiles tall (rows `spine_y` and `spine_y + 1`) so passing traffic
+/// can flow without deadlocking in a single-file hallway.
 fn spine_y(height: u16) -> i16 {
     height as i16 / 2
 }
@@ -50,16 +52,19 @@ pub fn build_layout(data: &GameData, rng: &mut Pcg32) -> Result<Layout, LayoutEr
     let mut doors: Vec<DoorState> = Vec::new();
     let mut rooms: Vec<Room> = Vec::new();
 
-    // Carve the corridor spine and outer walls of each storey.
+    // Carve the two-tile corridor spine and its walls on each storey.
     for floor in 0..floor_count {
         let sy = spine_y(height);
         for x in 1..(width as i16 - 1) {
             map.set_tile(Pos::new(floor, x, sy), TileKind::Floor);
+            map.set_tile(Pos::new(floor, x, sy + 1), TileKind::Floor);
             map.set_tile(Pos::new(floor, x, sy - 1), TileKind::Wall);
-            map.set_tile(Pos::new(floor, x, sy + 1), TileKind::Wall);
+            map.set_tile(Pos::new(floor, x, sy + 2), TileKind::Wall);
         }
-        map.set_tile(Pos::new(floor, 0, sy), TileKind::Wall);
-        map.set_tile(Pos::new(floor, width as i16 - 1, sy), TileKind::Wall);
+        for y in [sy, sy + 1] {
+            map.set_tile(Pos::new(floor, 0, y), TileKind::Wall);
+            map.set_tile(Pos::new(floor, width as i16 - 1, y), TileKind::Wall);
+        }
     }
 
     // Pack rooms onto the two shelves of each storey.
@@ -88,8 +93,9 @@ pub fn build_layout(data: &GameData, rng: &mut Pcg32) -> Result<Layout, LayoutEr
     for floor in 0..floor_count {
         let sy = spine_y(height);
         map.set_tile(Pos::new(floor, east_end + 1, sy), TileKind::Wall);
+        map.set_tile(Pos::new(floor, east_end + 1, sy + 1), TileKind::Wall);
         for x in (east_end + 2)..(width as i16) {
-            for y in [sy - 1, sy, sy + 1] {
+            for y in [sy - 1, sy, sy + 1, sy + 2] {
                 map.set_tile(Pos::new(floor, x, y), TileKind::Void);
             }
         }
@@ -101,8 +107,10 @@ pub fn build_layout(data: &GameData, rng: &mut Pcg32) -> Result<Layout, LayoutEr
     if floor_count == 2 {
         let sy = spine_y(height);
         for x in [1i16, east_end] {
-            for floor in 0..floor_count {
-                map.set_tile(Pos::new(floor, x, sy), TileKind::Stairs);
+            for y in [sy, sy + 1] {
+                for floor in 0..floor_count {
+                    map.set_tile(Pos::new(floor, x, y), TileKind::Stairs);
+                }
             }
             stairs.push(Pos::new(0, x, sy));
         }
@@ -194,11 +202,11 @@ fn plan_rooms(data: &GameData, rng: &mut Pcg32) -> Result<Vec<PlannedRoom>, Layo
     Ok(planned)
 }
 
-/// [top shelf height, bottom shelf height] for a storey.
+/// The shared shelf height for a storey (the smaller of the two shelves).
 fn shelf_heights(height: u16) -> i16 {
     let sy = spine_y(height);
-    // Top shelf: rows 1..=sy-2; bottom shelf: rows sy+2..=height-2.
-    (sy - 2).min(height as i16 - sy - 3)
+    // Top shelf: rows 1..=sy-2; bottom shelf: rows sy+3..=height-2.
+    (sy - 2).min(height as i16 - sy - 4)
 }
 
 fn place_room(
@@ -251,7 +259,7 @@ fn place_room(
     } else {
         Rect {
             x: x0,
-            y: sy + 2,
+            y: sy + 3,
             w: room_w,
             h: plan.height,
         }
@@ -283,7 +291,7 @@ fn place_room(
     }
 
     // Door(s) through the corridor-side wall.
-    let door_wall_y = if shelf == 0 { sy - 1 } else { sy + 1 };
+    let door_wall_y = if shelf == 0 { sy - 1 } else { sy + 2 };
     let mut door_ids = Vec::new();
     let mut door_xs = vec![bounds.x + rng.below(bounds.w as u32) as i16];
     if bounds.w >= 6 && rng.chance(1, 4) {

@@ -23,7 +23,7 @@ pub fn prepare_npc_actions(world: &mut World, data: &GameData) -> Vec<PreparedAc
     let ids: Vec<ActorId> = world
         .actors
         .iter()
-        .filter(|a| !a.is_player() && a.alive() && a.ai.is_some())
+        .filter(|a| !a.is_player() && a.alive() && !a.departed && a.ai.is_some())
         .map(|a| a.id)
         .collect();
 

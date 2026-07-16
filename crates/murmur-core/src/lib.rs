@@ -16,6 +16,7 @@ pub mod geom;
 pub mod map;
 pub mod path;
 pub mod perception;
+pub mod replay;
 pub mod rng;
 pub mod turn;
 pub mod world;

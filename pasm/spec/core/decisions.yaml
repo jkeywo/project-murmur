@@ -151,6 +151,30 @@ entities:
       summary: The catalog's look primitive is realised as the look-mode inspection cursor at the controller layer; it produces no simulation action and consumes no turn, matching the look-mode cursor contract.
       references: [primitive-action-catalog, look-mode-cursor-contract]
 
+  - decision: fleeing-npcs-depart-at-exits
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Fleeing NPCs Depart at Exits
+      summary: A fleeing NPC who reaches an extraction exit leaves the club for good and stops participating in the simulation. Discovered by playthrough testing, where panicked crowds otherwise cowered on the exit tiles and permanently blocked the player's extraction.
+      references: [mission-outcome-rules, alert-propagation-rules]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/playthrough.rs
+        summary: Scripted missions stalled at the turn cap until fleeing civilians vacated the exits.
+
+  - decision: simultaneous-swap-movement
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Simultaneous Swap Movement and Two-Tile Corridors
+      summary: When simultaneous resolution finds two actors stepping into each other's tiles, both moves apply at once (they squeeze past); unresolvable moves still fail in-turn. The corridor spine is two tiles wide. Both changes remove permanent single-file deadlocks that playthrough testing exposed.
+      references: [action-resolver, room-graph-and-metadata]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/playthrough.rs
+        summary: Opposing NPC traffic deadlocked one-tile corridors and walled off the club.
+
   - decision: action-catalog-extensions
     core:
       status: accepted

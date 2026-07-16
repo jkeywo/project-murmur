@@ -593,6 +593,30 @@ pub fn resolve_turn(
     // Phase 5: movement.
     resolve_movement(world, data, &mut events, &applying);
 
+    // Fleeing NPCs who reach an extraction exit leave the club for good;
+    // otherwise crowds would cower on the exits and block extraction.
+    let departures: Vec<ActorId> = world
+        .actors
+        .iter()
+        .filter(|a| {
+            !a.is_player()
+                && a.alive()
+                && !a.departed
+                && a.ai
+                    .as_ref()
+                    .is_some_and(|ai| ai.mood == crate::world::Mood::Fleeing)
+                && world.extraction_tiles.contains(&a.pos)
+        })
+        .map(|a| a.id)
+        .collect();
+    for id in departures {
+        world.actor_mut(id).departed = true;
+        let name = world.actor(id).name.clone();
+        events
+            .messages
+            .push(format!("{name} bolts out into the night"));
+    }
+
     // Post-phase bookkeeping: outcome checks and the turn counter.
     check_outcomes(world, &mut events);
     world.turn += 1;
@@ -949,7 +973,30 @@ fn resolve_movement(
     winners.sort_unstable();
 
     // Settle: apply moves whose destination is free, repeatedly, so chains
-    // (A follows B) resolve; swaps and cycles fail deterministically.
+    // (A follows B) resolve. When nothing frees up, mutual swaps apply
+    // simultaneously (two actors squeezing past each other); moves that
+    // still cannot land fail in-turn.
+    fn apply_move(
+        world: &mut World,
+        events: &mut TurnEvents,
+        actor_id: ActorId,
+        dir: Dir4,
+        dest: Pos,
+    ) {
+        {
+            let actor = world.actor_mut(actor_id);
+            actor.pos = dest;
+            if actor.facing.is_some() {
+                actor.facing = Some(dir);
+            }
+        }
+        // A carried body travels with its carrier.
+        if let Hands::CarryingBody(body) = world.actor(actor_id).hands {
+            world.actor_mut(body).pos = dest;
+        }
+        complete(world, events, actor_id);
+    }
+
     let mut pending: Vec<usize> = winners;
     loop {
         let mut progressed = false;
@@ -960,24 +1007,36 @@ fn resolve_movement(
                 still_pending.push(index);
                 continue;
             }
-            let actor_id = moves[index].actor;
-            let dir = moves[index].dir;
-            {
-                let actor = world.actor_mut(actor_id);
-                actor.pos = dest;
-                if actor.facing.is_some() {
-                    actor.facing = Some(dir);
-                }
-            }
-            // A carried body travels with its carrier.
-            if let Hands::CarryingBody(body) = world.actor(actor_id).hands {
-                world.actor_mut(body).pos = dest;
-            }
-            complete(world, events, actor_id);
+            apply_move(world, events, moves[index].actor, moves[index].dir, dest);
             progressed = true;
         }
         if still_pending.is_empty() {
             break;
+        }
+        if !progressed {
+            // Mutual swaps: both actors step into each other's tile at once.
+            let mut consumed: Vec<usize> = Vec::new();
+            for (slot, &i) in still_pending.iter().enumerate() {
+                if consumed.contains(&i) {
+                    continue;
+                }
+                for &j in &still_pending[slot + 1..] {
+                    if consumed.contains(&j) {
+                        continue;
+                    }
+                    let a = moves[i].actor;
+                    let b = moves[j].actor;
+                    if moves[i].dest == world.actor(b).pos && moves[j].dest == world.actor(a).pos {
+                        apply_move(world, events, a, moves[i].dir, moves[i].dest);
+                        apply_move(world, events, b, moves[j].dir, moves[j].dest);
+                        consumed.push(i);
+                        consumed.push(j);
+                        progressed = true;
+                        break;
+                    }
+                }
+            }
+            still_pending.retain(|index| !consumed.contains(index));
         }
         if !progressed {
             for index in still_pending {

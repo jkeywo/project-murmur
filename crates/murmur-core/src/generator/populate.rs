@@ -144,6 +144,7 @@ pub fn populate(
         is_vip: false,
         ai: None,
         hidden_in: None,
+        departed: false,
     });
 
     // The target: staff model with a richer generated schedule.
@@ -190,6 +191,7 @@ pub fn populate(
                 knows_player_hostile: false,
             }),
             hidden_in: None,
+            departed: false,
         });
     }
 
@@ -265,6 +267,7 @@ pub fn populate(
                     knows_player_hostile: false,
                 }),
                 hidden_in: None,
+                departed: false,
             });
         }
     }

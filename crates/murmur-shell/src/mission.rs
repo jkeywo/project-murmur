@@ -162,7 +162,7 @@ impl Mission {
         let mut ids: Vec<(i16, ActorId)> = world
             .actors
             .iter()
-            .filter(|a| !a.is_player() && a.alive() && a.hidden_in.is_none())
+            .filter(|a| !a.is_player() && a.alive() && !a.departed && a.hidden_in.is_none())
             .filter(|a| {
                 player
                     .pos

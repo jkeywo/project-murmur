@@ -73,7 +73,7 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
     let npc_ids: Vec<ActorId> = world
         .actors
         .iter()
-        .filter(|a| !a.is_player() && a.alive() && a.ai.is_some())
+        .filter(|a| !a.is_player() && a.alive() && !a.departed && a.ai.is_some())
         .map(|a| a.id)
         .collect();
 
@@ -250,7 +250,7 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
     let snapshot: Vec<(ActorId, Mood, Option<Pos>, Pos, bool)> = world
         .actors
         .iter()
-        .filter(|a| !a.is_player() && a.alive())
+        .filter(|a| !a.is_player() && a.alive() && !a.departed)
         .filter_map(|a| {
             a.ai.as_ref()
                 .map(|ai| (a.id, ai.mood, ai.focus, a.pos, a.role == Some(Role::Guard)))

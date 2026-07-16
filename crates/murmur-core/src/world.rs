@@ -199,6 +199,9 @@ pub struct Actor {
     pub ai: Option<AiState>,
     /// Set when this body has been stowed in a container (it is off-map).
     pub hidden_in: Option<FurnitureId>,
+    /// Set when a fleeing NPC escaped through an extraction exit and left
+    /// the premises for good.
+    pub departed: bool,
 }
 
 impl Actor {
@@ -325,12 +328,16 @@ impl World {
         &mut self.furniture[id.0 as usize]
     }
 
-    /// The standing (conscious, unhidden, uncarried) actor on a tile.
+    /// The standing (conscious, unhidden, undeparted) actor on a tile.
     /// Bodies lying on the ground do not occupy their tile for movement.
     pub fn standing_actor_at(&self, pos: Pos) -> Option<&Actor> {
-        self.actors
-            .iter()
-            .find(|a| a.alive() && a.hidden_in.is_none() && !self.is_carried(a.id) && a.pos == pos)
+        self.actors.iter().find(|a| {
+            a.alive()
+                && !a.departed
+                && a.hidden_in.is_none()
+                && !self.is_carried(a.id)
+                && a.pos == pos
+        })
     }
 
     /// A visible body lying on a tile (for looting, carrying, and evidence).
