@@ -113,6 +113,7 @@ fn spawn_spot(preferred: Pos, layout: &Layout, taken: &[Pos]) -> Pos {
 pub fn populate(
     data: &GameData,
     layout: &Layout,
+    venue: &crate::data::VenueSpec,
     constraint: Option<&crate::contract::Constraint>,
     loadout: &[String],
     heat: u8,
@@ -240,7 +241,14 @@ pub fn populate(
         data.population.vip_civilians_max.into(),
     );
     for role_spec in &data.population.roles {
-        let mut count = rng.range_inclusive(role_spec.count_min.into(), role_spec.count_max.into());
+        // Venue overrides shape the crowd; the role behaviour is shared.
+        let (count_min, count_max) = venue
+            .role_counts
+            .iter()
+            .find(|o| o.role == role_spec.role)
+            .map(|o| (o.count_min, o.count_max))
+            .unwrap_or((role_spec.count_min, role_spec.count_max));
+        let mut count = rng.range_inclusive(count_min.into(), count_max.into());
         // Persistent district heat hardens the venue: extra guards on
         // shift, capped so an area never locks out.
         if role_spec.role == Role::Guard {

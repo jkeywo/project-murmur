@@ -125,4 +125,15 @@
         carried_by: None,          // placed by the key-cache opportunity
         placed_in: None,
     ),
+    (
+        id: "foreman-key",
+        name: "foreman's key",
+        glyph: '-',
+        unlocks: Some("foreman-office"),
+        invitation: false,
+        weapon: false,
+        pickpocketable: true,
+        carried_by: Some(Manager),
+        placed_in: None,
+    ),
 ]

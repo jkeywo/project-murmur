@@ -78,6 +78,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let population = populate::populate(
         data,
         &layout,
+        venue,
         config.constraint.as_ref(),
         &config.loadout,
         config.heat,
@@ -329,8 +330,13 @@ mod tests {
             )
             .unwrap_or_else(|e| panic!("seed {seed} failed: {e}"));
 
-            // Every required room template is present.
-            for template in data.rooms.iter().filter(|t| t.required) {
+            // Every required room template of this venue is present.
+            let venue = data.venue("nightclub").unwrap();
+            for template in data
+                .rooms
+                .iter()
+                .filter(|t| t.required && venue.room_templates.contains(&t.id))
+            {
                 assert!(
                     world.rooms.iter().any(|r| r.template == template.id),
                     "seed {seed}: required room '{}' missing",

@@ -129,6 +129,19 @@ pub struct VenueSpec {
     pub floor_count: u8,
     /// Room templates this venue may place.
     pub room_templates: Vec<RoomTemplateId>,
+    /// Per-venue overrides of the population role counts (a warehouse
+    /// has few guests and more guards than a nightclub).
+    #[serde(default)]
+    pub role_counts: Vec<RoleCountOverride>,
+}
+
+/// One per-venue role count override.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoleCountOverride {
+    pub role: Role,
+    pub count_min: u8,
+    pub count_max: u8,
 }
 
 impl VenueSpec {
@@ -826,6 +839,15 @@ impl GameData {
             }
             if venue.room_templates.is_empty() {
                 errors.push(format!("venue '{}' places no rooms", venue.id));
+            }
+            for over in &venue.role_counts {
+                if over.count_min > over.count_max {
+                    errors.push(format!(
+                        "venue '{}' role override for {} has min > max",
+                        venue.id,
+                        over.role.name()
+                    ));
+                }
             }
             let mut has_required_exit = false;
             for template_id in &venue.room_templates {
