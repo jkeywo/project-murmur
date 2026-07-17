@@ -78,6 +78,30 @@ fn some_npc(world: &World, role: Role) -> ActorId {
 }
 
 #[test]
+fn private_kill_condition_text_names_the_actual_offices() {
+    let data = GameData::embedded().unwrap();
+    let text = Constraint::PrivateKill.describe(&data, "nightclub");
+    // The condition names the real personal-tier rooms, not a vague
+    // "away from the crowd" the player has to decode.
+    assert!(text.contains("manager's office"), "{text}");
+    assert!(text.contains("security office"), "{text}");
+    // The single-office case reads naturally in the warehouse.
+    let short = Constraint::PrivateKill.short(&data, "warehouse");
+    assert!(short.contains("foreman"), "{short}");
+}
+
+#[test]
+fn specific_exit_condition_uses_the_display_name_not_the_raw_id() {
+    let data = GameData::embedded().unwrap();
+    let c = Constraint::SpecificExit {
+        room_template: "loading-bay".to_string(),
+    };
+    let text = c.describe(&data, "nightclub");
+    assert!(text.contains("loading bay"), "{text}");
+    assert!(!text.contains("loading-bay"), "raw id leaked: {text}");
+}
+
+#[test]
 fn every_constraint_generates_with_a_compliant_route_proof() {
     let data = GameData::embedded().unwrap();
     let constraints = [

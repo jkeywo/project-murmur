@@ -177,8 +177,13 @@ pub fn draw_hub(
                 format!("    the target {}", offer.hook),
                 Style::default().fg(Color::Gray),
             ));
+            // The board stays compact with the chip; the full condition
+            // is spelled out on the briefing before you commit.
             lines.push(Line::styled(
-                format!("    condition: {}", offer.constraint.describe()),
+                format!(
+                    "    condition: {}",
+                    offer.constraint.short(data, &offer.venue)
+                ),
                 Style::default().fg(Color::LightCyan),
             ));
         }
@@ -294,7 +299,10 @@ pub fn draw_briefing(
             facts.target_locations.join(", ")
         )),
         Line::styled(
-            format!("Condition: {}", offer.constraint.describe()),
+            format!(
+                "Condition: {}",
+                offer.constraint.describe(data, &offer.venue)
+            ),
             Style::default().fg(Color::LightCyan),
         ),
         Line::from(format!("Payout on a clean job: {}", offer.payout)),
@@ -340,11 +348,16 @@ pub fn draw_briefing(
     if facts.target_locations.is_empty() {
         lines[5] = Line::from("Likely locations: unknown");
     }
-    let widget = Paragraph::new(lines).alignment(Alignment::Left).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
+    // Wrap so the full spelled-out contract condition stays readable
+    // rather than truncating at the panel edge.
+    let widget = Paragraph::new(lines)
+        .alignment(Alignment::Left)
+        .wrap(ratatui::widgets::Wrap { trim: true })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
     frame.render_widget(widget, area);
 }
 
@@ -371,6 +384,12 @@ pub fn draw_debrief(
         Line::from(format!("the contract {}", summary.result.describe())),
         Line::from(format!("payout: {}", summary.payout)),
     ];
+    if let Some(reason) = &summary.breach_reason {
+        lines.push(Line::styled(
+            format!("breached: {reason}"),
+            Style::default().fg(Color::LightRed),
+        ));
+    }
     if summary.fine > 0 {
         lines.push(Line::styled(
             format!("fine paid: {}", summary.fine),

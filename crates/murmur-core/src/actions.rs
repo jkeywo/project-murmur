@@ -1303,7 +1303,15 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
                 .room_at(player_pos)
                 .is_some_and(|r| r.template == room_template);
             if !via_required {
-                breach_constraint(world, events, "you left by the wrong exit");
+                let exit_name = world
+                    .rooms
+                    .iter()
+                    .find(|r| r.template == room_template)
+                    .map(|r| r.name.clone())
+                    .unwrap_or_else(|| room_template.clone());
+                let reason =
+                    format!("you left by the wrong exit - the contract named the {exit_name}");
+                breach_constraint(world, events, &reason);
             }
         }
         world.outcome = Some(MissionOutcome::Extracted);
@@ -1482,7 +1490,24 @@ fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: Act
                     .room_at(pos)
                     .is_some_and(|r| r.zone == crate::data::Zone::Personal);
                 if !private {
-                    breach_constraint(world, events, "the target did not die in private");
+                    let where_ = world
+                        .room_at(pos)
+                        .map(|r| r.name.clone())
+                        .unwrap_or_else(|| "the open floor".to_string());
+                    let offices: Vec<String> = world
+                        .rooms
+                        .iter()
+                        .filter(|r| r.zone == crate::data::Zone::Personal)
+                        .map(|r| r.name.clone())
+                        .collect();
+                    let needed = if offices.is_empty() {
+                        "a private office".to_string()
+                    } else {
+                        offices.join(" or ")
+                    };
+                    let reason =
+                        format!("the target died in {where_} - the kill had to happen in {needed}");
+                    breach_constraint(world, events, &reason);
                 }
             }
             _ => {}

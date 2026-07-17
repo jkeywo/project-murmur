@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{RoomTemplateId, VenueId};
+use crate::data::{GameData, RoomTemplateId, VenueId, Zone};
 
 /// The mandatory condition a contract imposes. Exactly one per contract.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,37 +32,86 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    /// The briefing sentence.
-    pub fn describe(&self) -> String {
+    /// The briefing sentence. Naming rooms concretely — the private
+    /// offices a kill must land in, the exact exit to leave by — so the
+    /// player is never guessing which rooms the rule means.
+    pub fn describe(&self, data: &GameData, venue: &str) -> String {
         match self {
             Constraint::NoFirearms => {
-                "the client demands no gunfire: the pistol stays cold".to_string()
-            }
-            Constraint::NoCivilianCasualties => {
-                "the client demands no collateral: only the target and their guards may die"
+                "no gunfire - the silenced pistol stays holstered (the garrote and \"accidents\" \
+                 are still fair game)"
                     .to_string()
             }
+            Constraint::NoCivilianCasualties => {
+                "no collateral - only the target and their guards may die by your hand".to_string()
+            }
             Constraint::NoBodiesFound => {
-                "the client demands discretion: no body of your making may be found".to_string()
+                "leave no trace - no body of your making may be discovered before you extract \
+                 (stash them in containers)"
+                    .to_string()
             }
             Constraint::PrivateKill => {
-                "the client demands it happen in private, away from the crowd".to_string()
+                let rooms = personal_room_names(data, venue);
+                let where_ = join_or(&rooms, "a private office");
+                format!(
+                    "kill in private - the target must die inside {where_}, not out among the \
+                     guests or in a corridor"
+                )
             }
             Constraint::SpecificExit { room_template } => {
-                format!("the client dictates your extraction: leave via the {room_template}")
+                let name = room_display_name(data, room_template);
+                format!("leave the way the client dictates: extract via the {name}")
             }
         }
     }
 
-    /// The HUD label.
-    pub fn short(&self) -> String {
+    /// The HUD chip: short and space-limited.
+    pub fn short(&self, data: &GameData, venue: &str) -> String {
         match self {
             Constraint::NoFirearms => "no gunfire".to_string(),
             Constraint::NoCivilianCasualties => "no collateral".to_string(),
             Constraint::NoBodiesFound => "no bodies found".to_string(),
-            Constraint::PrivateKill => "kill in private".to_string(),
-            Constraint::SpecificExit { room_template } => format!("exit via {room_template}"),
+            Constraint::PrivateKill => {
+                let rooms = personal_room_names(data, venue);
+                match rooms.first() {
+                    Some(first) if rooms.len() == 1 => format!("kill in the {first}"),
+                    Some(_) => "kill in an office".to_string(),
+                    None => "kill in private".to_string(),
+                }
+            }
+            Constraint::SpecificExit { room_template } => {
+                format!("exit via {}", room_display_name(data, room_template))
+            }
         }
+    }
+}
+
+/// Display names of a venue's personal-tier rooms (the management
+/// offices), for the private-kill condition text.
+fn personal_room_names(data: &GameData, venue: &str) -> Vec<String> {
+    let Some(spec) = data.venue(venue) else {
+        return Vec::new();
+    };
+    data.rooms
+        .iter()
+        .filter(|t| spec.room_templates.contains(&t.id) && t.zone == Zone::Personal)
+        .map(|t| t.name.clone())
+        .collect()
+}
+
+/// A room template's authored display name, falling back to its id.
+fn room_display_name(data: &GameData, template: &str) -> String {
+    data.room_template(template)
+        .map(|t| t.name.clone())
+        .unwrap_or_else(|| template.to_string())
+}
+
+/// Joins names with " or ", or a fallback phrase when the list is empty.
+fn join_or(names: &[String], fallback: &str) -> String {
+    if names.is_empty() {
+        fallback.to_string()
+    } else {
+        names.join(" or ")
     }
 }
 

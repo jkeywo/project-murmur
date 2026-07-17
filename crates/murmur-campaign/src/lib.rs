@@ -92,7 +92,9 @@ impl ContractResult {
 pub struct MissionResolution {
     /// `None` means the player abandoned the run.
     pub outcome: Option<MissionOutcome>,
-    pub constraint_breached: bool,
+    /// The specific reason the contract's condition was broken, if it
+    /// was; `None` when the condition held (or there was none).
+    pub breach_reason: Option<String>,
     pub mission_heat: u16,
     /// What the player carried in (lost on arrest).
     pub loadout: Vec<ItemSpecId>,
@@ -106,6 +108,8 @@ pub struct ResolutionSummary {
     pub fine: i64,
     pub confiscated: Vec<ItemSpecId>,
     pub district_heat_change: i8,
+    /// Why the contract's condition was broken, for the debrief.
+    pub breach_reason: Option<String>,
 }
 
 /// The whole persistent campaign. Serialises to the versioned JSON save.
@@ -240,7 +244,7 @@ impl CampaignState {
         resolution: &MissionResolution,
     ) -> ResolutionSummary {
         let result = match resolution.outcome {
-            Some(MissionOutcome::Extracted) if !resolution.constraint_breached => {
+            Some(MissionOutcome::Extracted) if resolution.breach_reason.is_none() => {
                 ContractResult::Completed
             }
             Some(MissionOutcome::Extracted) => ContractResult::CompletedUnclean,
@@ -304,6 +308,7 @@ impl CampaignState {
             fine,
             confiscated,
             district_heat_change,
+            breach_reason: resolution.breach_reason.clone(),
         }
     }
 
@@ -452,7 +457,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::Extracted),
-                constraint_breached: false,
+                breach_reason: None,
                 mission_heat: 0,
                 loadout: vec!["garrote".to_string()],
             },
@@ -466,7 +471,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::Extracted),
-                constraint_breached: true,
+                breach_reason: Some("the pistol was fired".to_string()),
                 mission_heat: 0,
                 loadout: vec![],
             },
@@ -482,7 +487,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::TargetEscaped),
-                constraint_breached: false,
+                breach_reason: None,
                 mission_heat: 0,
                 loadout: vec!["garrote".to_string()],
             },
@@ -500,7 +505,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::Arrested),
-                constraint_breached: false,
+                breach_reason: None,
                 mission_heat: 0,
                 loadout: vec!["garrote".to_string()],
             },
@@ -518,7 +523,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::PlayerKilled),
-                constraint_breached: false,
+                breach_reason: None,
                 mission_heat: 0,
                 loadout: vec![],
             },
@@ -541,7 +546,7 @@ mod tests {
             &the_offer,
             &MissionResolution {
                 outcome: Some(MissionOutcome::Extracted),
-                constraint_breached: false,
+                breach_reason: None,
                 mission_heat: data.campaign.hot_mission_threshold,
                 loadout: vec![],
             },

@@ -427,7 +427,7 @@ fn draw_sidebar(
             ));
         } else {
             lines.push(Line::styled(
-                format!("contract: {}", constraint.short()),
+                format!("contract: {}", constraint.short(data, &world.venue)),
                 Style::default().fg(Color::LightCyan),
             ));
         }

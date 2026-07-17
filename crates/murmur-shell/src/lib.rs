@@ -379,13 +379,13 @@ impl Shell {
         let world = mission.world();
         let resolution = MissionResolution {
             outcome: world.outcome.clone(),
-            constraint_breached: world.constraint_breach.is_some(),
+            breach_reason: world.constraint_breach.clone(),
             mission_heat: world.mission_heat,
             loadout,
         };
         let headline = match &resolution.outcome {
             Some(murmur_core::world::MissionOutcome::Extracted)
-                if !resolution.constraint_breached =>
+                if resolution.breach_reason.is_none() =>
             {
                 "CONTRACT COMPLETED"
             }
