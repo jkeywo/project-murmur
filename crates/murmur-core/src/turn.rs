@@ -129,7 +129,11 @@ impl TurnDriver {
         // Visible tampering: the player spending this turn picking a lock.
         self.world.player_tampering = self.store.actions.iter().any(|p| {
             p.actor == self.world.player
-                && matches!(p.intent, crate::actions::ActionIntent::PickLock(_))
+                && matches!(
+                    p.intent,
+                    crate::actions::ActionIntent::PickLock(_)
+                        | crate::actions::ActionIntent::Interact(_)
+                )
         });
         let events = resolve_turn(&mut self.world, data, &mut self.store.actions);
         let perception_messages = if self.world.outcome.is_none() {

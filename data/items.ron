@@ -113,4 +113,16 @@
         carried_by: Some(Guard),
         placed_in: None,
     ),
+    (
+        id: "service-master-key",
+        name: "service master key",
+        glyph: '-',
+        unlocks: None,
+        invitation: false,
+        weapon: false,
+        master_key: true,
+        pickpocketable: false,
+        carried_by: None,          // placed by the key-cache opportunity
+        placed_in: None,
+    ),
 ]

@@ -124,6 +124,9 @@ pub(crate) fn reachable_tiles(
         if let TileKind::Door(id) = layout.map.tile(pos)
             && let Some(key) = &layout.doors[id.0 as usize].locked_by
             && !keys.contains(key)
+            && !keys
+                .iter()
+                .any(|k| data.item(k).is_some_and(|s| s.master_key))
         {
             return false;
         }
@@ -318,6 +321,28 @@ pub(crate) fn capability_closure(
                     room_name_at(layout, furniture.pos)
                 ));
                 disguises.push(disguise.clone());
+                grew = true;
+            }
+        }
+        // Key-cache machines dispense their key when reachable.
+        for furniture in &layout.furniture {
+            if furniture.kind == FurnitureKind::Machine
+                && let Some(spec) = furniture
+                    .machine
+                    .as_deref()
+                    .and_then(|s| data.opportunity(s))
+                && let crate::data::OpportunityEffect::PlaceKey { item } = &spec.effect
+                && !keys.contains(item)
+                && Dir4::ALL
+                    .into_iter()
+                    .any(|d| seen.contains(furniture.pos.step(d)))
+            {
+                events.push(format!(
+                    "lift the {} from the {}",
+                    data.item(item).map(|s| s.name.as_str()).unwrap_or(item),
+                    spec.name
+                ));
+                keys.push(item.clone());
                 grew = true;
             }
         }

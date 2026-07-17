@@ -386,33 +386,35 @@ fn alerted_guard_arrests_the_nonviolent_player() {
 
 #[test]
 fn crouching_behind_low_cover_breaks_line_of_sight() {
-    let (data, mut driver) = setup(17);
-    quiet_all_npcs(driver.world_mut());
+    // Whether a cover piece has two open colinear sides depends on the
+    // generated furniture; search seeds until one does.
+    let (data, mut driver, cover, axis) = (0..24u64)
+        .find_map(|seed| {
+            let (data, mut driver) = setup(seed);
+            quiet_all_npcs(driver.world_mut());
+            let world = driver.world();
+            for furniture in &world.furniture {
+                if furniture.kind != FurnitureKind::LowCover {
+                    continue;
+                }
+                let cover = furniture.pos;
+                let open = |p: Pos| {
+                    matches!(world.map.tile(p), TileKind::Floor)
+                        && world.furniture_at(p).is_none()
+                        && world.standing_actor_at(p).is_none()
+                };
+                if let Some(axis) = Dir4::ALL
+                    .into_iter()
+                    .find(|d| open(cover.step(*d)) && open(cover.step(d.opposite())))
+                {
+                    return Some((data, driver, cover, axis));
+                }
+            }
+            None
+        })
+        .expect("some seed offers cover with two open colinear sides");
     let guard = some_npc(driver.world(), Role::Guard);
     let player = driver.world().player;
-
-    let cover = driver
-        .world()
-        .furniture
-        .iter()
-        .find(|f| f.kind == FurnitureKind::LowCover)
-        .map(|f| f.pos)
-        .expect("low cover exists");
-    // Guard on one side, player on the other, colinear through the cover.
-    let axis = Dir4::ALL
-        .into_iter()
-        .find(|d| {
-            let a = cover.step(*d);
-            let b = cover.step(d.opposite());
-            let world = driver.world();
-            let open = |p: Pos| {
-                matches!(world.map.tile(p), TileKind::Floor)
-                    && world.furniture_at(p).is_none()
-                    && world.standing_actor_at(p).is_none()
-            };
-            open(a) && open(b)
-        })
-        .expect("cover has two open colinear sides");
     place(
         driver.world_mut(),
         guard,

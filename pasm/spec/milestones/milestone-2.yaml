@@ -113,7 +113,7 @@ entities:
 
   - component: milestone-2-opportunity-library
     core:
-      status: proposed
+      status: implemented
       confidence: confirmed
       title: Five Composable Opportunity Machines
       summary: >-
@@ -124,6 +124,11 @@ entities:
         and discoverable presentation. Place a machine only when it improves a
         planner-validated route.
       references: [milestone-2-planning-domain-composition, milestone-2-route-planner]
+    implementation:
+      status: declared
+      paths: [data/opportunities.ron, crates/murmur-core/src/generator/opportunities.rs]
+      symbols: [place_opportunities]
+      tests: [crates/murmur-core/tests/opportunities.rs]
 
   - component: milestone-2-police-heat
     core:

@@ -192,6 +192,9 @@ pub struct ItemSpec {
     /// Grants staff-tier legitimacy while carried, whatever is worn.
     #[serde(default)]
     pub staff_pass: bool,
+    /// Opens every locked door in the venue (the key-cache opportunity).
+    #[serde(default)]
+    pub master_key: bool,
     /// Charges the item starts with (pistol rounds, noisemaker uses).
     #[serde(default)]
     pub charges: u16,
@@ -231,6 +234,51 @@ pub struct EquipmentSpec {
     pub item: ItemSpecId,
     pub approach: Approach,
     pub price: i64,
+}
+
+/// Which route posture an opportunity machine primarily serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpportunityApproach {
+    Physical,
+    Social,
+    Violence,
+    Universal,
+}
+
+/// What using (or placing) an opportunity machine does. Effects are the
+/// vocabulary shared by generation, the planner, and resolution — the
+/// same vocabulary a future mission-scripting layer will compose.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OpportunityEffect {
+    /// Cuts the lights: every bright room on the machine's storey dims.
+    CutLights,
+    /// Placement stocks a wardrobe with a disguise (no interaction).
+    StockWardrobe { disguise: DisguiseId },
+    /// Drops a load on whoever stands beneath: a deniable accident kill.
+    AccidentDrop,
+    /// Placement drops an item on the floor nearby (no interaction).
+    PlaceKey { item: ItemSpecId },
+    /// Triggers an evacuation: civilians and staff flee, guards respond.
+    Evacuate,
+}
+
+/// One authored opportunity machine.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OpportunitySpec {
+    pub id: String,
+    pub name: String,
+    pub glyph: char,
+    pub approach: OpportunityApproach,
+    pub effect: OpportunityEffect,
+    /// Zones whose rooms may host this machine.
+    pub zones: Vec<Zone>,
+    /// Turns the interaction takes.
+    pub interact_turns: u16,
+    /// Authored risk statement (briefing and inspection).
+    pub risk: String,
+    /// Discoverable presentation: what looking at it tells the player.
+    pub presentation: String,
 }
 
 /// How many waypoints of one kind a room offers.
@@ -419,6 +467,7 @@ pub struct GameData {
     pub disguises: Vec<DisguiseSpec>,
     pub items: Vec<ItemSpec>,
     pub equipment: Vec<EquipmentSpec>,
+    pub opportunities: Vec<OpportunitySpec>,
     pub rooms: Vec<RoomTemplate>,
     pub population: PopulationData,
     pub names: NamePools,
@@ -445,6 +494,7 @@ const VENUES_RON: &str = include_str!("../../../data/venues.ron");
 const DISGUISES_RON: &str = include_str!("../../../data/disguises.ron");
 const ITEMS_RON: &str = include_str!("../../../data/items.ron");
 const EQUIPMENT_RON: &str = include_str!("../../../data/equipment.ron");
+const OPPORTUNITIES_RON: &str = include_str!("../../../data/opportunities.ron");
 const ROOMS_RON: &str = include_str!("../../../data/rooms.ron");
 const POPULATION_RON: &str = include_str!("../../../data/population.ron");
 const NAMES_RON: &str = include_str!("../../../data/names.ron");
@@ -466,6 +516,7 @@ impl GameData {
             DISGUISES_RON,
             ITEMS_RON,
             EQUIPMENT_RON,
+            OPPORTUNITIES_RON,
             ROOMS_RON,
             POPULATION_RON,
             NAMES_RON,
@@ -481,6 +532,7 @@ impl GameData {
         disguises: &str,
         items: &str,
         equipment: &str,
+        opportunities: &str,
         rooms: &str,
         population: &str,
         names: &str,
@@ -492,6 +544,7 @@ impl GameData {
             disguises: parse("disguises.ron", disguises)?,
             items: parse("items.ron", items)?,
             equipment: parse("equipment.ron", equipment)?,
+            opportunities: parse("opportunities.ron", opportunities)?,
             rooms: parse("rooms.ron", rooms)?,
             population: parse("population.ron", population)?,
             names: parse("names.ron", names)?,
@@ -503,6 +556,10 @@ impl GameData {
 
     pub fn venue(&self, id: &str) -> Option<&VenueSpec> {
         self.venues.iter().find(|v| v.id == id)
+    }
+
+    pub fn opportunity(&self, id: &str) -> Option<&OpportunitySpec> {
+        self.opportunities.iter().find(|o| o.id == id)
     }
 
     pub fn disguise(&self, id: &str) -> Option<&DisguiseSpec> {
@@ -652,6 +709,52 @@ impl GameData {
             && pistol.charges != self.tuning.pistol_rounds
         {
             errors.push("silenced pistol charges must match tuning pistol_rounds".into());
+        }
+
+        {
+            use OpportunityApproach as OA;
+            let count_of = |a: OA| {
+                self.opportunities
+                    .iter()
+                    .filter(|o| o.approach == a)
+                    .count()
+            };
+            if self.opportunities.len() != 5
+                || count_of(OA::Physical) != 1
+                || count_of(OA::Social) != 1
+                || count_of(OA::Violence) != 1
+                || count_of(OA::Universal) != 2
+            {
+                errors.push(
+                    "opportunities must be exactly five: one physical, one social, one violence, two universal"
+                        .into(),
+                );
+            }
+            for spec in &self.opportunities {
+                if spec.zones.is_empty() {
+                    errors.push(format!("opportunity '{}' allows no zones", spec.id));
+                }
+                if spec.interact_turns == 0 {
+                    errors.push(format!("opportunity '{}' must take time", spec.id));
+                }
+                match &spec.effect {
+                    OpportunityEffect::StockWardrobe { disguise }
+                        if self.disguise(disguise).is_none() =>
+                    {
+                        errors.push(format!(
+                            "opportunity '{}' stocks unknown disguise '{disguise}'",
+                            spec.id
+                        ));
+                    }
+                    OpportunityEffect::PlaceKey { item } if self.item(item).is_none() => {
+                        errors.push(format!(
+                            "opportunity '{}' places unknown item '{item}'",
+                            spec.id
+                        ));
+                    }
+                    _ => {}
+                }
+            }
         }
 
         if self.venues.is_empty() {

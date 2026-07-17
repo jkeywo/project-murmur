@@ -393,3 +393,19 @@ entities:
       paths: [data/equipment.ron, data/items.ron, crates/murmur-core/src/data.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/access.rs, crates/murmur-core/src/planner.rs]
       symbols: [EquipmentSpec, Approach]
       tests: [crates/murmur-core/tests/equipment.rs]
+
+  - decision: opportunity-machines-and-deniable-accidents
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Opportunity Machines and Deniable Accidents
+      summary: The five machines are realised as interactable furniture placed after population and before the proofs, so the reachability closure and planner see their capabilities. Placement follows deterministic improvement rules, the fuse box only where its storey has light to cut, the uniform store only when no wardrobe already offers the disguise, the hoist only above a stop on the target's schedule, the key cache only when locked doors exist, the fire alarm wherever eligible. Accident kills are deniable by design, they carry no player attribution, never breach any contract constraint, and read as noise rather than violence, which makes the rigged hoist the planner's weapon-free kill route and lets weaponless loadouts certify. Interacting counts as visible tampering; the briefing surfaces each placed machine as a discoverable hint.
+      rationale:
+        - Placing machines before the proofs makes their effects planner-visible facts rather than presentation, exactly as the opportunity-library component demands.
+        - Deniable accidents give constraints a systemic pressure valve, the cleanest route under a strict contract is engineering, not shooting.
+      references: [milestone-2-opportunity-library, milestone-2-planning-domain-composition, constraint-catalogue-and-breach-semantics]
+    implementation:
+      status: declared
+      paths: [data/opportunities.ron, crates/murmur-core/src/generator/opportunities.rs, crates/murmur-core/src/actions.rs]
+      symbols: [place_opportunities]
+      tests: [crates/murmur-core/tests/opportunities.rs]

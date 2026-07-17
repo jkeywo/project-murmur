@@ -127,6 +127,15 @@ fn tile_cell(
             FurnitureKind::LowCover => ('=', Color::Yellow),
             FurnitureKind::Container => ('O', Color::Gray),
             FurnitureKind::Wardrobe => ('W', Color::LightBlue),
+            FurnitureKind::Machine => {
+                let glyph = furniture
+                    .machine
+                    .as_deref()
+                    .and_then(|id| data.opportunity(id))
+                    .map(|s| s.glyph)
+                    .unwrap_or('&');
+                (glyph, Color::LightYellow)
+            }
         };
         let style = if visible {
             Style::default().fg(color)
@@ -324,6 +333,7 @@ const ACTIONS: &[(char, &str)] = &[
     ('k', "close door"),
     ('l', "pick lock"),
     ('t', "noisemaker"),
+    ('u', "use machine"),
     (';', "look"),
 ];
 

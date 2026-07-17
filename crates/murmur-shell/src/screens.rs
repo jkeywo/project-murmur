@@ -42,7 +42,8 @@ pub fn draw_start(frame: &mut Frame) {
         Line::raw("arrows move    . or Space wait    c crouch    r draw/holster"),
         Line::raw("o/k open/close door   g garrote   f shoot   p pickpocket"),
         Line::raw("d change disguise   b carry/drop body   h hide body"),
-        Line::raw("l pick lock   t throw noisemaker   ; look   [ ] speed"),
+        Line::raw("l pick lock   t throw noisemaker   u use machine"),
+        Line::raw("; look   [ ] speed"),
         Line::raw("Esc cancel   Q abandon run"),
         Line::raw(""),
         Line::raw("The mouse works too: hover anything to inspect it —"),
@@ -103,6 +104,11 @@ pub fn draw_briefing(frame: &mut Frame, facts: &MissionFacts, seed: u64) {
             "Extraction: {}",
             facts.extraction_exits.join(" or ")
         )),
+        Line::from(if facts.opportunities.is_empty() {
+            "Word on the inside: nothing unusual".to_string()
+        } else {
+            format!("Word on the inside: {}", facts.opportunities.join("; "))
+        }),
         Line::raw(""),
         Line::raw("You carry a garrote and a silenced pistol (6 rounds)."),
         Line::raw("You enter as a guest, in civilian clothes."),

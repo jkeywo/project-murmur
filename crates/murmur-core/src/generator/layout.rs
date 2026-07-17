@@ -554,6 +554,9 @@ fn place_furniture(
                         pos,
                         body: None,
                         disguise: None,
+                        machine: None,
+                        used: false,
+                        drop_tile: None,
                     });
                     blocked.push(pos);
                     placed = true;
@@ -579,6 +582,44 @@ fn place_furniture(
     );
     let cover = rng.range_inclusive(template.low_cover_min.into(), template.low_cover_max.into());
     place_kind(FurnitureKind::LowCover, cover, furniture, &mut blocked, rng);
+}
+
+/// A free interior tile in `room` that keeps the room connected if
+/// blocked: the shared placement rule for wardrobes and machines.
+pub fn find_free_spot(
+    room: &Room,
+    map: &GameMap,
+    extraction: &[Pos],
+    furniture: &[Furniture],
+    occupied: &[Pos],
+    rng: &mut Pcg32,
+) -> Option<Pos> {
+    let protected = protected_tiles(room, map, extraction);
+    let mut blocked: Vec<Pos> = furniture
+        .iter()
+        .filter(|f| f.pos.floor == room.floor && room.bounds.contains(f.pos.x, f.pos.y))
+        .map(|f| f.pos)
+        .collect();
+    blocked.extend(
+        occupied
+            .iter()
+            .copied()
+            .filter(|p| p.floor == room.floor && room.bounds.contains(p.x, p.y)),
+    );
+    let mut candidates: Vec<Pos> = interior_tiles(room)
+        .into_iter()
+        .filter(|p| !protected.contains(p) && !blocked.contains(p))
+        .collect();
+    for _ in 0..12 {
+        if candidates.is_empty() {
+            return None;
+        }
+        let pos = rng.take(&mut candidates);
+        if placement_keeps_room_connected(room, &blocked, pos, &protected) {
+            return Some(pos);
+        }
+    }
+    None
 }
 
 /// Adds a wardrobe holding `disguise` to `room` if a legal tile exists.
@@ -613,6 +654,9 @@ pub fn insert_wardrobe(
                 pos,
                 body: None,
                 disguise: Some(disguise.to_string()),
+                machine: None,
+                used: false,
+                drop_tile: None,
             });
             return true;
         }

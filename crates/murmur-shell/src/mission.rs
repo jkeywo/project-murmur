@@ -35,6 +35,7 @@ pub enum PendingAction {
     OpenDoor,
     CloseDoor,
     PickLock,
+    UseMachine,
 }
 
 impl PendingAction {
@@ -49,6 +50,7 @@ impl PendingAction {
             PendingAction::OpenDoor => "open - which direction?",
             PendingAction::CloseDoor => "close - which direction?",
             PendingAction::PickLock => "pick lock - which direction?",
+            PendingAction::UseMachine => "use - which direction?",
         }
     }
 }
@@ -378,6 +380,7 @@ impl Mission {
             ShellInput::Char('o') => self.mode = InputMode::Pending(PendingAction::OpenDoor),
             ShellInput::Char('k') => self.mode = InputMode::Pending(PendingAction::CloseDoor),
             ShellInput::Char('l') => self.mode = InputMode::Pending(PendingAction::PickLock),
+            ShellInput::Char('u') => self.mode = InputMode::Pending(PendingAction::UseMachine),
             ShellInput::Char('t') => {
                 self.mode = InputMode::ThrowTarget(self.world().player_actor().pos);
             }
@@ -502,6 +505,9 @@ impl Mission {
                 TileKind::Door(id) => Some(Command::PickLock(id)),
                 _ => None,
             },
+            PendingAction::UseMachine => world.furniture_at(pos).and_then(|f| {
+                (f.kind == FurnitureKind::Machine).then_some(Command::Interact(f.id))
+            }),
             PendingAction::DropBody => {
                 // Handled directly in handle_pending; unreachable here.
                 None
@@ -743,6 +749,19 @@ impl Mission {
                         ),
                         None => "wardrobe (empty)".to_string(),
                     },
+                    FurnitureKind::Machine => {
+                        let spec = furniture
+                            .machine
+                            .as_deref()
+                            .and_then(|id| data.opportunity(id));
+                        match spec {
+                            Some(spec) if furniture.used => format!("{} (spent)", spec.name),
+                            Some(spec) => {
+                                format!("{} - {} ({})", spec.name, spec.presentation, spec.risk)
+                            }
+                            None => "machinery".to_string(),
+                        }
+                    }
                 };
                 parts.push(described);
             }

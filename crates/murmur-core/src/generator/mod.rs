@@ -9,6 +9,7 @@
 
 pub mod grammar;
 pub mod layout;
+pub mod opportunities;
 pub mod populate;
 pub mod proof;
 
@@ -83,6 +84,11 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     )
     .map_err(|e| e.0)?;
 
+    // Opportunity machines land before the proofs so the closure and
+    // the planner see their capabilities.
+    let opportunity_lines =
+        opportunities::place_opportunities(data, &mut layout, &population, &mut rng);
+
     let player_start = population.actors[population.player.0 as usize].pos;
     proof::prove_physical(data, &layout, player_start).map_err(|e| e.0)?;
     let report = proof::prove_progression(data, &mut layout, &population, player_start, &mut rng)
@@ -102,7 +108,8 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         )?);
     }
 
-    let facts = build_facts(data, &layout, &population, &mut rng);
+    let mut facts = build_facts(data, &layout, &population, &mut rng);
+    facts.opportunities = opportunity_lines;
 
     Ok(World {
         seed,
@@ -219,6 +226,7 @@ fn build_facts(
             .filter(|r| r.external_exit)
             .map(|r| r.name.clone())
             .collect(),
+        opportunities: Vec::new(),
     }
 }
 

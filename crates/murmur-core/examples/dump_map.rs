@@ -61,6 +61,7 @@ fn main() {
                         FurnitureKind::LowCover => '=',
                         FurnitureKind::Container => 'O',
                         FurnitureKind::Wardrobe => 'W',
+                        FurnitureKind::Machine => '&',
                     }
                 } else if world.extraction_tiles.contains(&pos) {
                     'X'

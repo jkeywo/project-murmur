@@ -83,6 +83,9 @@ pub fn can_pass_door(
     let Some(key) = &world.door(door).locked_by else {
         return true;
     };
+    if world.carries(actor, data, |spec| spec.master_key) {
+        return true;
+    }
     if world.carries(actor, data, |spec| &spec.id == key) {
         return true;
     }

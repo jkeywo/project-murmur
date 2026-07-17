@@ -81,6 +81,9 @@ pub enum FurnitureKind {
     Container,
     /// Wardrobes: like containers but hold a disguise instead of a body.
     Wardrobe,
+    /// An opportunity machine (fuse box, hoist, alarm): blocks movement
+    /// and sight like a container; interacted with, not opened.
+    Machine,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -92,6 +95,15 @@ pub struct Furniture {
     pub body: Option<ActorId>,
     /// Disguise available inside (wardrobes only).
     pub disguise: Option<DisguiseId>,
+    /// The opportunity spec realised here (machines only).
+    #[serde(default)]
+    pub machine: Option<String>,
+    /// One-shot machines flip this when used.
+    #[serde(default)]
+    pub used: bool,
+    /// Where the rigged load lands (accident machines only).
+    #[serde(default)]
+    pub drop_tile: Option<Pos>,
 }
 
 /// Where an item currently is.
@@ -270,6 +282,10 @@ pub struct MissionFacts {
     pub container_count: usize,
     /// Room names offering extraction exits.
     pub extraction_exits: Vec<String>,
+    /// Discoverable opportunity hints ("a humming fuse box in the
+    /// kitchen").
+    #[serde(default)]
+    pub opportunities: Vec<String>,
 }
 
 /// The complete authoritative simulation state.
@@ -423,7 +439,9 @@ impl World {
                 return true;
             }
             match self.furniture_at(pos).map(|f| f.kind) {
-                Some(FurnitureKind::Container) | Some(FurnitureKind::Wardrobe) => true,
+                Some(FurnitureKind::Container)
+                | Some(FurnitureKind::Wardrobe)
+                | Some(FurnitureKind::Machine) => true,
                 Some(FurnitureKind::LowCover) => either_endpoint_crouched,
                 None => false,
             }

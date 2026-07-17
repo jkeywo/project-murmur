@@ -47,6 +47,8 @@ pub enum Command {
     PickLock(DoorId),
     /// Throw a noisemaker charge at a visible tile to draw investigators.
     ThrowNoisemaker(Pos),
+    /// Use an adjacent opportunity machine.
+    Interact(FurnitureId),
 }
 
 /// Where a disguise change sources its clothes.
@@ -75,6 +77,7 @@ pub enum ActionIntent {
     DrawOrHolster,
     PickLock(DoorId),
     Throw(Pos),
+    Interact(FurnitureId),
     /// NPC-only in practice: turn on the spot to face a direction.
     TurnFacing(Dir4),
     /// NPC-only in practice: adjacent lethal melee.
@@ -115,6 +118,8 @@ pub enum RejectReason {
     NoLockpicks,
     DoorNotLocked,
     NoNoisemaker,
+    NothingToUse,
+    MachineSpent,
     MissionOver,
 }
 
@@ -148,6 +153,8 @@ impl RejectReason {
             RejectReason::NoLockpicks => "you carry no lockpicks",
             RejectReason::DoorNotLocked => "that door is not locked",
             RejectReason::NoNoisemaker => "no noisemaker charges left",
+            RejectReason::NothingToUse => "nothing to use there",
+            RejectReason::MachineSpent => "it has already been used",
             RejectReason::MissionOver => "the mission is over",
         }
     }
@@ -181,6 +188,14 @@ pub fn intent_duration(
         ActionIntent::DrawOrHolster => durations.draw_holster,
         ActionIntent::PickLock(_) => durations.pick_lock,
         ActionIntent::Throw(_) => durations.throw,
+        ActionIntent::Interact(id) => world
+            .furniture
+            .iter()
+            .find(|f| f.id == *id)
+            .and_then(|f| f.machine.as_deref())
+            .and_then(|spec| data.opportunity(spec))
+            .map(|spec| spec.interact_turns)
+            .unwrap_or(1),
         ActionIntent::MeleeAttack(_) | ActionIntent::Arrest(_) => 1,
     }
 }
@@ -458,6 +473,26 @@ pub fn translate(
             }
             Ok(ActionIntent::Throw(pos))
         }
+        Command::Interact(id) => {
+            let furniture = world
+                .furniture
+                .iter()
+                .find(|f| f.id == id && f.kind == FurnitureKind::Machine)
+                .ok_or(RejectReason::NothingToUse)?;
+            if furniture.machine.is_none() {
+                return Err(RejectReason::NothingToUse);
+            }
+            if furniture.used {
+                return Err(RejectReason::MachineSpent);
+            }
+            if !player.pos.is_adjacent(furniture.pos) {
+                return Err(RejectReason::NotAdjacent);
+            }
+            if player.hands != Hands::Free {
+                return Err(RejectReason::HandsNotFree);
+            }
+            Ok(ActionIntent::Interact(id))
+        }
     }
 }
 
@@ -674,6 +709,9 @@ pub fn resolve_turn(
                         ActionResult::Failed("the doorway is blocked"),
                     );
                 }
+            }
+            ActionIntent::Interact(id) => {
+                resolve_interact(world, data, &mut events, action.actor, id)
             }
             ActionIntent::PickLock(id) => {
                 if world.door(id).locked_by.is_some() {
@@ -1263,6 +1301,136 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
             .messages
             .push("you slip out into the night; the job is done".to_string());
     }
+}
+
+/// Applies one opportunity machine's effect.
+fn resolve_interact(
+    world: &mut World,
+    data: &GameData,
+    events: &mut TurnEvents,
+    actor: ActorId,
+    id: FurnitureId,
+) {
+    let Some(furniture) = world.furniture.iter().find(|f| f.id == id) else {
+        fail(world, events, actor, "nothing to use there");
+        return;
+    };
+    let (spec_id, machine_pos, drop_tile, used) = (
+        furniture.machine.clone(),
+        furniture.pos,
+        furniture.drop_tile,
+        furniture.used,
+    );
+    let Some(spec) = spec_id
+        .as_deref()
+        .and_then(|s| data.opportunity(s))
+        .cloned()
+    else {
+        fail(world, events, actor, "nothing to use there");
+        return;
+    };
+    if used {
+        fail(world, events, actor, "it has already been used");
+        return;
+    }
+
+    match &spec.effect {
+        crate::data::OpportunityEffect::CutLights => {
+            for room in &mut world.rooms {
+                if room.floor == machine_pos.floor {
+                    room.lighting = crate::data::Lighting::Dim;
+                }
+            }
+            events
+                .messages
+                .push("the fuses blow; darkness rolls across the floor".to_string());
+        }
+        crate::data::OpportunityEffect::AccidentDrop => {
+            let victim = drop_tile.and_then(|tile| world.standing_actor_at(tile).map(|a| a.id));
+            match victim {
+                Some(victim) => {
+                    // A deniable accident: no murder evidence, no
+                    // constraint breach, no player attribution.
+                    if let Hands::CarryingBody(body) = world.actor(victim).hands {
+                        let pos = world.actor(victim).pos;
+                        world.actor_mut(body).pos = pos;
+                    }
+                    let name = world.actor(victim).name.clone();
+                    let victim_mut = world.actor_mut(victim);
+                    victim_mut.condition = BodyCondition::Dead;
+                    victim_mut.hp = 0;
+                    victim_mut.hands = Hands::Free;
+                    world.incidents.push(crate::world::Incident {
+                        kind: crate::world::IncidentKind::Noise,
+                        pos: drop_tile.unwrap_or(machine_pos),
+                        radius: 8,
+                        turn: world.turn,
+                    });
+                    events
+                        .messages
+                        .push(format!("the hoist gives way; a crate crushes {name}"));
+                }
+                None => {
+                    events
+                        .messages
+                        .push("the hoist lets go; the crate shatters on empty floor".to_string());
+                }
+            }
+        }
+        crate::data::OpportunityEffect::Evacuate => {
+            let ids: Vec<ActorId> = world
+                .actors
+                .iter()
+                .filter(|a| !a.is_player() && a.alive() && !a.departed && a.ai.is_some())
+                .map(|a| a.id)
+                .collect();
+            for npc in ids {
+                let is_guard = world.actor(npc).role == Some(crate::data::Role::Guard);
+                let ai = world.actor_mut(npc).ai.as_mut().unwrap();
+                if is_guard {
+                    if matches!(
+                        ai.mood,
+                        crate::world::Mood::Relaxed | crate::world::Mood::Suspicious
+                    ) {
+                        ai.mood = crate::world::Mood::Investigating;
+                        ai.focus = Some(machine_pos);
+                    }
+                } else {
+                    ai.mood = crate::world::Mood::Fleeing;
+                    ai.focus = Some(machine_pos);
+                }
+            }
+            events
+                .messages
+                .push("the fire alarm shrieks; the whole club surges for the exits".to_string());
+        }
+        crate::data::OpportunityEffect::PlaceKey { item } => {
+            if world.carried_items(actor).count() >= INVENTORY_SLOTS {
+                fail(world, events, actor, "your pockets are full");
+                return;
+            }
+            let spec_item = data.item(item).expect("validated at load");
+            let new_id = crate::world::ItemId(world.items.len() as u32);
+            world.items.push(crate::world::ItemInstance {
+                id: new_id,
+                spec: spec_item.id.clone(),
+                location: ItemLocation::CarriedBy(actor),
+                charges: spec_item.charges,
+            });
+            events
+                .messages
+                .push(format!("you lift the {}", spec_item.name));
+        }
+        crate::data::OpportunityEffect::StockWardrobe { .. } => {
+            fail(world, events, actor, "nothing to use there");
+            return;
+        }
+    }
+
+    if let Some(furniture) = world.furniture.iter_mut().find(|f| f.id == id) {
+        furniture.used = true;
+    }
+    complete(world, events, actor);
 }
 
 /// Marks the contract constraint broken (once), with the reason on the

@@ -146,41 +146,75 @@ pub fn prove_route(
         filters.assume_catalogue,
     );
 
-    // A kill capability appropriate to the class.
+    // Kill capabilities appropriate to the class (an empty set may
+    // still be rescued by a rigged accident below).
     let weapons = player_weapons(data, population, filters);
-    let usable: Vec<&String> = weapons
+    let usable: Vec<String> = weapons
         .iter()
         .filter(|w| match class {
             RouteClass::Violence => true,
             _ => is_silent(w),
         })
+        .cloned()
         .collect();
-    if usable.is_empty() {
-        return Err(format!("no usable weapon for a {} route", class.name()));
-    }
 
     // A reachable room the target's schedule visits (abstract schedule
-    // window), honouring any kill-room restriction.
+    // window), honouring any kill-room restriction. Weapon kills need a
+    // usable weapon; a reachable rigged accident above a schedule stop
+    // kills without one.
     let target = &population.actors[population.target.0 as usize];
-    let kill_room = schedule_positions(target)
-        .iter()
-        .filter(|pos| outcome.seen.contains(**pos))
-        .find_map(|pos| {
-            let room = layout
-                .rooms
-                .iter()
-                .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))?;
-            match &filters.kill_rooms {
-                Some(allowed) if !allowed.contains(&room.name) => None,
-                _ => Some(room.name.clone()),
-            }
-        })
-        .ok_or_else(|| {
-            format!(
-                "no reachable kill site on the target's schedule for a {} route",
-                class.name()
-            )
-        })?;
+    let stops = schedule_positions(target);
+    let weapon_kill = if usable.is_empty() {
+        None
+    } else {
+        stops
+            .iter()
+            .filter(|pos| outcome.seen.contains(**pos))
+            .find_map(|pos| {
+                let room = layout
+                    .rooms
+                    .iter()
+                    .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))?;
+                match &filters.kill_rooms {
+                    Some(allowed) if !allowed.contains(&room.name) => None,
+                    _ => Some((room.name.clone(), usable[0].clone())),
+                }
+            })
+    };
+    let accident_kill = layout.furniture.iter().find_map(|f| {
+        if f.kind != crate::world::FurnitureKind::Machine {
+            return None;
+        }
+        let spec = f.machine.as_deref().and_then(|s| data.opportunity(s))?;
+        if !matches!(spec.effect, crate::data::OpportunityEffect::AccidentDrop) {
+            return None;
+        }
+        let drop = f.drop_tile?;
+        if !stops.contains(&drop) {
+            return None;
+        }
+        // The player must be able to reach the lever.
+        if !crate::geom::Dir4::ALL
+            .into_iter()
+            .any(|d| outcome.seen.contains(f.pos.step(d)))
+        {
+            return None;
+        }
+        let room = layout
+            .rooms
+            .iter()
+            .find(|r| r.floor == drop.floor && r.bounds.contains(drop.x, drop.y))?;
+        match &filters.kill_rooms {
+            Some(allowed) if !allowed.contains(&room.name) => None,
+            _ => Some((room.name.clone(), "rigged accident".to_string())),
+        }
+    });
+    let (kill_room, kill_method) = weapon_kill.or(accident_kill).ok_or_else(|| {
+        format!(
+            "no reachable kill site on the target's schedule for a {} route",
+            class.name()
+        )
+    })?;
 
     // Extraction after the kill: capabilities only grow, so the same
     // closure decides it.
@@ -202,8 +236,7 @@ pub fn prove_route(
 
     let mut steps = outcome.events;
     steps.push(format!(
-        "kill the target in {} with the {}",
-        kill_room, usable[0]
+        "kill the target in {kill_room} with the {kill_method}"
     ));
     steps.push(format!("extract via {exit_room}"));
 
