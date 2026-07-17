@@ -218,7 +218,6 @@ pub fn prove_physical(data: &GameData, layout: &Layout, start: Pos) -> Result<()
 pub(crate) struct ClosureOutcome {
     pub disguises: Vec<String>,
     pub keys: Vec<String>,
-    pub invitation: bool,
     pub seen: TileSet,
     /// Human-readable acquisition steps, in dependency order.
     pub events: Vec<String>,
@@ -335,7 +334,6 @@ pub(crate) fn capability_closure(
             return ClosureOutcome {
                 disguises,
                 keys,
-                invitation,
                 seen,
                 events,
             };
