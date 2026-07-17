@@ -71,7 +71,7 @@
     (
         id: "vip-lounge",
         name: "VIP lounge",
-        zone: Vip,
+        zone: Secure,
         floors: [1],
         count_min: 1, count_max: 1,
         required: true,
@@ -135,7 +135,7 @@
     (
         id: "manager-office",
         name: "manager's office",
-        zone: Private,
+        zone: Personal,
         floors: [1],
         count_min: 1, count_max: 1,
         required: true,
@@ -151,7 +151,7 @@
     (
         id: "security-office",
         name: "security office",
-        zone: Private,
+        zone: Personal,
         floors: [1],
         count_min: 1, count_max: 1,
         required: true,

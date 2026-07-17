@@ -42,12 +42,16 @@ fn spine_y(height: u16) -> i16 {
     height as i16 / 2
 }
 
-pub fn build_layout(data: &GameData, rng: &mut Pcg32) -> Result<Layout, LayoutError> {
-    let width = data.tuning.floor_width;
-    let height = data.tuning.floor_height;
-    let floor_count = data.tuning.floor_count;
+pub fn build_layout(
+    data: &GameData,
+    venue: &crate::data::VenueSpec,
+    rng: &mut Pcg32,
+) -> Result<Layout, LayoutError> {
+    let width = venue.floor_width;
+    let height = venue.floor_height;
+    let floor_count = venue.floor_count;
 
-    let planned = plan_rooms(data, rng)?;
+    let planned = plan_rooms(data, venue, rng)?;
     let mut map = GameMap::filled_void(width, height, floor_count);
     let mut doors: Vec<DoorState> = Vec::new();
     let mut rooms: Vec<Room> = Vec::new();
@@ -161,11 +165,19 @@ fn template_index_of(data: &GameData, id: &str) -> usize {
 }
 
 /// Decide the room list: counts, floors, and sizes, before any tiles.
-fn plan_rooms(data: &GameData, rng: &mut Pcg32) -> Result<Vec<PlannedRoom>, LayoutError> {
-    let height = data.tuning.floor_height;
+/// Only templates the venue lists participate.
+fn plan_rooms(
+    data: &GameData,
+    venue: &crate::data::VenueSpec,
+    rng: &mut Pcg32,
+) -> Result<Vec<PlannedRoom>, LayoutError> {
+    let height = venue.floor_height;
     let shelf_h = shelf_heights(height);
     let mut planned = Vec::new();
     for (template_index, template) in data.rooms.iter().enumerate() {
+        if !venue.room_templates.contains(&template.id) {
+            continue;
+        }
         let count = rng.range_inclusive(template.count_min.into(), template.count_max.into());
         let count = if template.required {
             count.max(1)

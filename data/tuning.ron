@@ -3,9 +3,6 @@
 (
     queue_capacity: 32,          // [spec] exactly 32, always visible
     batch_turns: 8,              // turns per cooperative batch before yielding
-    floor_width: 46,
-    floor_height: 26,
-    floor_count: 2,              // [spec] two-storey nightclub
 
     pistol_rounds: 6,            // [spec] six generated rounds
     pistol_range: 8,

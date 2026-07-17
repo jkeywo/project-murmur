@@ -19,7 +19,11 @@ use murmur_core::world::{
 
 fn setup(seed: u64) -> (GameData, TurnDriver) {
     let data = GameData::embedded().unwrap();
-    let world = generate(&data, seed).unwrap();
+    let world = generate(
+        &data,
+        &murmur_core::contract::MissionConfig::new(seed, "nightclub"),
+    )
+    .unwrap();
     let driver = TurnDriver::new(world, &data);
     (data, driver)
 }
@@ -274,13 +278,13 @@ fn pickpocketed_invitation_grants_vip_access() {
         let room = world
             .rooms
             .iter()
-            .find(|r| r.zone == Zone::Vip)
+            .find(|r| r.zone == Zone::Secure)
             .expect("VIP lounge exists");
         Pos::new(room.floor, room.bounds.x, room.bounds.y)
     };
     assert!(matches!(
         verdict_for_pos(driver.world(), &data, player, vip_probe),
-        AccessVerdict::Illegal(Zone::Vip)
+        AccessVerdict::Illegal(Zone::Secure)
     ));
 
     let (start, dir) = free_run(driver.world(), 2);

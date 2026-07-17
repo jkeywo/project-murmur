@@ -38,8 +38,8 @@ fn rooms_for_disguise<'a>(
             spec.zones.contains(&room.zone)
                 || spec.extra_rooms.contains(&room.template)
                 || (with_invitation
-                    && spec.vip_with_invitation
-                    && room.zone == crate::data::Zone::Vip)
+                    && spec.secure_with_invitation
+                    && room.zone == crate::data::Zone::Secure)
         })
         .collect()
 }
@@ -230,7 +230,7 @@ pub fn populate(
                     rooms
                         .iter()
                         .copied()
-                        .filter(|r| r.zone == crate::data::Zone::Vip),
+                        .filter(|r| r.zone == crate::data::Zone::Secure),
                     &[WaypointKind::Social, WaypointKind::Idle],
                 );
                 if !vip_pool.is_empty() {

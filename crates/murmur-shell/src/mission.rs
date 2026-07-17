@@ -626,7 +626,11 @@ impl Mission {
         }
         let mut parts: Vec<String> = Vec::new();
         if let Some(room) = world.room_at(pos) {
-            parts.push(format!("{} [{}]", room.name, room.zone.name()));
+            let zone_label = data
+                .venue(&world.venue)
+                .map(|v| v.zone_label(room.zone))
+                .unwrap_or_else(|| room.zone.name());
+            parts.push(format!("{} [{}]", room.name, zone_label));
         } else if matches!(world.map.tile(pos), TileKind::Floor | TileKind::Stairs) {
             parts.push("corridor".to_string());
         }

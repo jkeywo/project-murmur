@@ -9,6 +9,7 @@ pub mod layout;
 pub mod populate;
 pub mod proof;
 
+use crate::contract::MissionConfig;
 use crate::data::GameData;
 use crate::rng::{Pcg32, Stream};
 use crate::world::{FurnitureKind, MissionFacts, World};
@@ -38,11 +39,16 @@ impl std::fmt::Display for GenError {
 
 impl std::error::Error for GenError {}
 
-/// Generates the world for one mission seed.
-pub fn generate(data: &GameData, seed: u64) -> Result<World, GenError> {
+/// Generates the world for one mission configuration.
+pub fn generate(data: &GameData, config: &MissionConfig) -> Result<World, GenError> {
     let mut attempts = Vec::new();
+    if data.venue(&config.venue).is_none() {
+        return Err(GenError {
+            attempts: vec![format!("unknown venue '{}'", config.venue)],
+        });
+    }
     for attempt in 0..MAX_ATTEMPTS {
-        match try_generate(data, seed, attempt) {
+        match try_generate(data, config, attempt) {
             Ok(world) => return Ok(world),
             Err(reason) => attempts.push(format!("attempt {attempt}: {reason}")),
         }
@@ -50,10 +56,12 @@ pub fn generate(data: &GameData, seed: u64) -> Result<World, GenError> {
     Err(GenError { attempts })
 }
 
-fn try_generate(data: &GameData, seed: u64, attempt: u64) -> Result<World, String> {
+fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result<World, String> {
+    let seed = config.seed;
+    let venue = data.venue(&config.venue).expect("checked by generate");
     let mut rng = Pcg32::new(seed, ATTEMPT_STREAM_BASE + attempt);
 
-    let mut layout = layout::build_layout(data, &mut rng).map_err(|e| e.0)?;
+    let mut layout = layout::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
     let mut population = populate::populate(data, &layout, &mut rng).map_err(|e| e.0)?;
 
     // Charge weapons with their generated rounds.
@@ -72,6 +80,7 @@ fn try_generate(data: &GameData, seed: u64, attempt: u64) -> Result<World, Strin
 
     Ok(World {
         seed,
+        venue: config.venue.clone(),
         turn: 0,
         map: layout.map,
         doors: layout.doors,
@@ -196,7 +205,11 @@ mod tests {
     fn generates_valid_worlds_across_many_seeds() {
         let data = data();
         for seed in 0..60u64 {
-            let world = generate(&data, seed).unwrap_or_else(|e| panic!("seed {seed} failed: {e}"));
+            let world = generate(
+                &data,
+                &crate::contract::MissionConfig::new(seed, "nightclub"),
+            )
+            .unwrap_or_else(|e| panic!("seed {seed} failed: {e}"));
 
             // Every required room template is present.
             for template in data.rooms.iter().filter(|t| t.required) {
@@ -266,8 +279,16 @@ mod tests {
     #[test]
     fn generation_is_deterministic_for_a_seed() {
         let data = data();
-        let a = generate(&data, 12345).unwrap();
-        let b = generate(&data, 12345).unwrap();
+        let a = generate(
+            &data,
+            &crate::contract::MissionConfig::new(12345, "nightclub"),
+        )
+        .unwrap();
+        let b = generate(
+            &data,
+            &crate::contract::MissionConfig::new(12345, "nightclub"),
+        )
+        .unwrap();
         let a_text = ron::to_string(&a).unwrap();
         let b_text = ron::to_string(&b).unwrap();
         assert_eq!(a_text, b_text, "same seed must produce identical worlds");
@@ -276,8 +297,8 @@ mod tests {
     #[test]
     fn different_seeds_differ() {
         let data = data();
-        let a = generate(&data, 1).unwrap();
-        let b = generate(&data, 2).unwrap();
+        let a = generate(&data, &crate::contract::MissionConfig::new(1, "nightclub")).unwrap();
+        let b = generate(&data, &crate::contract::MissionConfig::new(2, "nightclub")).unwrap();
         assert_ne!(
             ron::to_string(&a).unwrap(),
             ron::to_string(&b).unwrap(),
@@ -288,7 +309,7 @@ mod tests {
     #[test]
     fn keys_exist_for_every_locked_room() {
         let data = data();
-        let world = generate(&data, 77).unwrap();
+        let world = generate(&data, &crate::contract::MissionConfig::new(77, "nightclub")).unwrap();
         for room in &world.rooms {
             let template = data.room_template(&room.template).unwrap();
             if let Some(key) = &template.locked_by {
@@ -304,7 +325,7 @@ mod tests {
     #[test]
     fn proof_reports_civilian_baseline() {
         let data = data();
-        let world = generate(&data, 5).unwrap();
+        let world = generate(&data, &crate::contract::MissionConfig::new(5, "nightclub")).unwrap();
         assert!(
             world
                 .proof

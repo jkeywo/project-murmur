@@ -60,10 +60,10 @@ fn zone_floor_color(zone: Zone, visible: bool) -> Color {
         (Zone::Public, false) => Color::Rgb(60, 60, 60),
         (Zone::Staff, true) => Color::Rgb(90, 130, 210),
         (Zone::Staff, false) => Color::Rgb(45, 65, 105),
-        (Zone::Vip, true) => Color::Rgb(190, 100, 210),
-        (Zone::Vip, false) => Color::Rgb(95, 50, 105),
-        (Zone::Private, true) => Color::Rgb(215, 95, 95),
-        (Zone::Private, false) => Color::Rgb(105, 48, 48),
+        (Zone::Secure, true) => Color::Rgb(190, 100, 210),
+        (Zone::Secure, false) => Color::Rgb(95, 50, 105),
+        (Zone::Personal, true) => Color::Rgb(215, 95, 95),
+        (Zone::Personal, false) => Color::Rgb(105, 48, 48),
     }
 }
 

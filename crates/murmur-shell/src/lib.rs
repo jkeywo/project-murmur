@@ -174,7 +174,16 @@ impl Shell {
     }
 
     fn begin_briefing(&mut self) {
-        match generate(&self.data, self.mission_seed) {
+        // Until the campaign layer selects venues per contract, missions
+        // run in the first authored venue.
+        let venue = self
+            .data
+            .venues
+            .first()
+            .map(|v| v.id.clone())
+            .unwrap_or_default();
+        let config = murmur_core::contract::MissionConfig::new(self.mission_seed, venue);
+        match generate(&self.data, &config) {
             Ok(world) => {
                 let driver = TurnDriver::new(world, &self.data);
                 let mission = Mission::new(driver, &self.data);

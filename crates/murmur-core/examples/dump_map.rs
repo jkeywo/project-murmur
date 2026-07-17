@@ -16,7 +16,11 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(42);
     let data = GameData::embedded().expect("embedded data");
-    let world = generate(&data, seed).expect("generation");
+    let world = generate(
+        &data,
+        &murmur_core::contract::MissionConfig::new(seed, "nightclub"),
+    )
+    .expect("generation");
 
     println!("seed {seed}");
     println!(

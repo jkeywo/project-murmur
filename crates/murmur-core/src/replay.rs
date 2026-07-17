@@ -9,6 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::actions::Command;
+use crate::contract::MissionConfig;
 use crate::data::GameData;
 use crate::generator::{GenError, generate};
 use crate::turn::TurnDriver;
@@ -17,7 +18,7 @@ use crate::world::World;
 /// Everything needed to reproduce a mission.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MissionRecord {
-    pub seed: u64,
+    pub config: MissionConfig,
     pub commands: Vec<Command>,
 }
 
@@ -47,7 +48,7 @@ impl std::error::Error for ReplayError {}
 
 /// Replays a record and returns the final world.
 pub fn replay(data: &GameData, record: &MissionRecord) -> Result<World, ReplayError> {
-    let world = generate(data, record.seed).map_err(ReplayError::Generation)?;
+    let world = generate(data, &record.config).map_err(ReplayError::Generation)?;
     let mut driver = TurnDriver::new(world, data);
     for (index, command) in record.commands.iter().enumerate() {
         while driver.player_busy() && !driver.mission_over() {

@@ -269,6 +269,9 @@ pub struct MissionFacts {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct World {
     pub seed: u64,
+    /// The venue this mission was generated for; venue data supplies
+    /// presentation flavour (zone labels, invitation naming).
+    pub venue: crate::data::VenueId,
     pub turn: u32,
     pub map: GameMap,
     pub doors: Vec<DoorState>,

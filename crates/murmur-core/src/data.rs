@@ -16,25 +16,31 @@ use serde::{Deserialize, Serialize};
 
 use crate::geom::FloorId;
 
-/// Access zones. The set is fixed by the MVP design; which disguise may
-/// enter which zone is data-driven via [`DisguiseSpec`].
+/// Access tiers. The four-tier security gradient is fixed (public,
+/// staff, secure, personal); which disguise may enter which tier is
+/// data-driven via [`DisguiseSpec`], and each venue supplies display
+/// labels (a nightclub calls its secure tier "VIP", a warehouse "the
+/// cage").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Zone {
     Public,
-    Vip,
+    Secure,
     Staff,
-    Private,
+    Personal,
 }
 
 impl Zone {
+    /// The neutral tier name; venue data supplies flavoured labels.
     pub fn name(self) -> &'static str {
         match self {
             Zone::Public => "public",
-            Zone::Vip => "VIP",
+            Zone::Secure => "secure",
             Zone::Staff => "staff",
-            Zone::Private => "private",
+            Zone::Personal => "personal",
         }
     }
+
+    pub const ALL: [Zone; 4] = [Zone::Public, Zone::Secure, Zone::Staff, Zone::Personal];
 }
 
 /// Fixed MVP roles. Civilians and guards have their own behaviour sets;
@@ -92,6 +98,49 @@ pub enum WaypointKind {
 pub type DisguiseId = String;
 pub type RoomTemplateId = String;
 pub type ItemSpecId = String;
+pub type VenueId = String;
+
+/// Display labels a venue gives the four access tiers.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ZoneLabels {
+    pub public: String,
+    pub staff: String,
+    pub secure: String,
+    pub personal: String,
+}
+
+/// A venue definition: its footprint, which room templates it draws
+/// from, and its presentation flavour. The same contract, planner,
+/// grammar, opportunity, heat, and campaign systems apply to every
+/// venue; nothing outside data may special-case one.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VenueSpec {
+    pub id: VenueId,
+    pub name: String,
+    pub zone_labels: ZoneLabels,
+    /// Flavoured name of the secure-tier invitation ("VIP invitation",
+    /// "visitor pass").
+    pub invitation_label: String,
+    /// Interior tile size of each storey and the storey count.
+    pub floor_width: u16,
+    pub floor_height: u16,
+    pub floor_count: u8,
+    /// Room templates this venue may place.
+    pub room_templates: Vec<RoomTemplateId>,
+}
+
+impl VenueSpec {
+    pub fn zone_label(&self, zone: Zone) -> &str {
+        match zone {
+            Zone::Public => &self.zone_labels.public,
+            Zone::Staff => &self.zone_labels.staff,
+            Zone::Secure => &self.zone_labels.secure,
+            Zone::Personal => &self.zone_labels.personal,
+        }
+    }
+}
 
 /// One row of the disguise permission matrix.
 #[derive(Clone, Debug, Deserialize)]
@@ -105,7 +154,7 @@ pub struct DisguiseSpec {
     /// private access" for staff).
     pub extra_rooms: Vec<RoomTemplateId>,
     /// Whether carrying an invitation item additionally grants VIP access.
-    pub vip_with_invitation: bool,
+    pub secure_with_invitation: bool,
     /// Roles that treat a player wearing this disguise as suspicious on
     /// sight (they would know the real person).
     pub suspicious_observers: Vec<Role>,
@@ -260,10 +309,6 @@ pub struct Tuning {
     /// Simulation turns resolved per cooperative batch before the driver
     /// yields for input and presentation.
     pub batch_turns: u16,
-    /// Interior tile size of each storey.
-    pub floor_width: u16,
-    pub floor_height: u16,
-    pub floor_count: u8,
 
     pub pistol_rounds: u16,
     pub pistol_range: i16,
@@ -305,6 +350,7 @@ pub struct Tuning {
 #[derive(Clone, Debug)]
 pub struct GameData {
     pub tuning: Tuning,
+    pub venues: Vec<VenueSpec>,
     pub disguises: Vec<DisguiseSpec>,
     pub items: Vec<ItemSpec>,
     pub rooms: Vec<RoomTemplate>,
@@ -329,6 +375,7 @@ impl std::fmt::Display for DataError {
 impl std::error::Error for DataError {}
 
 const TUNING_RON: &str = include_str!("../../../data/tuning.ron");
+const VENUES_RON: &str = include_str!("../../../data/venues.ron");
 const DISGUISES_RON: &str = include_str!("../../../data/disguises.ron");
 const ITEMS_RON: &str = include_str!("../../../data/items.ron");
 const ROOMS_RON: &str = include_str!("../../../data/rooms.ron");
@@ -348,6 +395,7 @@ impl GameData {
     pub fn embedded() -> Result<GameData, DataError> {
         Self::from_sources(
             TUNING_RON,
+            VENUES_RON,
             DISGUISES_RON,
             ITEMS_RON,
             ROOMS_RON,
@@ -361,6 +409,7 @@ impl GameData {
     #[allow(clippy::too_many_arguments)]
     pub fn from_sources(
         tuning: &str,
+        venues: &str,
         disguises: &str,
         items: &str,
         rooms: &str,
@@ -370,6 +419,7 @@ impl GameData {
     ) -> Result<GameData, DataError> {
         let data = GameData {
             tuning: parse("tuning.ron", tuning)?,
+            venues: parse("venues.ron", venues)?,
             disguises: parse("disguises.ron", disguises)?,
             items: parse("items.ron", items)?,
             rooms: parse("rooms.ron", rooms)?,
@@ -379,6 +429,10 @@ impl GameData {
         };
         data.validate()?;
         Ok(data)
+    }
+
+    pub fn venue(&self, id: &str) -> Option<&VenueSpec> {
+        self.venues.iter().find(|v| v.id == id)
     }
 
     pub fn disguise(&self, id: &str) -> Option<&DisguiseSpec> {
@@ -444,14 +498,6 @@ impl GameData {
             if room.floors.is_empty() {
                 errors.push(format!("room '{}' allows no floors", room.id));
             }
-            for floor in &room.floors {
-                if *floor >= self.tuning.floor_count {
-                    errors.push(format!(
-                        "room '{}' allows floor {floor} but the building has {} floors",
-                        room.id, self.tuning.floor_count
-                    ));
-                }
-            }
             if let Some(key) = &room.locked_by {
                 match self.item(key) {
                     None => errors.push(format!(
@@ -503,8 +549,49 @@ impl GameData {
         if self.tuning.cone_den <= 0 || self.tuning.cone_num <= 0 {
             errors.push("cone ratio must be positive".into());
         }
-        if !self.rooms.iter().any(|r| r.external_exit && r.required) {
-            errors.push("at least one required room must be an external exit".into());
+        if self.venues.is_empty() {
+            errors.push("at least one venue must be defined".into());
+        }
+        let mut venue_ids: Vec<&str> = self.venues.iter().map(|v| v.id.as_str()).collect();
+        venue_ids.sort_unstable();
+        venue_ids.dedup();
+        if venue_ids.len() != self.venues.len() {
+            errors.push("duplicate venue ids".into());
+        }
+        for venue in &self.venues {
+            if venue.floor_width == 0 || venue.floor_height == 0 || venue.floor_count == 0 {
+                errors.push(format!("venue '{}' has a degenerate footprint", venue.id));
+            }
+            if venue.room_templates.is_empty() {
+                errors.push(format!("venue '{}' places no rooms", venue.id));
+            }
+            let mut has_required_exit = false;
+            for template_id in &venue.room_templates {
+                let Some(template) = self.room_template(template_id) else {
+                    errors.push(format!(
+                        "venue '{}' references unknown room '{template_id}'",
+                        venue.id
+                    ));
+                    continue;
+                };
+                if template.required && template.external_exit {
+                    has_required_exit = true;
+                }
+                for floor in &template.floors {
+                    if *floor >= venue.floor_count {
+                        errors.push(format!(
+                            "venue '{}' places room '{template_id}' on floor {floor} but has {} floors",
+                            venue.id, venue.floor_count
+                        ));
+                    }
+                }
+            }
+            if !has_required_exit {
+                errors.push(format!(
+                    "venue '{}' needs a required external-exit room",
+                    venue.id
+                ));
+            }
         }
 
         if errors.is_empty() {
@@ -539,13 +626,13 @@ mod tests {
         let data = GameData::embedded().unwrap();
         let civilian = data.disguise("civilian").unwrap();
         assert!(civilian.zones.contains(&Zone::Public));
-        assert!(!civilian.zones.contains(&Zone::Vip));
-        assert!(civilian.vip_with_invitation);
+        assert!(!civilian.zones.contains(&Zone::Secure));
+        assert!(civilian.secure_with_invitation);
 
         let staff = data.disguise("staff").unwrap();
         assert!(staff.zones.contains(&Zone::Public));
         assert!(staff.zones.contains(&Zone::Staff));
-        assert!(!staff.zones.contains(&Zone::Private));
+        assert!(!staff.zones.contains(&Zone::Personal));
         assert!(
             !staff.extra_rooms.is_empty(),
             "staff must have authored partial private access"
@@ -553,7 +640,7 @@ mod tests {
 
         for id in ["guard", "manager"] {
             let disguise = data.disguise(id).unwrap();
-            for zone in [Zone::Public, Zone::Vip, Zone::Staff, Zone::Private] {
+            for zone in [Zone::Public, Zone::Secure, Zone::Staff, Zone::Personal] {
                 assert!(disguise.zones.contains(&zone), "{id} must access {zone:?}");
             }
         }

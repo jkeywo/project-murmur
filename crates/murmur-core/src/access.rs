@@ -55,8 +55,8 @@ pub fn verdict_for_pos(
     if disguise.extra_rooms.contains(&room.template) {
         return AccessVerdict::AllowedByRoomGrant;
     }
-    if room.zone == Zone::Vip
-        && disguise.vip_with_invitation
+    if room.zone == Zone::Secure
+        && disguise.secure_with_invitation
         && world.carries(actor, data, |spec| spec.invitation)
     {
         return AccessVerdict::AllowedByInvitation;
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn civilian_is_legal_in_public_and_illegal_in_private() {
         let data = GameData::embedded().unwrap();
-        let world = generate(&data, 11).unwrap();
+        let world = generate(&data, &crate::contract::MissionConfig::new(11, "nightclub")).unwrap();
         let player = world.player;
         assert_eq!(world.actor(player).worn_disguise, "civilian");
 
@@ -112,30 +112,31 @@ mod tests {
         let private = world
             .rooms
             .iter()
-            .find(|r| r.zone == Zone::Private)
+            .find(|r| r.zone == Zone::Personal)
             .expect("nightclub has private rooms");
         let pos = crate::geom::Pos::new(private.floor, private.bounds.x, private.bounds.y);
         assert_eq!(
             verdict_for_pos(&world, &data, player, pos),
-            AccessVerdict::Illegal(Zone::Private)
+            AccessVerdict::Illegal(Zone::Personal)
         );
     }
 
     #[test]
     fn invitation_makes_vip_legal_for_civilians() {
         let data = GameData::embedded().unwrap();
-        let mut world = generate(&data, 11).unwrap();
+        let mut world =
+            generate(&data, &crate::contract::MissionConfig::new(11, "nightclub")).unwrap();
         let player = world.player;
         let vip_room = world
             .rooms
             .iter()
-            .find(|r| r.zone == Zone::Vip)
+            .find(|r| r.zone == Zone::Secure)
             .expect("nightclub has a VIP lounge");
         let pos = crate::geom::Pos::new(vip_room.floor, vip_room.bounds.x, vip_room.bounds.y);
 
         assert_eq!(
             verdict_for_pos(&world, &data, player, pos),
-            AccessVerdict::Illegal(Zone::Vip)
+            AccessVerdict::Illegal(Zone::Secure)
         );
 
         // Hand the player an invitation: VIP becomes legitimate.
@@ -154,7 +155,8 @@ mod tests {
     #[test]
     fn guard_and_manager_disguises_are_legal_everywhere() {
         let data = GameData::embedded().unwrap();
-        let mut world = generate(&data, 11).unwrap();
+        let mut world =
+            generate(&data, &crate::contract::MissionConfig::new(11, "nightclub")).unwrap();
         let player = world.player;
         for disguise in ["guard", "manager"] {
             world.actor_mut(player).worn_disguise = disguise.to_string();

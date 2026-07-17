@@ -296,3 +296,34 @@ entities:
         - Pickpocket rules and VIP invitation rules are accepted components that presuppose a theft action.
         - The stealth rules distinguish a drawn pistol from a carried one; a state toggle action is the smallest mechanism that expresses it.
       references: [pickpocket-rules, vip-invitation-rules, stealth-and-combat-rules, primitive-action-catalog]
+
+  - decision: campaign-single-slot-autosave
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Campaign Persistence Is a Single-Slot Autosave
+      summary: One campaign at a time, autosaved between contracts in a small versioned JSON document and restored on relaunch. The native build stores it in the platform data directory and the web build in browser localStorage, both behind one storage trait injected by the delivery binaries. Abandoning a campaign starts fresh; there are no multiple slots.
+      rationale:
+        - Owner choice at Milestone 2 kickoff, refreshes and restarts must not lose a campaign, and one slot keeps the format and interface small.
+        - The campaign derives deterministically from a campaign seed plus recorded player choices, so the save stays compact and auditable.
+      references: [milestone-2-campaign-state]
+
+  - decision: campaign-death-ends-arrest-continues
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Death Ends the Campaign, Arrest Fines and Continues
+      summary: The operative dying ends the campaign at a final tally screen. Arrest fails the contract, levies a cash fine, and confiscates the equipment carried into the mission, but the campaign continues; owned-but-stashed equipment and remaining cash survive. Abandoning a mission fails the contract without confiscation.
+      rationale:
+        - Owner choice at Milestone 2 kickoff, death carries roguelike finality while arrest feeds the economy and heat loops instead of erasing the run.
+      references: [milestone-2-campaign-state, mission-outcome-rules]
+
+  - decision: equipment-buy-once-own-forever
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Equipment Is Bought Once and Owned
+      summary: Cash buys catalogue equipment between contracts; owned items persist in the stash and any three may be carried per mission. Equipment carried into an arrest is confiscated and must be re-bought. A new campaign starts with the garrote owned plus starting cash, so the first contract is completable while purchases stay meaningful.
+      rationale:
+        - Owner choice at Milestone 2 kickoff, ownership gives cash a durable purpose and arrests a sting without resetting progression.
+      references: [milestone-2-campaign-state]

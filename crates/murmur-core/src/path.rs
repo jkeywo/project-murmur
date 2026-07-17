@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn every_npc_can_path_to_every_routine_stop() {
         let data = GameData::embedded().unwrap();
-        let world = generate(&data, 21).unwrap();
+        let world = generate(&data, &crate::contract::MissionConfig::new(21, "nightclub")).unwrap();
         for actor in &world.actors {
             let Some(ai) = &actor.ai else { continue };
             for step in &ai.routine {
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn player_can_path_to_both_extraction_tiles() {
         let data = GameData::embedded().unwrap();
-        let world = generate(&data, 33).unwrap();
+        let world = generate(&data, &crate::contract::MissionConfig::new(33, "nightclub")).unwrap();
         for exit in &world.extraction_tiles {
             if world.player_actor().pos == *exit {
                 continue;

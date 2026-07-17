@@ -10,6 +10,7 @@
 pub mod access;
 pub mod actions;
 pub mod ai;
+pub mod contract;
 pub mod data;
 pub mod generator;
 pub mod geom;

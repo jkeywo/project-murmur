@@ -1,0 +1,31 @@
+// Venue definitions. Every venue runs on the same contract, planner,
+// grammar, opportunity, heat, and campaign systems; only data differs.
+[
+    (
+        id: "nightclub",
+        name: "nightclub",
+        zone_labels: (
+            public: "public",
+            staff: "staff",
+            secure: "VIP",
+            personal: "private",
+        ),
+        invitation_label: "VIP invitation",
+        floor_width: 46,
+        floor_height: 26,
+        floor_count: 2,              // [spec] two-storey nightclub
+        room_templates: [
+            "entrance",
+            "dance-floor",
+            "bar",
+            "bathroom",
+            "vip-lounge",
+            "kitchen",
+            "storage",
+            "maintenance",
+            "manager-office",
+            "security-office",
+            "loading-bay",
+        ],
+    ),
+]

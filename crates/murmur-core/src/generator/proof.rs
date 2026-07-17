@@ -128,8 +128,8 @@ fn reachable_tiles(
                 spec.zones.contains(&room.zone)
                     || spec.extra_rooms.contains(&room.template)
                     || (invitation
-                        && spec.vip_with_invitation
-                        && room.zone == crate::data::Zone::Vip)
+                        && spec.secure_with_invitation
+                        && room.zone == crate::data::Zone::Secure)
             })
         })
     };

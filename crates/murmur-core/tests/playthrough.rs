@@ -64,7 +64,11 @@ fn decide(world: &World, data: &GameData) -> Command {
 /// Plays a full mission with the scripted assassin. Returns the record and
 /// the final world.
 fn run_mission(data: &GameData, seed: u64, max_turns: u32) -> (MissionRecord, World) {
-    let world = generate(data, seed).unwrap();
+    let world = generate(
+        data,
+        &murmur_core::contract::MissionConfig::new(seed, "nightclub"),
+    )
+    .unwrap();
     let mut driver = TurnDriver::new(world, data);
 
     while !driver.mission_over() && driver.world().turn < max_turns {
@@ -99,7 +103,7 @@ fn run_mission(data: &GameData, seed: u64, max_turns: u32) -> (MissionRecord, Wo
     }
 
     let record = MissionRecord {
-        seed,
+        config: murmur_core::contract::MissionConfig::new(seed, "nightclub"),
         commands: driver.accepted_commands().to_vec(),
     };
     (record, driver.into_world())

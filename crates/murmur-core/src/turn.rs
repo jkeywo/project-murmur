@@ -161,7 +161,11 @@ mod tests {
 
     fn driver(seed: u64) -> (GameData, TurnDriver) {
         let data = GameData::embedded().unwrap();
-        let world = generate(&data, seed).unwrap();
+        let world = generate(
+            &data,
+            &crate::contract::MissionConfig::new(seed, "nightclub"),
+        )
+        .unwrap();
         let driver = TurnDriver::new(world, &data);
         (data, driver)
     }
