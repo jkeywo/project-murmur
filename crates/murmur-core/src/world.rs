@@ -266,6 +266,9 @@ pub enum MissionOutcome {
     Extracted,
     PlayerKilled,
     Arrested,
+    /// The living target fled the premises through an exit: the job is
+    /// blown.
+    TargetEscaped,
 }
 
 /// Raw facts derived from the generated world for the briefing.

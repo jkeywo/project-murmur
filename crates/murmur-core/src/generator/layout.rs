@@ -153,21 +153,39 @@ fn realise(
             }
         }
 
-        // Service doors onto the corridor (row 3) for service-shelf
-        // rooms the grammar gave a service connection.
+        // Service connections: a back-of-house route from the service
+        // corridor into each service-access room. The room is anchored
+        // against the main corridor, so its north wall sits below the
+        // corridor with a void gap between; carve a walled passage down
+        // that gap and hang the door flush with the corridor wall.
         let plan = &graph.floors[usize::from(floor)];
         for (node, room_index) in plan.service_shelf.iter().zip(&real.service_rooms) {
             if !node.service_door {
                 continue;
             }
             let room_bounds = rooms[*room_index].bounds;
-            let door_x = room_bounds.x + rng.below(room_bounds.w as u32) as i16;
+            if room_bounds.w < 3 {
+                // Too narrow to carry a passage without breaching a wall.
+                continue;
+            }
+            // A column strictly inside the room, so the passage walls
+            // stay within the room's own (void) airspace above it.
+            let door_x = room_bounds.x + 1 + rng.below((room_bounds.w - 2) as u32) as i16;
             let id = DoorId(doors.len() as u16);
             doors.push(DoorState {
                 open: false,
                 locked_by: data.rooms[node.template_index].locked_by.clone(),
             });
             map.set_tile(Pos::new(floor, door_x, 3), TileKind::Door(id));
+            // Drop the passage to the room's north wall, walling its sides.
+            for y in 4..=(room_bounds.y - 1) {
+                map.set_tile(Pos::new(floor, door_x, y), TileKind::Floor);
+                for wx in [door_x - 1, door_x + 1] {
+                    if map.tile(Pos::new(floor, wx, y)) == TileKind::Void {
+                        map.set_tile(Pos::new(floor, wx, y), TileKind::Wall);
+                    }
+                }
+            }
             rooms[*room_index].doors.push(id);
         }
 

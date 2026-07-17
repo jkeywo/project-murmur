@@ -1283,6 +1283,16 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
         events.messages.push("everything goes dark".to_string());
         return;
     }
+    // The target escaping alive ends the mission: there is no completing
+    // the contract once they are gone.
+    let target = world.actor(world.target);
+    if target.alive() && target.departed {
+        world.outcome = Some(MissionOutcome::TargetEscaped);
+        events
+            .messages
+            .push("the target slips away into the night; the job is blown".to_string());
+        return;
+    }
     let target_dead = world.actor(world.target).condition == BodyCondition::Dead;
     if target_dead && world.extraction_tiles.contains(&player.pos) {
         let player_pos = player.pos;

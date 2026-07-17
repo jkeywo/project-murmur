@@ -243,6 +243,40 @@ mod tests {
         GameData::embedded().unwrap()
     }
 
+    /// Every door must connect two walkable tiles across it — no door
+    /// opens onto void or a wall on either side (a "door to nowhere").
+    #[test]
+    fn no_door_opens_onto_nothing() {
+        let data = data();
+        for venue in ["nightclub", "warehouse"] {
+            for seed in 0..40u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let walkable = |pos: crate::geom::Pos| {
+                    matches!(
+                        world.map.tile(pos),
+                        TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
+                    )
+                };
+                for floor in 0..world.map.floor_count() {
+                    for pos in world.map.floor_positions(floor) {
+                        if !matches!(world.map.tile(pos), TileKind::Door(_)) {
+                            continue;
+                        }
+                        let ns = walkable(pos.step(crate::geom::Dir4::North))
+                            && walkable(pos.step(crate::geom::Dir4::South));
+                        let ew = walkable(pos.step(crate::geom::Dir4::East))
+                            && walkable(pos.step(crate::geom::Dir4::West));
+                        assert!(
+                            ns || ew,
+                            "{venue} seed {seed}: door at {pos:?} connects nothing"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn banded_realisation_keeps_the_graph_guarantees() {
         let data = data();

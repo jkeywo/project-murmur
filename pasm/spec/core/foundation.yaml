@@ -178,7 +178,7 @@ entities:
       status: implemented
       confidence: confirmed
       title: Mission Outcome Rules
-      summary: The mission succeeds only when the generated target is dead and the player exits through any generated external extraction exit. It fails only on player death or irreversible guard arrest; detection, alarms, and combat remain playable states.
+      summary: The mission succeeds only when the generated target is dead and the player exits through any generated external extraction exit. It fails on player death, irreversible guard arrest, or the living target fleeing the venue through an exit (a blown job); detection, alarms, and combat remain playable states.
       references: [world-model, turn-driver]
     implementation:
       status: declared

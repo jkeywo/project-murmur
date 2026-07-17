@@ -383,13 +383,16 @@ fn draw_sidebar(
     let hands = match player.hands {
         Hands::Free => "hands free".to_string(),
         Hands::CarryingBody(body) => format!("carrying {}", world.actor(body).name),
-        Hands::Drawn(_) => {
-            let ammo = world
-                .carried_items(world.player)
-                .find(|i| data.item(&i.spec).is_some_and(|s| s.weapon))
-                .map(|i| i.charges)
-                .unwrap_or(0);
-            format!("pistol drawn ({ammo} rounds)")
+        Hands::Drawn(id) => {
+            // Read the drawn weapon by its exact id: the garrote is also
+            // a weapon, so a name-based lookup could grab the wrong one.
+            let weapon = world.carried_items(world.player).find(|i| i.id == id);
+            let name = weapon
+                .and_then(|i| data.item(&i.spec))
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "weapon".to_string());
+            let ammo = weapon.map(|i| i.charges).unwrap_or(0);
+            format!("{name} drawn ({ammo} rounds)")
         }
     };
     lines.push(Line::from(hands));
@@ -507,8 +510,17 @@ fn draw_sidebar(
             let width = text.chars().count() as u16;
             let padded = format!("{text:<16}");
             ui.actions.push((row, column, column + width - 1, *key));
-            spans.push(Span::styled(format!("{} ", key), key_style));
-            spans.push(Span::raw(padded[2..].to_string()));
+            // Actions with no valid target right now are dimmed; they
+            // still click through and report why they can't be used.
+            let available = mission.action_available(data, *key);
+            let (kstyle, lstyle) = if available {
+                (key_style, Style::default())
+            } else {
+                let dim = Style::default().fg(Color::DarkGray);
+                (dim, dim)
+            };
+            spans.push(Span::styled(format!("{} ", key), kstyle));
+            spans.push(Span::styled(padded[2..].to_string(), lstyle));
             column += 16;
         }
         lines.push(Line::from(spans));

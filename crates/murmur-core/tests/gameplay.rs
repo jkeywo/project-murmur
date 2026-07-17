@@ -440,6 +440,39 @@ fn crouching_behind_low_cover_breaks_line_of_sight() {
 }
 
 #[test]
+fn a_fleeing_target_that_reaches_an_exit_blows_the_job() {
+    let (data, mut driver) = setup(17);
+    quiet_all_npcs(driver.world_mut());
+    let target = driver.world().target;
+    let exit = driver.world().extraction_tiles[0];
+
+    // The target panics on top of an exit and bolts.
+    place(driver.world_mut(), target, exit, None);
+    if let Some(ai) = driver.world_mut().actor_mut(target).ai.as_mut() {
+        ai.mood = Mood::Fleeing;
+        ai.focus = Some(exit);
+        ai.routine.clear();
+    }
+    // The player stands well clear and idle.
+    let player = driver.world().player;
+    let (start, _) = free_run(driver.world(), 1);
+    place(driver.world_mut(), player, start, None);
+
+    for _ in 0..40 {
+        if driver.mission_over() {
+            break;
+        }
+        driver.submit(&data, &Command::Wait).unwrap();
+    }
+    assert_eq!(
+        driver.world().outcome,
+        Some(MissionOutcome::TargetEscaped),
+        "a living target leaving through an exit ends the mission"
+    );
+    assert!(driver.world().actor(target).alive());
+}
+
+#[test]
 fn drawn_weapon_alerts_guards_unless_the_disguise_legitimises_it() {
     let (data, mut driver) = setup(17);
     quiet_all_npcs(driver.world_mut());

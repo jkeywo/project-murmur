@@ -68,6 +68,8 @@ pub enum ContractResult {
     /// Target eliminated but the mandatory constraint was violated.
     CompletedUnclean,
     Abandoned,
+    /// The target fled the venue alive.
+    TargetEscaped,
     Arrested,
     Killed,
 }
@@ -78,6 +80,7 @@ impl ContractResult {
             ContractResult::Completed => "completed cleanly",
             ContractResult::CompletedUnclean => "completed, contract breached",
             ContractResult::Abandoned => "abandoned",
+            ContractResult::TargetEscaped => "the target escaped",
             ContractResult::Arrested => "ended in arrest",
             ContractResult::Killed => "ended in death",
         }
@@ -241,6 +244,7 @@ impl CampaignState {
                 ContractResult::Completed
             }
             Some(MissionOutcome::Extracted) => ContractResult::CompletedUnclean,
+            Some(MissionOutcome::TargetEscaped) => ContractResult::TargetEscaped,
             Some(MissionOutcome::Arrested) => ContractResult::Arrested,
             Some(MissionOutcome::PlayerKilled) => ContractResult::Killed,
             None => ContractResult::Abandoned,
@@ -469,6 +473,25 @@ mod tests {
         );
         assert_eq!(summary.result, ContractResult::CompletedUnclean);
         assert_eq!(summary.payout, 0);
+
+        // An escaped target pays nothing, keeps the kit, and the
+        // campaign continues.
+        let cash = state.cash;
+        let summary = state.resolve(
+            &data,
+            &the_offer,
+            &MissionResolution {
+                outcome: Some(MissionOutcome::TargetEscaped),
+                constraint_breached: false,
+                mission_heat: 0,
+                loadout: vec!["garrote".to_string()],
+            },
+        );
+        assert_eq!(summary.result, ContractResult::TargetEscaped);
+        assert_eq!(summary.payout, 0);
+        assert_eq!(state.cash, cash, "no fine for a blown job");
+        assert!(!state.over);
+        assert!(state.owned_equipment.iter().any(|i| i == "garrote"));
 
         // Arrest fines and confiscates the carried kit.
         let cash_before = state.cash;

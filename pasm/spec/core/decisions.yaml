@@ -488,3 +488,18 @@ entities:
       status: declared
       paths: [data/venues.ron, data/opportunities.ron, data/campaign.ron, crates/murmur-core/src/data.rs]
       symbols: [OpportunityEffect]
+
+  - decision: round-two-playtest-fixes
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Round Two Playtest Fixes
+      summary: Five playtest corrections. A living target that flees the venue through an exit ends the mission as MissionOutcome::TargetEscaped (campaign ContractResult::TargetEscaped, no payout, no fine, campaign continues) rather than leaving the contract impossible to complete. The drop-body prompt carries the same "b again drops here" hint as carry. Targeted palette actions with no valid potential target (no garrote victim adjacent, no lock to pick, no body to carry, and so on) are dimmed and, when pressed or clicked, report why instead of entering a dead targeting mode; availability is computed from the player's own tile plus its four orthogonal neighbours and inventory, mirroring the command translator's adjacency. The drawn-weapon HUD line reads the weapon by its exact Hands::Drawn item id, fixing a "pistol drawn (0 rounds)" misread now that the garrote is also a weapon. Service-connection doors are carved as a proper walled passage down to the room's north wall, closing the door-to-nowhere gap that appeared when a service-shelf room did not reach the service corridor.
+      rationale:
+        - Each is a correctness or clarity fix surfaced by play; none change the design, and each is guarded by a test (a door-connectivity invariant across both venues, a target-escape scenario, a campaign resolution case, and a shell availability test).
+      references: [mission-outcome-rules, two-corridor-banded-realisation, ascii-presentation, campaign-death-ends-arrest-continues]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
+      symbols: [action_available]
+      tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/tests/gameplay.rs, crates/murmur-shell/src/lib.rs]

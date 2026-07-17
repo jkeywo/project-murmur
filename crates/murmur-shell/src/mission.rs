@@ -46,7 +46,7 @@ impl PendingAction {
             PendingAction::Disguise => "take disguise - which direction?",
             PendingAction::CarryBody => "carry body - which direction? (b again: here)",
             PendingAction::HideBody => "hide body - which direction?",
-            PendingAction::DropBody => "drop body - which direction?",
+            PendingAction::DropBody => "drop body - which direction? (b again: here)",
             PendingAction::OpenDoor => "open - which direction?",
             PendingAction::CloseDoor => "close - which direction?",
             PendingAction::PickLock => "pick lock - which direction?",
@@ -364,7 +364,152 @@ impl Mission {
         }
     }
 
+    /// Whether a palette action currently has a valid potential target
+    /// or context. Non-targeted actions (move, wait, crouch, look, speed)
+    /// are always available; targeted ones grey out and, if pressed,
+    /// report why rather than entering a dead targeting mode.
+    pub fn action_available(&self, data: &GameData, key: char) -> bool {
+        self.action_block(data, key).is_none()
+    }
+
+    /// The reason a targeted action cannot be attempted right now, or
+    /// `None` when it is available (or is a non-targeted action).
+    fn action_block(&self, data: &GameData, key: char) -> Option<&'static str> {
+        let world = self.world();
+        let player = world.player_actor();
+        let here = player.pos;
+        // Own tile plus the four orthogonal neighbours — the reach of
+        // every adjacency-based command.
+        let near = |probe: &dyn Fn(Pos) -> bool| {
+            probe(here) || Dir4::ALL.into_iter().any(|d| probe(here.step(d)))
+        };
+        let carries = |pred: &dyn Fn(&murmur_core::data::ItemSpec) -> bool| {
+            world
+                .carried_items(world.player)
+                .any(|i| data.item(&i.spec).is_some_and(pred))
+        };
+        let living_npc = |p: Pos| {
+            world
+                .standing_actor_at(p)
+                .is_some_and(|a| !a.is_player() && a.alive())
+        };
+
+        match key {
+            'r' => (!carries(&|s| s.firearm)).then_some("you have no firearm"),
+            'g' => {
+                if !carries(&|s| s.weapon && !s.firearm) {
+                    Some("you carry no garrote")
+                } else if !near(&living_npc) {
+                    Some("no one to garrote")
+                } else {
+                    None
+                }
+            }
+            'f' => {
+                if !carries(&|s| s.firearm) {
+                    Some("you carry no firearm")
+                } else if self.visible_actors(data).is_empty() {
+                    Some("no target in sight")
+                } else {
+                    None
+                }
+            }
+            'p' => {
+                if world.carried_items(world.player).count()
+                    >= murmur_core::actions::INVENTORY_SLOTS
+                {
+                    Some("your pockets are full")
+                } else if !near(&|p| {
+                    world.standing_actor_at(p).is_some_and(|a| !a.is_player())
+                        || world.body_at(p).is_some()
+                }) {
+                    Some("no one to pickpocket")
+                } else {
+                    None
+                }
+            }
+            'd' => {
+                if player.hands != Hands::Free {
+                    Some("your hands are not free")
+                } else if !near(&|p| {
+                    world.body_at(p).is_some()
+                        || world.furniture_at(p).is_some_and(|f| {
+                            f.kind == FurnitureKind::Wardrobe && f.disguise.is_some()
+                        })
+                }) {
+                    Some("no clothes to take here")
+                } else {
+                    None
+                }
+            }
+            'b' => {
+                if matches!(player.hands, Hands::CarryingBody(_)) {
+                    None // drop is available
+                } else if player.hands != Hands::Free {
+                    Some("your hands are not free")
+                } else if !near(&|p| world.body_at(p).is_some()) {
+                    Some("no body to carry")
+                } else {
+                    None
+                }
+            }
+            'h' => {
+                if !matches!(player.hands, Hands::CarryingBody(_)) {
+                    Some("you aren't carrying a body")
+                } else if !near(&|p| {
+                    world
+                        .furniture_at(p)
+                        .is_some_and(|f| f.kind == FurnitureKind::Container && f.body.is_none())
+                }) {
+                    Some("no container to hide it in")
+                } else {
+                    None
+                }
+            }
+            'o' => (!near(
+                &|p| matches!(world.map.tile(p), TileKind::Door(id) if !world.door(id).open),
+            ))
+            .then_some("no door to open"),
+            'k' => {
+                (!near(&|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).open)))
+                    .then_some("no door to close")
+            }
+            'l' => {
+                if !carries(&|s| s.lockpick) {
+                    Some("you carry no lockpicks")
+                } else if !near(
+                    &|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).locked_by.is_some()),
+                ) {
+                    Some("no lock to pick")
+                } else {
+                    None
+                }
+            }
+            't' => {
+                let ready = world
+                    .carried_items(world.player)
+                    .any(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker) && i.charges > 0);
+                (!ready).then_some("no noisemaker charges")
+            }
+            'u' => (!near(&|p| {
+                world
+                    .furniture_at(p)
+                    .is_some_and(|f| f.kind == FurnitureKind::Machine && !f.used)
+            }))
+            .then_some("nothing to use here"),
+            _ => None,
+        }
+    }
+
     fn handle_normal(&mut self, data: &GameData, input: ShellInput) {
+        // Targeted actions with no valid target report why instead of
+        // entering a dead targeting mode.
+        if let ShellInput::Char(key) = input
+            && let Some(reason) = self.action_block(data, key)
+        {
+            self.push_log(format!("can't: {reason}"));
+            return;
+        }
         match input {
             ShellInput::Up => self.enqueue(Command::Move(Dir4::North)),
             ShellInput::Down => self.enqueue(Command::Move(Dir4::South)),

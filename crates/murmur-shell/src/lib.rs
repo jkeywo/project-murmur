@@ -390,6 +390,7 @@ impl Shell {
                 "CONTRACT COMPLETED"
             }
             Some(murmur_core::world::MissionOutcome::Extracted) => "CONTRACT BREACHED",
+            Some(murmur_core::world::MissionOutcome::TargetEscaped) => "TARGET ESCAPED",
             Some(murmur_core::world::MissionOutcome::Arrested) => "ARRESTED",
             Some(murmur_core::world::MissionOutcome::PlayerKilled) => "KILLED IN ACTION",
             None => "CONTRACT ABANDONED",
@@ -502,6 +503,25 @@ mod tests {
         assert_eq!(mission(&shell).world().turn, 0);
         // The accepted contract's constraint rides on the world.
         assert!(mission(&shell).world().constraint.is_some());
+    }
+
+    #[test]
+    fn targeted_actions_with_no_target_are_unavailable_and_report_why() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        let data = shell.data().clone();
+        // The default loadout carries no lockpicks, so pick-lock can
+        // never have a valid target; wait always can.
+        assert!(!mission(&shell).action_available(&data, 'l'));
+        assert!(mission(&shell).action_available(&data, '.'));
+        // Pressing the unavailable key reports why and stays in normal
+        // mode rather than entering a dead targeting prompt.
+        let before = mission(&shell).log.len();
+        shell.handle_input(ShellInput::Char('l'));
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        let log = &mission(&shell).log;
+        assert!(log.len() > before);
+        assert!(log.last().unwrap().contains("lockpicks"));
     }
 
     #[test]
