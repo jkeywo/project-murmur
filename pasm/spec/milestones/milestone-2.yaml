@@ -22,10 +22,6 @@ entities:
         - milestone-2-venue-graph-grammar
         - milestone-2-planning-domain-composition
         - milestone-2-opportunity-library
-    implementation:
-      status: declared
-      paths: [data/venues.ron, data/rooms.ron]
-      tests: [crates/murmur-core/tests/warehouse.rs]
         - milestone-2-police-heat
         - milestone-2-second-venue
 
@@ -171,3 +167,7 @@ entities:
         - milestone-2-venue-graph-grammar
         - milestone-2-planning-domain-composition
         - milestone-2-opportunity-library
+    implementation:
+      status: declared
+      paths: [data/venues.ron, data/rooms.ron]
+      tests: [crates/murmur-core/tests/warehouse.rs]
