@@ -1,0 +1,85 @@
+entities:
+  - system: future-campaign-sandbox
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Long-Term Campaign Sandbox
+      summary: >-
+        A future layer above repeatable contracts. It preserves the core loop of
+        receiving a contract, infiltrating a generated venue, completing the
+        objective, and extracting, while allowing the city and its people to
+        react across a sequence of missions.
+      references:
+        - future-faction-corporate-simulation
+        - future-nemesis-system
+        - future-city-map-layers
+        - future-wanted-response
+        - future-life-simulation
+        - future-solo-heists
+
+  - component: future-faction-corporate-simulation
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Faction and Corporate Simulation
+      summary: >-
+        Organisations, gangs, corporations, and venues may gain or lose
+        resources, relationships, territory, and personnel. Their state can
+        generate contracts, alter venue security, and provide a future source
+        of persistent consequences. This is not part of the next milestone.
+
+  - component: future-nemesis-system
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Recurring Nemeses
+      summary: >-
+        Notable survivors, investigators, rivals, and offended organisations
+        may remember the player and reappear with adapted resources or motives.
+        It depends on a future persistent campaign and faction simulation.
+      references: [future-faction-corporate-simulation]
+
+  - component: future-city-map-layers
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Hierarchical City Map Layers
+      summary: >-
+        The future city may be represented at city, vehicle-street,
+        pedestrian-street, and building-interior scales. Each lower scale is
+        generated and constrained by the one above it. This is deferred until
+        venue-scale contract variety is proven.
+
+  - component: future-wanted-response
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Wanted Levels and External Police Response
+      summary: >-
+        Temporary incidents and longer-lived district heat can drive witness
+        calls, searches, checkpoints, police arrival, and escalating response.
+        Response can enter buildings after an external district model exists;
+        venue guards remain the immediate indoor response in the current game.
+      references: [future-city-map-layers]
+
+  - component: future-life-simulation
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Life Simulation, Safehouses, and Equipment Economy
+      summary: >-
+        Safehouses, rented apartments, equipment, identities, contacts,
+        storage, and laundering can become meaningful strategic choices rather
+        than cosmetic purchases. The initial campaign layer should establish
+        only the state needed for contracts before this broader simulation.
+
+  - component: future-solo-heists
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Standalone Solo Heists
+      summary: >-
+        Reward-focused, lone-operator operations outside the assassination
+        contract board. Heists reuse infiltration, security, planning,
+        opportunity, and extraction systems, but define a different objective
+        and reward structure.

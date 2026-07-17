@@ -1,0 +1,140 @@
+# Milestone 2 — Contract Sandbox
+#
+# This is the agreed execution plan after the implemented nightclub MVP. All
+# entities in this file are proposed until their model and implementation land.
+
+entities:
+  - system: milestone-2-contract-sandbox
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Milestone 2 — Contract Sandbox
+      summary: >-
+        Turn the single generated nightclub mission into a repeatable,
+        constraint-aware contract sandbox. The milestone proves planner-led
+        venue generation, five composable opportunities, campaign heat and
+        progression, and a second contrasting venue without expanding to a
+        city simulation, vehicles, external police, factions, or heists.
+      references:
+        - milestone-2-campaign-state
+        - milestone-2-constrained-contracts
+        - milestone-2-route-planner
+        - milestone-2-venue-graph-grammar
+        - milestone-2-planning-domain-composition
+        - milestone-2-opportunity-library
+        - milestone-2-police-heat
+        - milestone-2-second-venue
+
+  - component: milestone-2-campaign-state
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Campaign State, Cash, and Limited Equipment
+      summary: >-
+        Add campaign-owned state outside a deterministic mission World:
+        cash, police heat by area, contract history, and a three-item carried
+        inventory. The initial equipment catalogue contains two choices each
+        for physical stealth, social stealth, and violence. Equipment must
+        create concrete starting capability and cannot be cosmetic-only.
+      references: [deterministic-mission-replay]
+
+  - component: milestone-2-constrained-contracts
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Constrained Assassination Contracts
+      summary: >-
+        Contracts specify a venue, area, target, narrative hook, payout,
+        police-heat context, and exactly one mandatory constraint. Constraints
+        are incorporated before level generation, and the planner must prove
+        that at least one route completes the contract while satisfying its
+        constraint. The base objective remains eliminate the target and extract.
+      references: [milestone-2-campaign-state, milestone-2-route-planner]
+
+  - component: milestone-2-route-planner
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Abstract Capability-Graph Route Planner
+      summary: >-
+        Extend generated-reachability-proof into a deterministic search over
+        planner-visible facts: rooms, zones, disguises, equipment, keys,
+        interactions, target states, contract constraints, and exits. The
+        planner validates at least one physical-stealth, social-stealth, and
+        violence-capable route, plus a constraint-compliant route and
+        extraction. Schedule windows initially appear as abstract available
+        state transitions rather than a full temporal GOAP model.
+      references:
+        - generated-reachability-proof
+        - access-and-disguise-rules
+        - mission-outcome-rules
+
+  - component: milestone-2-venue-graph-grammar
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Security-Gradient Venue Graph Grammar
+      summary: >-
+        Replace the corridor-spine bias with a room-graph grammar containing
+        public, staff, secure, and personal bands. Generate primary and service
+        connections, loops, alternate vertical routes where appropriate, and
+        multiple extraction paths before realising tile geometry. A venue
+        definition may require room kinds and restrict its available zone kinds.
+      references: [nightclub-generator, milestone-2-route-planner]
+
+  - component: milestone-2-planning-domain-composition
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Script-Compatible Planning-Domain Composition
+      summary: >-
+        Define a data format that composes contract, venue, and generic
+        opportunity planning domains into the nodes, actions, constraints, and
+        effects available to generation. The format is intentionally compatible
+        with a future mission-scripting layer so hand-crafted and generated
+        elements can coexist. Milestone 2 loads one assassination-contract
+        domain, one venue domain, and one generic-opportunity domain.
+      references: [milestone-2-constrained-contracts, milestone-2-route-planner]
+
+  - component: milestone-2-opportunity-library
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Five Composable Opportunity Machines
+      summary: >-
+        Author five planner-visible, script-compatible opportunity machines:
+        one primarily physical-stealth route, one social/disguise route, one
+        violence route, and two universal route-changers. Each declares its
+        required room, role, and prop conditions; preconditions; effects; risk;
+        and discoverable presentation. Place a machine only when it improves a
+        planner-validated route.
+      references: [milestone-2-planning-domain-composition, milestone-2-route-planner]
+
+  - component: milestone-2-police-heat
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Police-Faction Temporary and Persistent Heat
+      summary: >-
+        Model the police as the sole current city-wide faction. Mission heat
+        rises from observed crimes and incidents and affects the immediate
+        venue security response. High mission heat raises persistent police
+        heat for the contract area on resolution; persistent heat decays over
+        later contracts and modifies future generation without locking an area
+        out. External police entry is deferred until city-scale traversal exists.
+      references: [milestone-2-campaign-state, milestone-2-constrained-contracts]
+
+  - component: milestone-2-second-venue
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Second Contrasting Venue
+      summary: >-
+        Add one office or warehouse-scale venue alongside the nightclub. Both
+        venues use the same contract, domain-composition, planner, graph-grammar,
+        opportunity, heat, and campaign systems. This validates that Milestone
+        2 architecture is venue-driven rather than nightclub-specific.
+      references:
+        - milestone-2-venue-graph-grammar
+        - milestone-2-planning-domain-composition
+        - milestone-2-opportunity-library
