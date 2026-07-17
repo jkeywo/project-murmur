@@ -196,7 +196,9 @@ pub fn translate(
         Command::Move(dir) => {
             let dest = player.pos.step(dir);
             match world.map.tile(dest) {
-                TileKind::Wall | TileKind::Void => Err(RejectReason::PathBlocked("the way is blocked by a wall")),
+                TileKind::Wall | TileKind::Void => {
+                    Err(RejectReason::PathBlocked("the way is blocked by a wall"))
+                }
                 TileKind::Door(id) => {
                     // Bump-open: stepping into a closed door opens it when
                     // unlocked or when the player holds the key (recorded
@@ -398,14 +400,21 @@ pub fn translate(
     }
 }
 
-fn validate_drop_destination(world: &World, dest: Pos, player_id: ActorId) -> Result<(), RejectReason> {
+fn validate_drop_destination(
+    world: &World,
+    dest: Pos,
+    player_id: ActorId,
+) -> Result<(), RejectReason> {
     if !world.map.walkable(dest, |id| world.door(id).open) {
         return Err(RejectReason::PathBlocked("the way is blocked by terrain"));
     }
     if world.furniture_at(dest).is_some() {
         return Err(RejectReason::PathBlocked("the way is blocked by furniture"));
     }
-    if world.standing_actor_at(dest).is_some_and(|a| a.id != player_id) {
+    if world
+        .standing_actor_at(dest)
+        .is_some_and(|a| a.id != player_id)
+    {
         return Err(RejectReason::OccupiedByActor);
     }
     if world.body_at(dest).is_some() {
@@ -981,7 +990,12 @@ fn resolve_movement(
                 TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
             ) && world.furniture_at(ahead).is_none();
             if !terrain_open {
-                fail(world, events, action.actor, "the way is blocked by furniture or a wall");
+                fail(
+                    world,
+                    events,
+                    action.actor,
+                    "the way is blocked by furniture or a wall",
+                );
                 continue;
             }
             moves.push(Move {
@@ -1088,7 +1102,12 @@ fn resolve_movement(
         }
         if !progressed {
             for index in still_pending {
-                fail(world, events, moves[index].actor, "the way is blocked by another person");
+                fail(
+                    world,
+                    events,
+                    moves[index].actor,
+                    "the way is blocked by another person",
+                );
             }
             break;
         }
