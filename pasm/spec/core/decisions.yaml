@@ -425,3 +425,19 @@ entities:
       paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/turn.rs, crates/murmur-core/src/generator/populate.rs]
       symbols: [apply_heat_tiers]
       tests: [crates/murmur-core/tests/heat.rs]
+
+  - decision: deterministic-contract-board
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Deterministic Contract Board and District Heat Ledger
+      summary: Contract offers derive from the campaign seed and an offer index, two per board, each naming a district, venue, narrative hook, payout (base plus danger money per district heat plus a constraint bonus), exactly one constraint, and a mission seed. Declining or accepting advances the index so boards never repeat. Resolution follows the standing rules, clean completion pays, a breached contract pays nothing, arrest levies the fine and confiscates the carried loadout, death ends the campaign. A hot mission (mission heat at or above the authored threshold) raises its district's persistent heat by two, capped; every other district cools by one as contracts pass elsewhere, so no area ever locks out. All numbers live in data/campaign.ron.
+      rationale:
+        - Deriving offers from state rather than storing them keeps the save tiny and the board reproducible, matching the deterministic campaign guarantee.
+        - Decay-elsewhere is the most literal reading of "persistent heat decays over later contracts" and gives the player agency, lie low in another district.
+      references: [milestone-2-campaign-state, milestone-2-police-heat, campaign-death-ends-arrest-continues, equipment-buy-once-own-forever]
+    implementation:
+      status: declared
+      paths: [crates/murmur-campaign/src/lib.rs, data/campaign.ron]
+      symbols: [CampaignState, ContractOffer, MissionResolution]
+      tests: [crates/murmur-campaign/src/lib.rs]

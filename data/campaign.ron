@@ -1,0 +1,13 @@
+// Campaign-layer tunables: districts, economy, and heat persistence.
+(
+    districts: ["Docklands", "Midtown", "The Neon Mile"],
+    starting_cash: 300,
+    starting_equipment: ["garrote"],   // the syndicate's basic issue
+    arrest_fine: 250,
+    payout_base: 400,
+    payout_per_heat: 100,              // hot districts pay danger money
+    payout_constraint_bonus: 200,
+    hot_mission_threshold: 30,         // mission heat at/above this raises district heat
+    district_heat_max: 5,
+    offers_per_batch: 2,
+)

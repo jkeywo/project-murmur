@@ -470,6 +470,25 @@ pub struct Tuning {
     pub durations: ActionDurations,
 }
 
+/// Campaign-layer tunables: districts, economy, heat persistence.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CampaignData {
+    pub districts: Vec<String>,
+    pub starting_cash: i64,
+    /// Equipment a fresh campaign owns from the start.
+    pub starting_equipment: Vec<ItemSpecId>,
+    pub arrest_fine: i64,
+    pub payout_base: i64,
+    pub payout_per_heat: i64,
+    pub payout_constraint_bonus: i64,
+    /// Mission heat at or above this raises the district's persistent
+    /// heat on resolution.
+    pub hot_mission_threshold: u16,
+    pub district_heat_max: u8,
+    pub offers_per_batch: u8,
+}
+
 /// All authored data, cross-validated.
 #[derive(Clone, Debug)]
 pub struct GameData {
@@ -483,6 +502,7 @@ pub struct GameData {
     pub population: PopulationData,
     pub names: NamePools,
     pub briefing: BriefingData,
+    pub campaign: CampaignData,
 }
 
 /// A data authoring error: which file, and what is wrong.
@@ -510,6 +530,7 @@ const ROOMS_RON: &str = include_str!("../../../data/rooms.ron");
 const POPULATION_RON: &str = include_str!("../../../data/population.ron");
 const NAMES_RON: &str = include_str!("../../../data/names.ron");
 const BRIEFING_RON: &str = include_str!("../../../data/briefing.ron");
+const CAMPAIGN_RON: &str = include_str!("../../../data/campaign.ron");
 
 fn parse<T: serde::de::DeserializeOwned>(file: &'static str, text: &str) -> Result<T, DataError> {
     ron::from_str(text).map_err(|err| DataError {
@@ -532,6 +553,7 @@ impl GameData {
             POPULATION_RON,
             NAMES_RON,
             BRIEFING_RON,
+            CAMPAIGN_RON,
         )
     }
 
@@ -548,6 +570,7 @@ impl GameData {
         population: &str,
         names: &str,
         briefing: &str,
+        campaign: &str,
     ) -> Result<GameData, DataError> {
         let data = GameData {
             tuning: parse("tuning.ron", tuning)?,
@@ -560,6 +583,7 @@ impl GameData {
             population: parse("population.ron", population)?,
             names: parse("names.ron", names)?,
             briefing: parse("briefing.ron", briefing)?,
+            campaign: parse("campaign.ron", campaign)?,
         };
         data.validate()?;
         Ok(data)
@@ -766,6 +790,25 @@ impl GameData {
                     _ => {}
                 }
             }
+        }
+
+        if self.campaign.districts.is_empty() {
+            errors.push("campaign needs at least one district".into());
+        }
+        if self.campaign.offers_per_batch == 0 {
+            errors.push("campaign must offer at least one contract".into());
+        }
+        for item in &self.campaign.starting_equipment {
+            match self.item(item) {
+                None => errors.push(format!("starting equipment '{item}' is unknown")),
+                Some(spec) if !spec.purchasable => {
+                    errors.push(format!("starting equipment '{item}' must be purchasable"))
+                }
+                Some(_) => {}
+            }
+        }
+        if self.campaign.starting_cash < 0 || self.campaign.arrest_fine < 0 {
+            errors.push("campaign cash values must be non-negative".into());
         }
 
         if self.venues.is_empty() {

@@ -27,7 +27,7 @@ entities:
 
   - component: milestone-2-campaign-state
     core:
-      status: proposed
+      status: partially-implemented
       confidence: confirmed
       title: Campaign State, Cash, and Limited Equipment
       summary: >-
@@ -37,6 +37,11 @@ entities:
         for physical stealth, social stealth, and violence. Equipment must
         create concrete starting capability and cannot be cosmetic-only.
       references: [deterministic-mission-replay]
+    implementation:
+      status: declared
+      paths: [crates/murmur-campaign/src/lib.rs, data/campaign.ron, data/equipment.ron]
+      symbols: [CampaignState, CampaignStore]
+      tests: [crates/murmur-campaign/src/lib.rs]
 
   - component: milestone-2-constrained-contracts
     core:
