@@ -399,8 +399,13 @@ fn validate_step_destination(world: &World, dest: Pos) -> Result<(), RejectReaso
     if world.furniture_at(dest).is_some() {
         return Err(RejectReason::PathBlocked);
     }
-    if world.standing_actor_at(landing).is_some() {
-        return Err(RejectReason::OccupiedByActor);
+    if let Some(occupant) = world.standing_actor_at(landing) {
+        // Civilians and staff step aside (the mover swaps places with
+        // them at resolution) — but not across a stairs transition, where
+        // a swap would teleport the bystander between storeys.
+        if landing != dest || !world.is_displaceable(occupant.id) {
+            return Err(RejectReason::OccupiedByActor);
+        }
     }
     Ok(())
 }
@@ -1003,8 +1008,20 @@ fn resolve_movement(
         let mut still_pending: Vec<usize> = Vec::new();
         for index in pending.iter().copied() {
             let dest = moves[index].dest;
-            if world.standing_actor_at(dest).is_some() {
-                still_pending.push(index);
+            if let Some(occupant) = world.standing_actor_at(dest).map(|a| a.id) {
+                // Bystanders step aside: a mover swaps places with a
+                // civilian or staff member who is not moving this turn.
+                let occupant_is_moving = pending
+                    .iter()
+                    .any(|&other| other != index && moves[other].actor == occupant);
+                if !occupant_is_moving && world.is_displaceable(occupant) {
+                    let origin = world.actor(moves[index].actor).pos;
+                    apply_move(world, events, moves[index].actor, moves[index].dir, dest);
+                    world.actor_mut(occupant).pos = origin;
+                    progressed = true;
+                } else {
+                    still_pending.push(index);
+                }
                 continue;
             }
             apply_move(world, events, moves[index].actor, moves[index].dir, dest);

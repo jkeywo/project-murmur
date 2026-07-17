@@ -87,6 +87,46 @@ fn quiet_all_npcs(world: &mut World) {
 }
 
 #[test]
+fn movers_swap_places_with_civilians_but_not_guards() {
+    let (data, mut driver) = setup(17);
+    quiet_all_npcs(driver.world_mut());
+    let civilian = some_npc(driver.world(), Role::Civilian);
+    let guard = some_npc(driver.world(), Role::Guard);
+    let player = driver.world().player;
+    let (start, dir) = free_run(driver.world(), 3);
+
+    // A civilian in the way: moving into them swaps places.
+    place(driver.world_mut(), player, start, None);
+    place(driver.world_mut(), civilian, start.step(dir), Some(dir));
+    let move_cmd = match dir {
+        Dir4::East => Command::Move(Dir4::East),
+        Dir4::South => Command::Move(Dir4::South),
+        other => Command::Move(other),
+    };
+    driver.submit(&data, &move_cmd).unwrap();
+    assert_eq!(driver.world().player_actor().pos, start.step(dir));
+    assert_eq!(
+        driver.world().actor(civilian).pos,
+        start,
+        "the civilian stepped aside into the mover's tile"
+    );
+
+    // A guard in the way still blocks outright.
+    place(driver.world_mut(), player, start, None);
+    place(
+        driver.world_mut(),
+        civilian,
+        start.step(dir).step(dir),
+        None,
+    );
+    place(driver.world_mut(), guard, start.step(dir), Some(dir));
+    assert!(matches!(
+        driver.submit(&data, &move_cmd),
+        Err(RejectReason::OccupiedByActor)
+    ));
+}
+
+#[test]
 fn garrote_kills_silently_from_behind_only() {
     let (data, mut driver) = setup(17);
     quiet_all_npcs(driver.world_mut());

@@ -100,11 +100,122 @@ entities:
 
   - decision: two-cell-tile-rendering
     core:
-      status: accepted
+      status: deprecated
       confidence: confirmed
       title: Two-Cell Tile Rendering
-      summary: Every map tile renders as two terminal cells. NPCs occupy both with glyph plus facing marker exactly as the foundation sketches them, and the doubled width squares up the tile aspect ratio.
+      summary: Every map tile renders as two terminal cells. NPCs occupy both with glyph plus facing marker exactly as the foundation sketches them, and the doubled width squares up the tile aspect ratio. Superseded after Round One playtest by single-cell-tiles-and-inspection.
       references: [ascii-presentation, perception-model]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Facing markers read as clutter and doubled the map footprint; the owner asked for a compact map with no direction markers on NPCs.
+
+  - decision: single-cell-tiles-and-inspection
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Single-Cell Tiles with Inspection Overlays
+      summary: Every map tile renders as one terminal cell with no facing markers on NPCs, halving the map footprint. What an NPC can currently see is surfaced on demand instead; inspecting a visible NPC (mouse hover or the look cursor) highlights every tile their perception covers, computed by the same cone, lighting, and line-of-sight rules the simulation uses. Floor dots are tinted by access zone (public grey, staff blue, VIP magenta, private red, dimmed when remembered rather than seen) so territory reads at a glance.
+      supersedes: [two-cell-tile-rendering]
+      rationale:
+        - Round One playtest direction, permanent glyph markers communicate less than an on-demand vision overlay and cost half the screen.
+        - Deriving the overlay from perception rules keeps the display honest; it can never disagree with what NPCs actually see.
+      references: [ascii-presentation, perception-model]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/render.rs, crates/murmur-core/src/perception.rs]
+      symbols: [npc_visible_tiles]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Owner asked for no direction markers, a more compact map, NPC line of sight shown when looking at an NPC, and colourised zone floors.
+      - kind: decision-record
+        reference: crates/murmur-shell/src/render.rs
+        summary: One-cell tile renderer with zone floor tints and the npc_visible_tiles overlay.
+
+  - decision: queue-desurfacing
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Command Queue Is Not Player-Facing
+      summary: The command queue remains the architectural mechanism for one-intention-per-turn execution, but it has no player-facing surface. The start screen and HUD no longer mention or display it, Space is repurposed from pause/resume to wait, and there is no manual pause toggle at all, because with no visible queue state an accidental pause would be an invisible stuck state. Escape still cancels pending commands and Backspace still removes the newest; overflow logs a jargon-free line without disturbing queued input. Look mode is the only thing that pauses consumption, internally, and exiting look mode resumes it.
+      rationale:
+        - Round One playtest direction, the queue is plumbing; players think in actions, not in queue slots.
+        - Every keyboard control that silently froze execution has been removed or made self-resuming, eliminating the class of stuck states the playtest exposed.
+      references: [queue-control-surface, queue-input-contract, player-command-queue]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/queue.rs]
+      tests: [crates/murmur-shell/src/lib.rs]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Owner ruled the queue is not a player-facing mechanism and asked for its removal from the start screen and HUD.
+
+  - decision: civilian-displacement
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Civilians Step Aside (Displacement Swap)
+      summary: Any mover, player or NPC, who steps into a tile occupied by a living civilian or staff member swaps places with them; the bystander ends up on the mover's origin tile. Guards and the player hold their ground and still block. Displacement never applies across a stairs transition, which would teleport the bystander between storeys.
+      rationale:
+        - Round One playtest direction, bumping into drifting guests read as the game refusing input.
+        - Guards remaining solid preserves their role as physical obstacles, and pursuit through crowds no longer stalls on stationary bystanders.
+      references: [action-resolver, player-command-translator, npc-controller]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs]
+      symbols: [is_displaceable]
+      tests: [crates/murmur-core/tests/gameplay.rs]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Owner asked that moving into a civilian swaps places, for the player and for guards alike.
+      - kind: test
+        reference: crates/murmur-core/tests/gameplay.rs
+        summary: movers_swap_places_with_civilians_but_not_guards.
+
+  - decision: liberal-player-wall-visibility
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Liberal Player Wall Visibility
+      summary: The player's displayed field of view is widened after line-of-sight computation, every sight-blocking tile adjacent (including diagonals) to a visible open tile is lit. Standing against a wall therefore shows the whole wall face instead of a supercover-sampled patchwork. Presentation only; NPC perception and target visibility are unchanged, and the widening can only add blocking tiles, never actors or floor.
+      references: [ascii-presentation, perception-model]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs]
+      symbols: [visible_tiles]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Owner asked that standing against a wall reveals the whole wall.
+      - kind: decision-record
+        reference: crates/murmur-shell/src/mission.rs
+        summary: visible_tiles widening pass in the mission controller.
+
+  - decision: mouse-inspection-and-clickable-actions
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Mouse Inspection and Clickable Actions
+      summary: Both delivery targets accept mouse input mapped onto the shared shell vocabulary. Hovering a map tile inspects it exactly like the look cursor, without pausing execution; hovering a visible NPC shows their vision overlay. Clicking a sidebar action is identical to pressing its key, clicking an adjacent tile completes a pending directional action, and clicking a candidate confirms shot targeting. Hit-testing resolves against the layout of the last drawn frame, cached by the renderer.
+      rationale:
+        - Round One playtest direction, the mouse should always be usable to look, and clicking an action should equal pressing the key.
+        - Keyboard-only play remains complete; the mouse is an additive convenience on the same command translator.
+      references: [ascii-presentation, player-command-translator, look-mode-cursor-contract]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
+      symbols: [UiLayout]
+      tests: [crates/murmur-shell/src/lib.rs]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Owner asked for hover-to-look everywhere and click-equals-key on the action list.
+      - kind: test
+        reference: crates/murmur-shell/src/lib.rs
+        summary: clicking_an_action_matches_pressing_its_key_and_hover_inspects.
 
   - decision: corridors-are-public-circulation
     core:

@@ -7,6 +7,7 @@ use std::rc::Rc;
 
 use murmur_core::data::GameData;
 use murmur_shell::{Shell, ShellInput};
+use ratzilla::event::{MouseButton, MouseEventKind};
 use ratzilla::ratatui::Terminal;
 use ratzilla::{DomBackend, WebRenderer};
 use wasm_bindgen::JsCast;
@@ -27,7 +28,28 @@ fn run() -> Result<(), Box<dyn Error>> {
     let shell = Rc::new(RefCell::new(Shell::new(data, seed)));
 
     let backend = DomBackend::new()?;
-    let terminal = Terminal::new(backend)?;
+    let mut terminal = Terminal::new(backend)?;
+
+    // Mouse: hover inspects, click activates (Ratzilla translates pixel
+    // coordinates to terminal grid cells for us).
+    let mouse_shell = Rc::clone(&shell);
+    terminal.on_mouse_event(move |event| {
+        let input = match event.kind {
+            MouseEventKind::Moved => Some(ShellInput::MouseMove {
+                column: event.col,
+                row: event.row,
+            }),
+            MouseEventKind::SingleClick(MouseButton::Left)
+            | MouseEventKind::DoubleClick(MouseButton::Left) => Some(ShellInput::MouseClick {
+                column: event.col,
+                row: event.row,
+            }),
+            _ => None,
+        };
+        if let Some(input) = input {
+            mouse_shell.borrow_mut().handle_input(input);
+        }
+    })?;
 
     // Keyboard input attaches at the document level rather than through
     // Ratzilla's grid-focused listener, so the game responds immediately

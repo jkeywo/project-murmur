@@ -1,9 +1,18 @@
 //! The in-mission controller: owns the turn driver and the command queue,
-//! translates key input into queued commands, and paces cooperative
-//! simulation batches. Rendering cadence never changes simulation results;
-//! it only decides how many due turns run per presentation frame.
+//! translates key and mouse input into queued commands, and paces
+//! cooperative simulation batches. Rendering cadence never changes
+//! simulation results; it only decides how many due turns run per
+//! presentation frame.
+//!
+//! The command queue itself is deliberately not player-facing: it is an
+//! architectural mechanism (intentions executed one per turn), surfaced
+//! only through its effects. Look mode pauses consumption internally and
+//! resumes it on exit, so the player is never left in an invisible paused
+//! state.
 
-use murmur_core::actions::{ActionResult, Command, RejectReason};
+use std::collections::HashSet;
+
+use murmur_core::actions::{ActionResult, Command};
 use murmur_core::data::GameData;
 use murmur_core::geom::{Dir4, Pos};
 use murmur_core::map::{TileKind, line_of_sight, tiles_visible_from};
@@ -13,7 +22,8 @@ use murmur_core::world::{ActorId, FurnitureKind, Hands, World};
 use crate::ShellInput;
 use crate::queue::{CommandQueue, EnqueueOutcome};
 
-/// Actions that need a follow-up direction key to pick their target.
+/// Actions that need a follow-up direction key (or a click on an adjacent
+/// tile) to pick their target.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PendingAction {
     Garrote,
@@ -39,8 +49,7 @@ impl PendingAction {
     }
 }
 
-/// The mission input mode. Look mode pauses queue consumption and keeps it
-/// paused after exit until the player explicitly resumes.
+/// The mission input mode.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
@@ -98,12 +107,58 @@ impl Speed {
     }
 }
 
+/// Where the last frame put things, for mouse hit-testing. Rebuilt on
+/// every draw.
+#[derive(Clone, Debug, Default)]
+pub struct UiLayout {
+    /// Interior of the map viewport in terminal cells (borders excluded).
+    pub map_x: u16,
+    pub map_y: u16,
+    pub map_w: u16,
+    pub map_h: u16,
+    /// The map tile rendered at the viewport's top-left interior cell.
+    pub origin: Option<Pos>,
+    /// Clickable action items: (row, first column, last column, key).
+    pub actions: Vec<(u16, u16, u16, char)>,
+}
+
+impl UiLayout {
+    /// The map tile under a terminal cell, if any.
+    pub fn tile_at(&self, column: u16, row: u16) -> Option<Pos> {
+        let origin = self.origin?;
+        if column < self.map_x
+            || row < self.map_y
+            || column >= self.map_x + self.map_w
+            || row >= self.map_y + self.map_h
+        {
+            return None;
+        }
+        Some(Pos::new(
+            origin.floor,
+            origin.x + (column - self.map_x) as i16,
+            origin.y + (row - self.map_y) as i16,
+        ))
+    }
+
+    /// The action key under a terminal cell, if any.
+    pub fn action_at(&self, column: u16, row: u16) -> Option<char> {
+        self.actions
+            .iter()
+            .find(|(r, x0, x1, _)| *r == row && column >= *x0 && column <= *x1)
+            .map(|(_, _, _, key)| *key)
+    }
+}
+
 pub struct Mission {
     pub driver: TurnDriver,
     pub queue: CommandQueue,
     pub mode: InputMode,
     pub speed: Speed,
     pub log: Vec<String>,
+    /// The map tile under the mouse cursor, for hover inspection.
+    pub hover: Option<Pos>,
+    /// Last frame's layout, for mouse hit-testing.
+    pub ui: UiLayout,
     explored: Vec<Vec<bool>>,
     frame: u64,
 }
@@ -121,6 +176,8 @@ impl Mission {
             mode: InputMode::Normal,
             speed: Speed::Fast,
             log: vec!["you slip in through the entrance".to_string()],
+            hover: None,
+            ui: UiLayout::default(),
             explored,
             frame: 0,
         };
@@ -130,6 +187,11 @@ impl Mission {
 
     pub fn world(&self) -> &World {
         self.driver.world()
+    }
+
+    /// Renders the mission and caches the layout for mouse hit-testing.
+    pub fn draw(&mut self, frame: &mut ratatui::Frame, data: &GameData) {
+        self.ui = crate::render::draw_mission(frame, data, self);
     }
 
     pub fn is_explored(&self, pos: Pos) -> bool {
@@ -142,17 +204,37 @@ impl Mission {
         self.explored[usize::from(pos.floor)][index]
     }
 
-    /// The player's current field of view. Low cover blocks the view of a
-    /// crouched player symmetrically.
+    /// The player's current field of view, widened so that every
+    /// sight-blocking tile bordering a visible open tile is lit too:
+    /// standing against a wall shows the whole wall face, matching how a
+    /// person actually reads a room.
     pub fn visible_tiles(&self, data: &GameData) -> Vec<Pos> {
         let world = self.driver.world();
         let player = world.player_actor();
-        tiles_visible_from(
+        let base = tiles_visible_from(
             player.pos,
             data.tuning.player_vision_range,
             &world.map,
             world.sight_blocker(player.crouched),
-        )
+        );
+        let mut lit: HashSet<Pos> = base.iter().copied().collect();
+        // Classify blockers without crouch effects: walls, closed doors,
+        // and tall furniture, not low cover.
+        let blocking = world.sight_blocker(false);
+        for pos in &base {
+            if blocking(*pos) {
+                continue;
+            }
+            for dy in -1i16..=1 {
+                for dx in -1i16..=1 {
+                    let neighbour = Pos::new(pos.floor, pos.x + dx, pos.y + dy);
+                    if world.map.in_bounds(neighbour) && blocking(neighbour) {
+                        lit.insert(neighbour);
+                    }
+                }
+            }
+        }
+        lit.into_iter().collect()
     }
 
     /// Living NPCs the player can currently see, nearest first.
@@ -180,7 +262,30 @@ impl Mission {
         ids.into_iter().map(|(_, id)| id).collect()
     }
 
+    /// The tile currently being inspected: the look cursor when look mode
+    /// is active, otherwise the hovered tile.
+    pub fn inspected_tile(&self) -> Option<Pos> {
+        match &self.mode {
+            InputMode::Look(cursor) => Some(*cursor),
+            _ => self.hover,
+        }
+    }
+
     pub fn handle_input(&mut self, data: &GameData, input: ShellInput) {
+        match input {
+            ShellInput::MouseMove { column, row } => {
+                self.hover = self
+                    .ui
+                    .tile_at(column, row)
+                    .filter(|pos| self.world().map.in_bounds(*pos));
+                return;
+            }
+            ShellInput::MouseClick { column, row } => {
+                self.handle_click(data, column, row);
+                return;
+            }
+            _ => {}
+        }
         match &self.mode {
             InputMode::Normal => self.handle_normal(data, input),
             InputMode::Pending(action) => {
@@ -193,8 +298,52 @@ impl Mission {
             }
             InputMode::TargetSelect { candidates, index } => {
                 let (candidates, index) = (candidates.clone(), *index);
-                self.handle_target_select(data, candidates, index, input);
+                self.handle_target_select(candidates, index, input);
             }
+        }
+    }
+
+    /// Clicking an action in the palette is exactly pressing its key;
+    /// clicking the map completes pending targeting, aims shots, or moves
+    /// the look cursor.
+    fn handle_click(&mut self, data: &GameData, column: u16, row: u16) {
+        if let Some(key) = self.ui.action_at(column, row) {
+            self.handle_input(data, ShellInput::Char(key));
+            return;
+        }
+        let Some(pos) = self
+            .ui
+            .tile_at(column, row)
+            .filter(|pos| self.world().map.in_bounds(*pos))
+        else {
+            return;
+        };
+        match &self.mode {
+            InputMode::Pending(action) => {
+                let action = *action;
+                let player_pos = self.world().player_actor().pos;
+                if pos == player_pos || pos.is_adjacent(player_pos) {
+                    self.mode = InputMode::Normal;
+                    match self.command_for_target(action, pos) {
+                        Some(command) => self.enqueue(command),
+                        None => self.push_log("nothing suitable there".to_string()),
+                    }
+                }
+            }
+            InputMode::TargetSelect { candidates, .. } => {
+                let clicked = candidates
+                    .iter()
+                    .copied()
+                    .find(|id| self.world().actor(*id).pos == pos);
+                if let Some(target) = clicked {
+                    self.mode = InputMode::Normal;
+                    self.enqueue(Command::Shoot(target));
+                }
+            }
+            InputMode::Look(_) => {
+                self.mode = InputMode::Look(pos);
+            }
+            InputMode::Normal => {}
         }
     }
 
@@ -204,7 +353,7 @@ impl Mission {
             ShellInput::Down => self.enqueue(Command::Move(Dir4::South)),
             ShellInput::Left => self.enqueue(Command::Move(Dir4::West)),
             ShellInput::Right => self.enqueue(Command::Move(Dir4::East)),
-            ShellInput::Char('.') => self.enqueue(Command::Wait),
+            ShellInput::Char('.') | ShellInput::Char(' ') => self.enqueue(Command::Wait),
             ShellInput::Char('c') => self.enqueue(Command::ToggleCrouch),
             ShellInput::Char('r') => self.enqueue(Command::DrawOrHolster),
             ShellInput::Char('g') => self.mode = InputMode::Pending(PendingAction::Garrote),
@@ -232,18 +381,10 @@ impl Mission {
                 }
             }
             ShellInput::Char(';') => {
+                // Look mode pauses execution internally; leaving it
+                // resumes, so the pause is never a stuck state.
                 self.queue.pause();
                 self.mode = InputMode::Look(self.world().player_actor().pos);
-                self.push_log("look mode: queue paused".to_string());
-            }
-            ShellInput::Char(' ') => {
-                self.queue.toggle_paused();
-                let state = if self.queue.is_paused() {
-                    "paused"
-                } else {
-                    "running"
-                };
-                self.push_log(format!("queue {state}"));
             }
             ShellInput::Char('[') => {
                 self.speed = self.speed.slower();
@@ -253,13 +394,13 @@ impl Mission {
                 self.speed = self.speed.faster();
                 self.push_log(format!("speed: {}", self.speed.label()));
             }
-            ShellInput::Backspace if self.queue.remove_newest().is_some() => {
-                self.push_log("newest queued command removed".to_string());
+            ShellInput::Backspace => {
+                self.queue.remove_newest();
             }
             ShellInput::Esc => {
-                let dropped = self.queue.clear();
-                if dropped > 0 {
-                    self.push_log(format!("queue cleared ({dropped} commands)"));
+                let cancelled = self.queue.clear();
+                if cancelled > 0 {
+                    self.push_log("you stop what you were doing".to_string());
                 }
             }
             _ => {}
@@ -283,27 +424,22 @@ impl Mission {
                 return;
             }
         };
+        let _ = data;
         self.mode = InputMode::Normal;
         let player_pos = self.world().player_actor().pos;
         let target_pos = match dir {
             Some(dir) => player_pos.step(dir),
             None => player_pos,
         };
-        let command = self.command_for_target(data, action, target_pos);
-        match command {
+        match self.command_for_target(action, target_pos) {
             Some(command) => self.enqueue(command),
             None => self.push_log("nothing suitable there".to_string()),
         }
     }
 
-    /// Captures the stable domain ID for a directional action target at
-    /// enqueue time; validation happens only when the command executes.
-    fn command_for_target(
-        &self,
-        _data: &GameData,
-        action: PendingAction,
-        pos: Pos,
-    ) -> Option<Command> {
+    /// Captures the stable domain ID for an action target at enqueue
+    /// time; validation happens only when the command executes.
+    fn command_for_target(&self, action: PendingAction, pos: Pos) -> Option<Command> {
         let world = self.world();
         match action {
             PendingAction::Garrote => world.standing_actor_at(pos).map(|a| Command::Garrote(a.id)),
@@ -350,26 +486,15 @@ impl Mission {
                 }
             }
             ShellInput::Char(';') | ShellInput::Esc => {
-                // Exiting look mode keeps the queue paused until the
-                // player explicitly resumes.
+                // Exiting look mode resumes execution immediately.
                 self.mode = InputMode::Normal;
-                self.push_log("look mode off (queue still paused)".to_string());
-            }
-            ShellInput::Char(' ') => {
-                self.queue.toggle_paused();
+                self.queue.resume();
             }
             _ => {}
         }
     }
 
-    fn handle_target_select(
-        &mut self,
-        data: &GameData,
-        candidates: Vec<ActorId>,
-        index: usize,
-        input: ShellInput,
-    ) {
-        let _ = data;
+    fn handle_target_select(&mut self, candidates: Vec<ActorId>, index: usize, input: ShellInput) {
         match input {
             ShellInput::Up | ShellInput::Left => {
                 let index = (index + candidates.len() - 1) % candidates.len();
@@ -393,10 +518,7 @@ impl Mission {
         match self.queue.push(command) {
             EnqueueOutcome::Accepted => {}
             EnqueueOutcome::RejectedFull => {
-                let capacity = self.queue.capacity();
-                self.push_log(format!(
-                    "queue full ({capacity}/{capacity}): input rejected"
-                ));
+                self.push_log("you can't plan any further ahead".to_string());
             }
         }
     }
@@ -415,7 +537,7 @@ impl Mission {
     }
 
     /// Runs at most one simulation turn. Returns false when no turn was
-    /// due (idle, paused, or mission over).
+    /// due (idle, look mode, or mission over).
     fn step_one(&mut self, data: &GameData) -> bool {
         if self.driver.mission_over() {
             return false;
@@ -439,23 +561,12 @@ impl Mission {
             }
             Err(reason) => {
                 // Pre-turn rejection: pure, no time passed. Remove the
-                // offender and cancel the queued remainder with the reason.
+                // offender and quietly drop whatever was planned after it.
                 self.queue.pop_head();
-                let dropped = self.queue.clear();
-                self.reject_feedback(reason, dropped);
+                self.queue.clear();
+                self.push_log(format!("rejected: {}", reason.message()));
                 false
             }
-        }
-    }
-
-    fn reject_feedback(&mut self, reason: RejectReason, dropped: usize) {
-        if dropped > 0 {
-            self.push_log(format!(
-                "rejected: {} ({dropped} queued commands cancelled)",
-                reason.message()
-            ));
-        } else {
-            self.push_log(format!("rejected: {}", reason.message()));
         }
     }
 
@@ -466,14 +577,10 @@ impl Mission {
         for message in &report.perception {
             self.push_log(message.clone());
         }
-        if let Some(ActionResult::Failed(why)) = &report.events.player_result {
-            // In-turn failure: the turn passed; cancel the remainder.
-            let dropped = self.queue.clear();
-            if dropped > 0 {
-                self.push_log(format!(
-                    "action failed: {why}; {dropped} queued commands cancelled"
-                ));
-            }
+        if let Some(ActionResult::Failed(_)) = &report.events.player_result {
+            // In-turn failure: the turn passed; the rest of the plan is
+            // abandoned (the failure itself was already logged).
+            self.queue.clear();
         }
     }
 
@@ -493,7 +600,7 @@ impl Mission {
         }
     }
 
-    /// A one-line description of a looked-at tile, honest about what the
+    /// A one-line description of an inspected tile, honest about what the
     /// player can currently see.
     pub fn describe(&self, data: &GameData, pos: Pos, visible: bool) -> String {
         let world = self.world();

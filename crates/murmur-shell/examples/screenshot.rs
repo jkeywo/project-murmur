@@ -9,7 +9,7 @@ use murmur_shell::{Shell, ShellInput};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
-fn print_frame(terminal: &mut Terminal<TestBackend>, shell: &Shell, label: &str) {
+fn print_frame(terminal: &mut Terminal<TestBackend>, shell: &mut Shell, label: &str) {
     terminal.draw(|frame| shell.draw(frame)).unwrap();
     println!("=== {label} ===");
     let buffer = terminal.backend().buffer().clone();
@@ -32,9 +32,9 @@ fn main() {
     let backend = TestBackend::new(130, 38);
     let mut terminal = Terminal::new(backend).unwrap();
 
-    print_frame(&mut terminal, &shell, "start");
+    print_frame(&mut terminal, &mut shell, "start");
     shell.handle_input(ShellInput::Enter);
-    print_frame(&mut terminal, &shell, "briefing");
+    print_frame(&mut terminal, &mut shell, "briefing");
     shell.handle_input(ShellInput::Enter);
 
     // Walk a little and let the club live for a while.
@@ -51,5 +51,5 @@ fn main() {
     for _ in 0..60 {
         shell.tick();
     }
-    print_frame(&mut terminal, &shell, "playing");
+    print_frame(&mut terminal, &mut shell, "playing");
 }

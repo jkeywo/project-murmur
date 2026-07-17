@@ -353,6 +353,17 @@ impl World {
             .any(|a| a.hands == Hands::CarryingBody(id))
     }
 
+    /// Whether a mover may swap places with this actor instead of being
+    /// blocked. Civilians and staff step aside for anyone; guards and the
+    /// player hold their ground.
+    pub fn is_displaceable(&self, id: ActorId) -> bool {
+        let actor = self.actor(id);
+        !actor.is_player()
+            && actor.alive()
+            && !actor.departed
+            && actor.role != Some(crate::data::Role::Guard)
+    }
+
     pub fn room_at(&self, pos: Pos) -> Option<&Room> {
         self.rooms
             .iter()

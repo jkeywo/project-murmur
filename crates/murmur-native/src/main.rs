@@ -7,10 +7,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use bevy::app::AppExit;
 use bevy::prelude::*;
-use bevy_ratatui::{RatatuiContext, RatatuiPlugins, event::KeyMessage};
+use bevy_ratatui::{
+    RatatuiContext, RatatuiPlugins,
+    event::{KeyMessage, MouseMessage},
+};
 use murmur_core::data::GameData;
 use murmur_shell::{Shell, ShellInput};
-use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers};
+use ratatui::crossterm::event::{KeyCode, KeyEventKind, KeyModifiers, MouseButton, MouseEventKind};
 
 #[derive(Resource)]
 struct ShellResource(Shell);
@@ -59,6 +62,7 @@ fn seed_from_args_or_clock() -> u64 {
 fn read_input(
     mut shell: ResMut<ShellResource>,
     mut keys: MessageReader<KeyMessage>,
+    mut mice: MessageReader<MouseMessage>,
     mut exit: MessageWriter<AppExit>,
 ) {
     for key in keys.read() {
@@ -70,6 +74,22 @@ fn read_input(
             return;
         }
         if let Some(input) = translate(key.code) {
+            shell.0.handle_input(input);
+        }
+    }
+    for mouse in mice.read() {
+        let input = match mouse.kind {
+            MouseEventKind::Moved => Some(ShellInput::MouseMove {
+                column: mouse.column,
+                row: mouse.row,
+            }),
+            MouseEventKind::Down(MouseButton::Left) => Some(ShellInput::MouseClick {
+                column: mouse.column,
+                row: mouse.row,
+            }),
+            _ => None,
+        };
+        if let Some(input) = input {
             shell.0.handle_input(input);
         }
     }
@@ -96,7 +116,7 @@ fn advance(mut shell: ResMut<ShellResource>) {
     shell.0.tick();
 }
 
-fn draw(mut context: ResMut<RatatuiContext>, shell: Res<ShellResource>) -> Result {
+fn draw(mut context: ResMut<RatatuiContext>, mut shell: ResMut<ShellResource>) -> Result {
     context.draw(|frame| shell.0.draw(frame))?;
     Ok(())
 }

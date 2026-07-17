@@ -38,9 +38,10 @@ actors, objects, containers, mission facts, alertness, routines, and knowledge
 belong to the world model. NPCs use routines and state machines; the target
 uses the same base model as staff with a richer schedule.
 
-NPC perception is line of sight plus facing cone and range. NPC facing is shown
-in ASCII using a directional marker such as `g>` or `g^`; the player has no
-facing. Disguises define allowed zones, suspicious observers, and illegal
+NPC perception is line of sight plus facing cone and range. The player has no
+facing. NPC facing carries no permanent map marker (Round One decision:
+single-cell tiles); inspecting a visible NPC — mouse hover or the look
+cursor — overlays every tile their perception currently covers. Disguises define allowed zones, suspicious observers, and illegal
 equipment. Initial planned actions are movement, wait, look, garrote, shoot,
 carry, drop or hide a body, change disguise, and open or close a door.
 
@@ -94,13 +95,16 @@ interrupted, while completed or partially completed actions continue.
 
 The simulation never tries to infer tactical significance or automatically
 protect the player from detection, alarms, changed line of sight, or combat.
-Queue control is explicit: clear, remove newest command, pause/resume, and
-look-mode pause. Leaving look mode keeps the queue paused until the player
-explicitly resumes it.
+Queue control is explicit: clear, remove newest command, and the internal
+look-mode pause. Leaving look mode resumes consumption immediately (Round One
+playtest: an implementation that stayed paused after exit stranded the player
+in an unplayable state).
 
-Escape clears the queue, Backspace removes its newest command, and Space pauses
-or resumes consumption. The queue capacity is exactly 32 commands and is always
-visible; input beyond it is rejected visibly without disturbing queued input.
+The queue is an architectural mechanism, not a player-facing one (Round One
+decision): it has no HUD or start-screen surface and no manual pause toggle.
+Escape clears the queue and Backspace removes its newest command. The queue
+capacity is exactly 32 commands; input beyond it is rejected with a log line
+without disturbing queued input.
 Targeted commands
 store stable actor or object IDs, never runtime entity IDs, and resolve those
 IDs only at execution time. A future controller-level `TravelTo` command may

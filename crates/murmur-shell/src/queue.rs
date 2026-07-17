@@ -3,10 +3,12 @@
 //! A bounded FIFO of controller commands. Entries are intentions, never
 //! prevalidated simulation actions: the head is translated against the
 //! live world only when it is due to execute. Capacity is exactly the
-//! authored `queue_capacity` (32), always visible; overflow rejects the
-//! new command visibly without disturbing queued input. Escape clears,
-//! Backspace removes the newest entry, Space pauses or resumes
-//! consumption, and look mode pauses without clearing.
+//! authored `queue_capacity` (32); overflow rejects the new command with
+//! a log line, without disturbing queued input. The queue is an
+//! architectural mechanism, not a player-facing one: it has no HUD
+//! surface. Escape clears, Backspace removes the newest entry, and look
+//! mode pauses consumption internally (resumed on exit) so inspection
+//! never costs turns.
 
 use murmur_core::actions::Command;
 use std::collections::VecDeque;

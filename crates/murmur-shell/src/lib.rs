@@ -22,8 +22,10 @@ use ratatui::Frame;
 
 use mission::Mission;
 
-/// Backend-neutral input events. Platform binaries map their own key event
-/// types (crossterm, browser) onto this vocabulary.
+/// Backend-neutral input events. Platform binaries map their own key and
+/// mouse event types (crossterm, browser) onto this vocabulary. Mouse
+/// coordinates are terminal cells; the shell resolves them against the
+/// layout of the last drawn frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShellInput {
     Up,
@@ -34,6 +36,8 @@ pub enum ShellInput {
     Esc,
     Backspace,
     Char(char),
+    MouseMove { column: u16, row: u16 },
+    MouseClick { column: u16, row: u16 },
 }
 
 /// Which interface mode the shell is in. Start, briefing, and game-over
@@ -150,14 +154,16 @@ impl Shell {
         }
     }
 
-    /// Renders the current screen into a ratatui frame.
-    pub fn draw(&self, frame: &mut Frame) {
-        match &self.screen {
+    /// Renders the current screen into a ratatui frame. Takes `&mut self`
+    /// because the mission caches the drawn layout for mouse hit-testing.
+    pub fn draw(&mut self, frame: &mut Frame) {
+        let data = &self.data;
+        match &mut self.screen {
             Screen::Start => screens::draw_start(frame),
             Screen::Briefing(mission) => {
                 screens::draw_briefing(frame, &mission.world().facts, mission.world().seed)
             }
-            Screen::Playing(mission) => render::draw_mission(frame, &self.data, mission),
+            Screen::Playing(mission) => mission.draw(frame, data),
             Screen::GameOver {
                 headline,
                 summary,
@@ -216,11 +222,10 @@ mod tests {
     }
 
     #[test]
-    fn queue_capacity_is_visible_and_overflow_rejects() {
+    fn queue_overflow_rejects_without_disturbing_queued_input() {
         let mut shell = shell();
         start_mission(&mut shell);
-        // Pause so nothing consumes, then stuff the queue past capacity.
-        shell.handle_input(ShellInput::Char(' '));
+        // Input between ticks never consumes; stuff the queue past capacity.
         for _ in 0..40 {
             shell.handle_input(ShellInput::Char('.'));
         }
@@ -230,17 +235,21 @@ mod tests {
             mission
                 .log
                 .iter()
-                .any(|line| line.contains("queue full (32/32)")),
-            "overflow must be visible"
+                .any(|line| line.contains("can't plan any further")),
+            "overflow is reported without queue jargon"
         );
     }
 
     #[test]
-    fn escape_clears_and_backspace_removes_newest() {
+    fn space_waits_and_escape_clears_and_backspace_removes_newest() {
         let mut shell = shell();
         start_mission(&mut shell);
-        shell.handle_input(ShellInput::Char(' ')); // pause
-        shell.handle_input(ShellInput::Char('.'));
+        shell.handle_input(ShellInput::Char(' '));
+        assert_eq!(
+            mission(&shell).queue.head(),
+            Some(&Command::Wait),
+            "space is wait, not a pause toggle"
+        );
         shell.handle_input(ShellInput::Up);
         assert_eq!(mission(&shell).queue.len(), 2);
         shell.handle_input(ShellInput::Backspace);
@@ -250,27 +259,11 @@ mod tests {
         assert!(mission(&shell).queue.is_empty());
     }
 
+    /// Round One bug: leaving look mode used to keep consumption paused,
+    /// leaving the player unable to move. Look mode pauses internally and
+    /// exit must resume.
     #[test]
-    fn paused_queue_consumes_nothing_until_resumed() {
-        let mut shell = shell();
-        start_mission(&mut shell);
-        shell.handle_input(ShellInput::Char(' ')); // pause
-        shell.handle_input(ShellInput::Char('.'));
-        for _ in 0..10 {
-            shell.tick();
-        }
-        assert_eq!(mission(&shell).world().turn, 0);
-        assert_eq!(mission(&shell).queue.len(), 1);
-        shell.handle_input(ShellInput::Char(' ')); // resume
-        for _ in 0..10 {
-            shell.tick();
-        }
-        assert_eq!(mission(&shell).queue.len(), 0);
-        assert_eq!(mission(&shell).world().turn, 1);
-    }
-
-    #[test]
-    fn look_mode_pauses_and_stays_paused_after_exit() {
+    fn look_mode_pauses_internally_and_exit_resumes() {
         let mut shell = shell();
         start_mission(&mut shell);
         shell.handle_input(ShellInput::Char(';'));
@@ -279,12 +272,22 @@ mod tests {
         // Cursor moves without enqueueing player movement.
         shell.handle_input(ShellInput::Up);
         assert!(mission(&shell).queue.is_empty());
+        // Nothing executes while looking.
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 0);
         shell.handle_input(ShellInput::Esc);
         assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
         assert!(
-            mission(&shell).queue.is_paused(),
-            "leaving look mode keeps the queue paused until explicit resume"
+            !mission(&shell).queue.is_paused(),
+            "leaving look mode must never strand the player in a paused state"
         );
+        shell.handle_input(ShellInput::Char('.'));
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 1, "play resumes immediately");
     }
 
     #[test]
@@ -307,12 +310,10 @@ mod tests {
             murmur_core::geom::Dir4::East => ShellInput::Right,
             murmur_core::geom::Dir4::West => ShellInput::Left,
         };
-        shell.handle_input(ShellInput::Char(' ')); // pause to build a queue
         shell.handle_input(input); // will be rejected
         shell.handle_input(ShellInput::Char('.'));
         shell.handle_input(ShellInput::Char('.'));
         assert_eq!(mission(&shell).queue.len(), 3);
-        shell.handle_input(ShellInput::Char(' ')); // resume
         for _ in 0..5 {
             shell.tick();
         }
@@ -324,12 +325,41 @@ mod tests {
         );
         assert!(mission.queue.is_empty());
         assert!(
-            mission
-                .log
-                .iter()
-                .any(|line| line.contains("rejected") && line.contains("cancelled")),
-            "the cancellation reason must be reported"
+            mission.log.iter().any(|line| line.contains("rejected")),
+            "the rejection reason must be reported"
         );
+    }
+
+    #[test]
+    fn clicking_an_action_matches_pressing_its_key_and_hover_inspects() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let mut shell = shell();
+        start_mission(&mut shell);
+        let mut terminal = Terminal::new(TestBackend::new(110, 40)).unwrap();
+        terminal.draw(|frame| shell.draw(frame)).unwrap();
+
+        // Click the "wait" palette entry: identical to pressing '.'.
+        let (row, x0, _, key) = *mission(&shell)
+            .ui
+            .actions
+            .iter()
+            .find(|(_, _, _, key)| *key == '.')
+            .expect("wait is in the palette");
+        assert_eq!(key, '.');
+        shell.handle_input(ShellInput::MouseClick { column: x0, row });
+        assert_eq!(mission(&shell).queue.head(), Some(&Command::Wait));
+
+        // Hovering the player's own tile inspects it without pausing.
+        let ui = mission(&shell).ui.clone();
+        let origin = ui.origin.unwrap();
+        let player_pos = mission(&shell).world().player_actor().pos;
+        let column = ui.map_x + u16::try_from(player_pos.x - origin.x).unwrap();
+        let row = ui.map_y + u16::try_from(player_pos.y - origin.y).unwrap();
+        shell.handle_input(ShellInput::MouseMove { column, row });
+        assert_eq!(mission(&shell).hover, Some(player_pos));
+        assert!(!mission(&shell).queue.is_paused(), "hover never pauses");
     }
 
     #[test]

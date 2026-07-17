@@ -53,12 +53,12 @@ entities:
       status: implemented
       confidence: confirmed
       title: NPC Perception Model
-      summary: Line of sight, facing cone, range, alertness, memory, and knowledge for non-player actors. The player has no facing.
+      summary: Line of sight, facing cone, range, alertness, memory, and knowledge for non-player actors. The player has no facing. Also exposes the full visible-tile set of an NPC for the presentation inspection overlay, computed by the same rules.
       references: [npc-controller, action-resolver]
     implementation:
       status: declared
       paths: [crates/murmur-core/src/perception.rs]
-      symbols: [npc_sees, update]
+      symbols: [npc_sees, update, npc_visible_tiles]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
   - component: npc-controller
@@ -142,7 +142,7 @@ entities:
       status: implemented
       confidence: confirmed
       title: Queue Control Surface
-      summary: Presentation and input boundary for visible capacity, explicit pause/resume, newest-command removal, and queue clearing. Look mode pauses consumption and requires explicit resume after exit.
+      summary: Input boundary for cancelling pending commands (Escape), removing the newest (Backspace), and the internal look-mode pause that resumes on exit. Per the queue-desurfacing decision the queue has no presentation surface and no manual pause toggle; its capacity and contents are never displayed.
       references: [player-command-queue]
     implementation:
       status: declared
@@ -166,12 +166,12 @@ entities:
       status: implemented
       confidence: confirmed
       title: ASCII Presentation
-      summary: Presentation-only terminal view with directional NPC indicators, latest completed state, command queue status, and configurable render cadence that never changes simulation results.
+      summary: Presentation-only terminal view of the latest completed state, one terminal cell per tile, zone-tinted floors, an on-demand NPC vision overlay, a prominent worn-disguise line, a clickable action palette, and configurable render cadence that never changes simulation results. Facing markers and queue status are deliberately absent per the single-cell-tiles-and-inspection and queue-desurfacing decisions.
       references: [queue-control-surface, world-model]
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/render.rs, crates/murmur-shell/src/mission.rs]
-      symbols: [draw_mission, Speed]
+      symbols: [draw_mission, Speed, UiLayout]
 
   - component: mission-outcome-rules
     core:
@@ -462,7 +462,7 @@ entities:
       status: implemented
       confidence: confirmed
       title: Queue Input Contract
-      summary: Input events are retained while resolution is busy and appended FIFO between cooperative batches. Escape clears the queue, Backspace removes its newest command, and Space pauses or resumes consumption. Capacity is exactly 32 commands and must be visible; additional input is rejected visibly without dropping queued commands.
+      summary: Input events are retained while resolution is busy and appended FIFO between cooperative batches. Escape clears the queue, Backspace removes its newest command, and Space enqueues a wait. Capacity is exactly 32 commands; overflow is reported with a jargon-free log line and never drops queued commands. Mouse clicks translate through the same contract, a click on a sidebar action is exactly its key press.
       references: [queue-control-surface, player-command-queue]
     implementation:
       status: declared
@@ -482,12 +482,16 @@ entities:
       status: implemented
       confidence: confirmed
       title: Look Mode Cursor Contract
-      summary: Entering look mode pauses queue consumption without clearing it. Movement input controls a detached inspection cursor rather than enqueuing player movement; exiting look mode remains paused until explicit resume.
+      summary: Entering look mode pauses queue consumption without clearing it. Movement input controls a detached inspection cursor rather than enqueuing player movement; exiting look mode resumes consumption immediately. The mouse provides the same inspection passively, hovering describes a tile (and shows a visible NPC's vision overlay) without entering look mode or pausing anything.
       references: [queue-control-surface, queue-input-contract]
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/mission.rs]
       tests: [crates/murmur-shell/src/lib.rs]
+    evidence:
+      - kind: playtest
+        reference: round-one-feedback
+        summary: Bug, the first implementation left the queue paused after exiting look mode, stranding the player in a state where nothing executed. Exit now resumes; regression test look_mode_pauses_internally_and_exit_resumes.
 
   - component: crouch-and-low-cover-rules
     core:

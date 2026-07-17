@@ -16,11 +16,13 @@ cargo run --release -p murmur-native -- --seed 42
 
 ## How it plays
 
-Commands queue up (32 slots, always visible) and execute one per turn
-against an authoritative, deterministic simulation. A command that cannot
-be submitted is rejected without time passing and cancels the queued
-remainder; a valid action can still fail during simultaneous resolution,
-and that turn stands. NPCs run generated routines on a relaxed cadence,
+Commands execute one per turn against an authoritative, deterministic
+simulation (input runs ahead through an internal 32-slot queue). A command
+that cannot be submitted is rejected without time passing and cancels the
+queued remainder; a valid action can still fail during simultaneous
+resolution, and that turn stands. The mouse works everywhere: hover
+inspects any tile (hovering a person shows exactly what they can see),
+and clicking a sidebar action equals pressing its key. NPCs run generated routines on a relaxed cadence,
 see through facing cones, grow suspicious of trespass, crouching, drawn
 weapons, and bodies, and propagate alerts by line of sight only.
 

@@ -54,6 +54,26 @@ pub fn npc_sees(
     line_of_sight(viewer_ref.pos, target_pos, world.sight_blocker(crouched))
 }
 
+/// Every tile an NPC can currently see (cone, lighting-dependent range,
+/// line of sight), for presentation overlays: inspecting an NPC shows
+/// exactly what the perception rules let them see against a standing
+/// target.
+pub fn npc_visible_tiles(world: &World, data: &GameData, viewer: ActorId) -> Vec<Pos> {
+    let viewer_ref = world.actor(viewer);
+    let range = data.tuning.vision_range.max(data.tuning.vision_range_dim);
+    let origin = viewer_ref.pos;
+    let mut tiles = Vec::new();
+    for y in (origin.y - range)..=(origin.y + range) {
+        for x in (origin.x - range)..=(origin.x + range) {
+            let pos = Pos::new(origin.floor, x, y);
+            if world.map.in_bounds(pos) && npc_sees(world, data, viewer, pos, false) {
+                tiles.push(pos);
+            }
+        }
+    }
+    tiles
+}
+
 /// One perceived problem, for the log.
 fn note(messages: &mut Vec<String>, text: String) {
     if !messages.contains(&text) {
