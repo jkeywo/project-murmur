@@ -218,6 +218,9 @@ pub struct Actor {
     /// tracking (collateral, discovered bodies) keys off it.
     #[serde(default)]
     pub killed_by_player: bool,
+    /// Whether this body's discovery has already been counted for heat.
+    #[serde(default)]
+    pub discovery_counted: bool,
 }
 
 impl Actor {
@@ -315,6 +318,14 @@ pub struct World {
     /// witnesses gain suspicion fast.
     #[serde(default)]
     pub player_tampering: bool,
+    /// Mission heat: observed crimes accumulate here and drive the
+    /// venue's tiered security response. High heat at resolution raises
+    /// persistent district heat in the campaign.
+    #[serde(default)]
+    pub mission_heat: u16,
+    /// The heat tier whose response has already been applied.
+    #[serde(default)]
+    pub heat_tier: u8,
     pub facts: MissionFacts,
     /// What the generated reachability proof established.
     pub proof: crate::generator::proof::ProofReport,

@@ -132,7 +132,7 @@ entities:
 
   - component: milestone-2-police-heat
     core:
-      status: proposed
+      status: partially-implemented
       confidence: confirmed
       title: Police-Faction Temporary and Persistent Heat
       summary: >-
@@ -143,6 +143,10 @@ entities:
         later contracts and modifies future generation without locking an area
         out. External police entry is deferred until city-scale traversal exists.
       references: [milestone-2-campaign-state, milestone-2-constrained-contracts]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/turn.rs]
+      tests: [crates/murmur-core/tests/heat.rs]
 
   - component: milestone-2-second-venue
     core:

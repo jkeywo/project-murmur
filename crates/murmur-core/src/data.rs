@@ -453,6 +453,17 @@ pub struct Tuning {
     pub noise_radius: i16,
     /// Suspicion per turn an NPC watches the player pick a lock.
     pub gain_tampering: u16,
+    /// Mission heat weights and tier thresholds.
+    pub heat_gunshot: u16,
+    pub heat_violence: u16,
+    pub heat_body_found: u16,
+    pub heat_tier1: u16,
+    pub heat_tier2: u16,
+    /// Guards spawned at the entrance when heat reaches tier two.
+    pub heat_reinforcements: u8,
+    /// The most extra guards persistent district heat may add at
+    /// generation.
+    pub heat_extra_guard_cap: u8,
     /// Tiles of the player's own field of view.
     pub player_vision_range: i16,
 

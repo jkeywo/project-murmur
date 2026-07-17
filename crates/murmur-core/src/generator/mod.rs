@@ -80,6 +80,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         &layout,
         config.constraint.as_ref(),
         &config.loadout,
+        config.heat,
         &mut rng,
     )
     .map_err(|e| e.0)?;
@@ -127,6 +128,8 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         incidents: Vec::new(),
         player_violence_witnessed: false,
         player_tampering: false,
+        mission_heat: 0,
+        heat_tier: 0,
         facts,
         proof: report,
         routes,

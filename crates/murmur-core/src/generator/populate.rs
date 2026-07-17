@@ -115,6 +115,7 @@ pub fn populate(
     layout: &Layout,
     constraint: Option<&crate::contract::Constraint>,
     loadout: &[String],
+    heat: u8,
     rng: &mut Pcg32,
 ) -> Result<Population, PopulateError> {
     let mut actors: Vec<Actor> = Vec::new();
@@ -148,6 +149,7 @@ pub fn populate(
         hidden_in: None,
         departed: false,
         killed_by_player: false,
+        discovery_counted: false,
     });
 
     // The target: staff model with a richer generated schedule.
@@ -228,6 +230,7 @@ pub fn populate(
             hidden_in: None,
             departed: false,
             killed_by_player: false,
+            discovery_counted: false,
         });
     }
 
@@ -237,7 +240,12 @@ pub fn populate(
         data.population.vip_civilians_max.into(),
     );
     for role_spec in &data.population.roles {
-        let count = rng.range_inclusive(role_spec.count_min.into(), role_spec.count_max.into());
+        let mut count = rng.range_inclusive(role_spec.count_min.into(), role_spec.count_max.into());
+        // Persistent district heat hardens the venue: extra guards on
+        // shift, capped so an area never locks out.
+        if role_spec.role == Role::Guard {
+            count += u32::from(heat.min(data.tuning.heat_extra_guard_cap));
+        }
         for _ in 0..count {
             let is_vip = role_spec.role == Role::Civilian && vip_civilians > 0;
             if is_vip {
@@ -305,6 +313,7 @@ pub fn populate(
                 hidden_in: None,
                 departed: false,
                 killed_by_player: false,
+                discovery_counted: false,
             });
         }
     }

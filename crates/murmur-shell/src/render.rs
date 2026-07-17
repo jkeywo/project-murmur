@@ -407,6 +407,14 @@ fn draw_sidebar(
     };
     lines.push(Line::styled(legit, Style::default().fg(color)));
 
+    // The venue's security posture, driven by mission heat.
+    let (alert_label, alert_color) = match world.heat_tier {
+        0 => ("venue: quiet", Color::DarkGray),
+        1 => ("venue: security wary", Color::Yellow),
+        _ => ("venue: backup on site", Color::Red),
+    };
+    lines.push(Line::styled(alert_label, Style::default().fg(alert_color)));
+
     // The contract's mandatory constraint, and whether it still holds.
     if let Some(constraint) = &world.constraint {
         if world.constraint_breach.is_some() {

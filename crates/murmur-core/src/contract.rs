@@ -83,6 +83,10 @@ pub struct MissionConfig {
     /// matches the original briefing kit.
     #[serde(default)]
     pub loadout: Vec<crate::data::ItemSpecId>,
+    /// Persistent district heat at contract time: raises the venue's
+    /// guard count (capped) and, at two or more, its baseline wariness.
+    #[serde(default)]
+    pub heat: u8,
 }
 
 impl MissionConfig {
@@ -92,7 +96,13 @@ impl MissionConfig {
             venue: venue.into(),
             constraint: None,
             loadout: vec!["garrote".to_string(), "silenced-pistol".to_string()],
+            heat: 0,
         }
+    }
+
+    pub fn with_heat(mut self, heat: u8) -> Self {
+        self.heat = heat;
+        self
     }
 
     pub fn with_constraint(mut self, constraint: Constraint) -> Self {

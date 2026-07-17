@@ -409,3 +409,19 @@ entities:
       paths: [data/opportunities.ron, crates/murmur-core/src/generator/opportunities.rs, crates/murmur-core/src/actions.rs]
       symbols: [place_opportunities]
       tests: [crates/murmur-core/tests/opportunities.rs]
+
+  - decision: observed-crime-heat-model
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Heat Counts Observed Crimes, Never Omniscient Ones
+      summary: Mission heat rises only when somebody perceives a crime, a heard gunshot, a witnessed act of violence, or the first discovery of a body of the player's making (counted once per body). Accidents and unobserved acts add nothing. Two data-driven tiers shape the venue response, at tier one every guard's suspicion floor rises to wary, at tier two backup guards spawn at the entrance already investigating. Persistent district heat feeds forward at generation as extra guards on shift, capped so a hot district is harder, never locked out; campaign-side persistence and decay land with the campaign state.
+      rationale:
+        - Observation-gated heat preserves the stealth promise, a perfect ghost run stays quiet no matter what it leaves behind unseen.
+        - Tier effects are venue-internal (wariness, door reinforcements), respecting the deferral of external police entry until city-scale traversal exists.
+      references: [milestone-2-police-heat, opportunity-machines-and-deniable-accidents]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/turn.rs, crates/murmur-core/src/generator/populate.rs]
+      symbols: [apply_heat_tiers]
+      tests: [crates/murmur-core/tests/heat.rs]

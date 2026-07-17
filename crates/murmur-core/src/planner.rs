@@ -390,7 +390,7 @@ mod tests {
                 continue;
             };
             let Ok(population) =
-                populate::populate(&data, &layout, None, &config_loadout, &mut rng)
+                populate::populate(&data, &layout, None, &config_loadout, 0, &mut rng)
             else {
                 continue;
             };

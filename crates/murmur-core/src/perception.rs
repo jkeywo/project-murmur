@@ -97,6 +97,59 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
         .map(|a| a.id)
         .collect();
 
+    // Pass 0: mission heat. Each observed crime counts once, however
+    // many NPCs perceive it.
+    let mut heat_gain: u16 = 0;
+    for incident in world.incidents.clone() {
+        match incident.kind {
+            IncidentKind::Gunshot => {
+                let heard = npc_ids.iter().any(|id| {
+                    world
+                        .actor(*id)
+                        .pos
+                        .chebyshev(incident.pos)
+                        .is_some_and(|d| d <= incident.radius)
+                });
+                if heard {
+                    heat_gain += data.tuning.heat_gunshot;
+                }
+            }
+            IncidentKind::Violence => {
+                let seen = npc_ids
+                    .iter()
+                    .any(|id| npc_sees(world, data, *id, incident.pos, false));
+                if seen {
+                    heat_gain += data.tuning.heat_violence;
+                }
+            }
+            IncidentKind::Noise => {}
+        }
+    }
+    // Bodies of the player's making, first time anyone sees them.
+    let uncounted: Vec<(ActorId, Pos)> = world
+        .actors
+        .iter()
+        .filter(|a| {
+            a.is_visible_body()
+                && a.killed_by_player
+                && !a.discovery_counted
+                && !world.is_carried(a.id)
+        })
+        .map(|a| (a.id, a.pos))
+        .collect();
+    for (body, pos) in uncounted {
+        let seen = npc_ids
+            .iter()
+            .any(|id| npc_sees(world, data, *id, pos, false));
+        if seen {
+            world.actor_mut(body).discovery_counted = true;
+            heat_gain += data.tuning.heat_body_found;
+        }
+    }
+    if heat_gain > 0 {
+        world.mission_heat = world.mission_heat.saturating_add(heat_gain);
+    }
+
     // Pass 1: direct perception.
     for id in npc_ids.iter().copied() {
         let role = world.actor(id).role.unwrap_or(Role::Civilian);

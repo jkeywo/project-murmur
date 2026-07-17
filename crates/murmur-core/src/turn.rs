@@ -136,11 +136,14 @@ impl TurnDriver {
                 )
         });
         let events = resolve_turn(&mut self.world, data, &mut self.store.actions);
-        let perception_messages = if self.world.outcome.is_none() {
+        let mut perception_messages = if self.world.outcome.is_none() {
             perception::update(&mut self.world, data)
         } else {
             Vec::new()
         };
+        if self.world.outcome.is_none() {
+            apply_heat_tiers(&mut self.world, data, &mut perception_messages);
+        }
         // Prepare the next turn's AI actions; in-progress multi-turn
         // actions (the player's, and any NPC's) carry over.
         if self.world.outcome.is_none() {
@@ -155,6 +158,110 @@ impl TurnDriver {
             events,
             perception: perception_messages,
         }
+    }
+}
+
+/// Applies the venue's tiered response when mission heat crosses a
+/// threshold. Each tier fires once per mission.
+fn apply_heat_tiers(world: &mut World, data: &GameData, messages: &mut Vec<String>) {
+    let due_tier = if world.mission_heat >= data.tuning.heat_tier2 {
+        2
+    } else if world.mission_heat >= data.tuning.heat_tier1 {
+        1
+    } else {
+        0
+    };
+    while world.heat_tier < due_tier {
+        world.heat_tier += 1;
+        match world.heat_tier {
+            1 => {
+                // Security goes wary: every guard starts from suspicious.
+                let guard_ids: Vec<crate::world::ActorId> = world
+                    .actors
+                    .iter()
+                    .filter(|a| {
+                        a.role == Some(crate::data::Role::Guard) && a.alive() && !a.departed
+                    })
+                    .map(|a| a.id)
+                    .collect();
+                for id in guard_ids {
+                    if let Some(ai) = world.actor_mut(id).ai.as_mut() {
+                        ai.suspicion = ai.suspicion.max(data.tuning.suspicion_suspicious_at);
+                        if ai.mood == crate::world::Mood::Relaxed {
+                            ai.mood = crate::world::Mood::Suspicious;
+                        }
+                    }
+                }
+                messages.push("word spreads among security: something is wrong".to_string());
+            }
+            _ => {
+                spawn_reinforcements(world, data);
+                messages.push("backup security pushes in through the entrance".to_string());
+            }
+        }
+    }
+}
+
+/// Backup guards arrive at the entrance, already hunting.
+fn spawn_reinforcements(world: &mut World, data: &GameData) {
+    let Some(entrance) = world.extraction_tiles.first().copied() else {
+        return;
+    };
+    let focus = world
+        .incidents
+        .last()
+        .map(|i| i.pos)
+        .or(Some(world.player_actor().pos));
+    let guard_spec = data.role_spec(crate::data::Role::Guard);
+    let hp = 1;
+    for n in 0..data.tuning.heat_reinforcements {
+        // Deterministic outward scan for a free spawn tile.
+        let mut spot = entrance;
+        'scan: for radius in 0..8i16 {
+            for dy in -radius..=radius {
+                for dx in -radius..=radius {
+                    let pos =
+                        crate::geom::Pos::new(entrance.floor, entrance.x + dx, entrance.y + dy);
+                    let open = matches!(world.map.tile(pos), crate::map::TileKind::Floor)
+                        && world.standing_actor_at(pos).is_none()
+                        && world.furniture_at(pos).is_none();
+                    if open {
+                        spot = pos;
+                        break 'scan;
+                    }
+                }
+            }
+        }
+        let id = crate::world::ActorId(world.actors.len() as u32);
+        world.actors.push(crate::world::Actor {
+            id,
+            name: format!("backup guard {}", n + 1),
+            role: Some(crate::data::Role::Guard),
+            pos: spot,
+            facing: Some(crate::geom::Dir4::North),
+            condition: crate::world::BodyCondition::Healthy,
+            hp,
+            worn_disguise: guard_spec
+                .and_then(|s| s.disguise.clone())
+                .unwrap_or_else(|| "guard".to_string()),
+            hands: crate::world::Hands::Free,
+            crouched: false,
+            is_target: false,
+            is_vip: false,
+            ai: Some(crate::world::AiState {
+                routine: Vec::new(),
+                routine_index: 0,
+                wait_remaining: 0,
+                mood: crate::world::Mood::Investigating,
+                suspicion: data.tuning.suspicion_investigate_at,
+                focus,
+                knows_player_hostile: false,
+            }),
+            hidden_in: None,
+            departed: false,
+            killed_by_player: false,
+            discovery_counted: false,
+        });
     }
 }
 

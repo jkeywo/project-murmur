@@ -27,6 +27,14 @@
     noise_radius: 10,            // how far the crack is heard
     gain_tampering: 40,          // suspicion per turn seen picking a lock
 
+    heat_gunshot: 12,            // mission heat per heard gunshot
+    heat_violence: 20,           // per witnessed act of violence
+    heat_body_found: 25,         // per discovered body of the player's making
+    heat_tier1: 30,              // security goes wary
+    heat_tier2: 70,              // backup arrives at the door
+    heat_reinforcements: 2,      // guards spawned at tier two
+    heat_extra_guard_cap: 3,     // most extra guards district heat can add
+
     relaxed_cadence: 2,          // [spec] relaxed NPCs act on alternating turns
     investigate_linger: 4,
     player_vision_range: 11,
