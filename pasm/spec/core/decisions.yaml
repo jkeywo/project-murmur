@@ -503,3 +503,18 @@ entities:
       paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
       symbols: [action_available]
       tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/tests/gameplay.rs, crates/murmur-shell/src/lib.rs]
+
+  - decision: contract-conditions-name-their-rooms
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Contract Conditions Name Their Rooms
+      summary: Playtest found the private-kill rule (kill must land in a personal-tier office) confusing because its text said only "in private, away from the crowd", which reads as any quiet spot. The mechanic was kept; the wording was fixed to match it. Constraint::describe and short take the game data and venue and name the actual rooms - private-kill lists the venue's real offices, specific-exit uses the room's authored display name rather than its raw template id. Breach lines name where it went wrong ("the target died in the dance floor - the kill had to happen in the manager's office or security office"; "you left by the wrong exit - the contract named the loading bay"). The debrief spells out the breach reason, carried on MissionResolution and ResolutionSummary. The hub board keeps a compact chip while the briefing wraps to show the full condition.
+      rationale:
+        - When a rule is fine but its description misleads, correct the words, not the mechanic; naming concrete rooms removes the guesswork that caused the bad kill.
+      references: [constraint-catalogue-and-breach-semantics, round-two-playtest-fixes, mission-briefing]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/render.rs]
+      symbols: [describe, short]
+      tests: [crates/murmur-core/tests/contracts.rs]
