@@ -33,7 +33,10 @@ fn main() {
             MinimalPlugins.set(bevy::app::ScheduleRunnerPlugin::run_loop(
                 Duration::from_millis(16),
             )),
-            RatatuiPlugins::default(),
+            RatatuiPlugins {
+                enable_mouse_capture: true,
+                ..Default::default()
+            },
         ))
         .insert_resource(ShellResource(Shell::new(data, seed)))
         .add_systems(PreUpdate, read_input)

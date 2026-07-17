@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "murmur-web",
+      "runtimeExecutable": "trunk",
+      "runtimeArgs": ["serve"],
+      "cwd": "crates/murmur-web",
+      "port": 8080
+    }
+  ]
+}

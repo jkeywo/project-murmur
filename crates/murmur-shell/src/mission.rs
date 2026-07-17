@@ -31,6 +31,7 @@ pub enum PendingAction {
     Disguise,
     CarryBody,
     HideBody,
+    DropBody,
     OpenDoor,
     CloseDoor,
 }
@@ -43,6 +44,7 @@ impl PendingAction {
             PendingAction::Disguise => "take disguise - which direction?",
             PendingAction::CarryBody => "carry body - which direction? (b again: here)",
             PendingAction::HideBody => "hide body - which direction?",
+            PendingAction::DropBody => "drop body - which direction?",
             PendingAction::OpenDoor => "open - which direction?",
             PendingAction::CloseDoor => "close - which direction?",
         }
@@ -364,7 +366,7 @@ impl Mission {
             ShellInput::Char('k') => self.mode = InputMode::Pending(PendingAction::CloseDoor),
             ShellInput::Char('b') => {
                 if matches!(self.world().player_actor().hands, Hands::CarryingBody(_)) {
-                    self.enqueue(Command::DropBody);
+                    self.mode = InputMode::Pending(PendingAction::DropBody);
                 } else {
                     self.mode = InputMode::Pending(PendingAction::CarryBody);
                 }
@@ -413,8 +415,12 @@ impl Mission {
             ShellInput::Down => Some(Dir4::South),
             ShellInput::Left => Some(Dir4::West),
             ShellInput::Right => Some(Dir4::East),
-            // 'b' twice targets the player's own tile (a body underfoot).
-            ShellInput::Char('b') if action == PendingAction::CarryBody => None,
+            // 'b' twice targets the player's own tile.
+            ShellInput::Char('b')
+                if action == PendingAction::CarryBody || action == PendingAction::DropBody =>
+            {
+                None
+            }
             ShellInput::Esc => {
                 self.mode = InputMode::Normal;
                 return;
@@ -427,6 +433,13 @@ impl Mission {
         let _ = data;
         self.mode = InputMode::Normal;
         let player_pos = self.world().player_actor().pos;
+
+        // DropBody needs the raw option rather than a resolved target pos.
+        if action == PendingAction::DropBody {
+            self.enqueue(Command::DropBody(dir));
+            return;
+        }
+
         let target_pos = match dir {
             Some(dir) => player_pos.step(dir),
             None => player_pos,
@@ -468,6 +481,10 @@ impl Mission {
                 TileKind::Door(id) => Some(Command::CloseDoor(id)),
                 _ => None,
             },
+            PendingAction::DropBody => {
+                // Handled directly in handle_pending; unreachable here.
+                None
+            }
         }
     }
 

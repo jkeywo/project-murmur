@@ -39,7 +39,8 @@ pub enum Command {
     TakeDisguiseFromBody(ActorId),
     TakeDisguiseFromWardrobe(FurnitureId),
     CarryBody(ActorId),
-    DropBody,
+    /// `None` drops on the carrier's tile; `Some(dir)` drops adjacent.
+    DropBody(Option<Dir4>),
     HideBody(FurnitureId),
     DrawOrHolster,
 }
@@ -64,7 +65,8 @@ pub enum ActionIntent {
     Pickpocket(ActorId),
     TakeDisguise(DisguiseSource),
     CarryBody(ActorId),
-    DropBody,
+    /// `None` drops on the carrier's tile; `Some(dir)` drops adjacent.
+    DropBody(Option<Dir4>),
     HideBody(FurnitureId),
     DrawOrHolster,
     /// NPC-only in practice: turn on the spot to face a direction.
@@ -80,7 +82,7 @@ pub enum ActionIntent {
 /// consumed, and prepared AI actions stay fixed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RejectReason {
-    PathBlocked,
+    PathBlocked(&'static str),
     OccupiedByActor,
     DoorIsLocked,
     DoorAlreadyOpen,
@@ -109,7 +111,7 @@ pub enum RejectReason {
 impl RejectReason {
     pub fn message(&self) -> &'static str {
         match self {
-            RejectReason::PathBlocked => "the way is blocked",
+            RejectReason::PathBlocked(why) => why,
             RejectReason::OccupiedByActor => "someone is standing there",
             RejectReason::DoorIsLocked => "the door is locked",
             RejectReason::DoorAlreadyOpen => "the door is already open",
@@ -160,7 +162,7 @@ pub fn intent_duration(
         ActionIntent::Pickpocket(_) => durations.pickpocket,
         ActionIntent::TakeDisguise(_) => durations.change_disguise,
         ActionIntent::CarryBody(_) => durations.carry_body,
-        ActionIntent::DropBody => durations.drop_body,
+        ActionIntent::DropBody(_) => durations.drop_body,
         ActionIntent::HideBody(_) => durations.hide_body,
         ActionIntent::DrawOrHolster => durations.draw_holster,
         ActionIntent::MeleeAttack(_) | ActionIntent::Arrest(_) => 1,
@@ -194,7 +196,7 @@ pub fn translate(
         Command::Move(dir) => {
             let dest = player.pos.step(dir);
             match world.map.tile(dest) {
-                TileKind::Wall | TileKind::Void => Err(RejectReason::PathBlocked),
+                TileKind::Wall | TileKind::Void => Err(RejectReason::PathBlocked("the way is blocked by a wall")),
                 TileKind::Door(id) => {
                     // Bump-open: stepping into a closed door opens it when
                     // unlocked or when the player holds the key (recorded
@@ -352,12 +354,14 @@ pub fn translate(
             }
             Ok(ActionIntent::CarryBody(target))
         }
-        Command::DropBody => match player.hands {
+        Command::DropBody(dir) => match player.hands {
             Hands::CarryingBody(_) => {
-                if world.body_at(player.pos).is_some() {
-                    return Err(RejectReason::PathBlocked);
-                }
-                Ok(ActionIntent::DropBody)
+                let dest = match dir {
+                    Some(dir) => player.pos.step(dir),
+                    None => player.pos,
+                };
+                validate_drop_destination(world, dest, player.id)?;
+                Ok(ActionIntent::DropBody(dir))
             }
             _ => Err(RejectReason::NotCarryingBody),
         },
@@ -394,10 +398,26 @@ pub fn translate(
     }
 }
 
+fn validate_drop_destination(world: &World, dest: Pos, player_id: ActorId) -> Result<(), RejectReason> {
+    if !world.map.walkable(dest, |id| world.door(id).open) {
+        return Err(RejectReason::PathBlocked("the way is blocked by terrain"));
+    }
+    if world.furniture_at(dest).is_some() {
+        return Err(RejectReason::PathBlocked("the way is blocked by furniture"));
+    }
+    if world.standing_actor_at(dest).is_some_and(|a| a.id != player_id) {
+        return Err(RejectReason::OccupiedByActor);
+    }
+    if world.body_at(dest).is_some() {
+        return Err(RejectReason::PathBlocked("the way is blocked by a body"));
+    }
+    Ok(())
+}
+
 fn validate_step_destination(world: &World, dest: Pos) -> Result<(), RejectReason> {
     let landing = world.map.resolve_step_destination(dest);
     if world.furniture_at(dest).is_some() {
-        return Err(RejectReason::PathBlocked);
+        return Err(RejectReason::PathBlocked("the way is blocked by furniture"));
     }
     if let Some(occupant) = world.standing_actor_at(landing) {
         // Civilians and staff step aside (the mover swaps places with
@@ -589,7 +609,7 @@ pub fn resolve_turn(
             ActionIntent::CarryBody(target) => {
                 resolve_carry(world, &mut events, action.actor, target)
             }
-            ActionIntent::DropBody => resolve_drop(world, &mut events, action.actor),
+            ActionIntent::DropBody(dir) => resolve_drop(world, &mut events, action.actor, dir),
             ActionIntent::HideBody(id) => resolve_hide(world, &mut events, action.actor, id),
             _ => {}
         }
@@ -868,14 +888,25 @@ fn resolve_carry(world: &mut World, events: &mut TurnEvents, actor: ActorId, tar
     complete(world, events, actor);
 }
 
-fn resolve_drop(world: &mut World, events: &mut TurnEvents, actor: ActorId) {
+fn resolve_drop(world: &mut World, events: &mut TurnEvents, actor: ActorId, dir: Option<Dir4>) {
     let Hands::CarryingBody(body) = world.actor(actor).hands else {
         fail(world, events, actor, "nothing to drop");
         return;
     };
     let pos = world.actor(actor).pos;
+    let dest = match dir {
+        Some(dir) => pos.step(dir),
+        None => pos,
+    };
+    if !world.map.walkable(dest, |id| world.door(id).open)
+        || world.furniture_at(dest).is_some()
+        || world.body_at(dest).is_some()
+    {
+        fail(world, events, actor, "no room to drop the body");
+        return;
+    }
     world.actor_mut(actor).hands = Hands::Free;
-    world.actor_mut(body).pos = pos;
+    world.actor_mut(body).pos = dest;
     events.messages.push("you set the body down".to_string());
     complete(world, events, actor);
 }
@@ -950,7 +981,7 @@ fn resolve_movement(
                 TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
             ) && world.furniture_at(ahead).is_none();
             if !terrain_open {
-                fail(world, events, action.actor, "the way is blocked");
+                fail(world, events, action.actor, "the way is blocked by furniture or a wall");
                 continue;
             }
             moves.push(Move {
@@ -1057,7 +1088,7 @@ fn resolve_movement(
         }
         if !progressed {
             for index in still_pending {
-                fail(world, events, moves[index].actor, "the way is blocked");
+                fail(world, events, moves[index].actor, "the way is blocked by another person");
             }
             break;
         }
