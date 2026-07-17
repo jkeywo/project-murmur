@@ -6,7 +6,7 @@
 entities:
   - system: milestone-2-contract-sandbox
     core:
-      status: proposed
+      status: implemented
       confidence: confirmed
       title: Milestone 2 — Contract Sandbox
       summary: >-
@@ -24,6 +24,10 @@ entities:
         - milestone-2-opportunity-library
         - milestone-2-police-heat
         - milestone-2-second-venue
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src, crates/murmur-campaign/src, data]
+      tests: [crates/murmur-core/tests/warehouse.rs, crates/murmur-shell/src/lib.rs]
 
   - component: milestone-2-campaign-state
     core:
@@ -45,7 +49,7 @@ entities:
 
   - component: milestone-2-constrained-contracts
     core:
-      status: partially-implemented
+      status: implemented
       confidence: confirmed
       title: Constrained Assassination Contracts
       summary: >-
@@ -104,7 +108,7 @@ entities:
 
   - component: milestone-2-planning-domain-composition
     core:
-      status: proposed
+      status: implemented
       confidence: confirmed
       title: Script-Compatible Planning-Domain Composition
       summary: >-
@@ -115,6 +119,10 @@ entities:
         elements can coexist. Milestone 2 loads one assassination-contract
         domain, one venue domain, and one generic-opportunity domain.
       references: [milestone-2-constrained-contracts, milestone-2-route-planner]
+    implementation:
+      status: declared
+      paths: [data/venues.ron, data/opportunities.ron, data/campaign.ron, crates/murmur-core/src/data.rs]
+      symbols: [OpportunityEffect, OpportunitySpec, VenueSpec]
 
   - component: milestone-2-opportunity-library
     core:
@@ -137,7 +145,7 @@ entities:
 
   - component: milestone-2-police-heat
     core:
-      status: partially-implemented
+      status: implemented
       confidence: confirmed
       title: Police-Faction Temporary and Persistent Heat
       summary: >-

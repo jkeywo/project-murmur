@@ -473,3 +473,18 @@ entities:
       paths: [data/venues.ron, data/rooms.ron, crates/murmur-core/src/data.rs, crates/murmur-core/src/generator/populate.rs]
       symbols: [RoleCountOverride]
       tests: [crates/murmur-core/tests/warehouse.rs]
+
+  - decision: ron-family-is-the-planning-domain-format
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The RON Data Family Is the Planning-Domain Composition Format
+      summary: Milestone 2's planning-domain composition is realised as the composing RON family rather than a single monolithic domain file. The assassination-contract domain is the constraint catalogue plus campaign contract data, the venue domain is a venues.ron entry with its room templates, and the generic-opportunity domain is opportunities.ron. They meet in the generator, which composes them into the nodes, actions, constraints, and effects the planner searches. The shared vocabulary a future mission-scripting layer will reuse is the OpportunityEffect enum plus the constraint and filter types, hand-crafted scripted elements can emit the same effects the generated machines do.
+      rationale:
+        - Composing small per-concern files keeps each domain independently authorable and validated, while the effect vocabulary is the actual compatibility surface a scripting layer needs.
+        - Milestone 2 loads exactly the required three domains, one contract kind, one venue per contract, one opportunity library.
+      references: [milestone-2-planning-domain-composition, opportunity-machines-and-deniable-accidents, constraint-catalogue-and-breach-semantics]
+    implementation:
+      status: declared
+      paths: [data/venues.ron, data/opportunities.ron, data/campaign.ron, crates/murmur-core/src/data.rs]
+      symbols: [OpportunityEffect]

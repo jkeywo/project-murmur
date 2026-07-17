@@ -1,16 +1,17 @@
 # Project Murmur
 
-A turn-based ASCII social-stealth roguelike. One generated two-storey
-nightclub, one target, one way out. Blend into the crowd — your clothes
-decide where you belong — then garrote or shoot the target and walk out
-through an extraction exit before the guards close in.
+A turn-based ASCII social-stealth contract campaign. Take a job from the
+syndicate desk, buy your kit, slip into a generated venue — a heaving
+nightclub or a bonded warehouse — eliminate the target under the
+contract's one hard condition, and walk out unremarked. Arrest costs
+your carried kit and a fine; death ends the campaign.
 
 **Play in the browser:** <https://jkeywo.github.io/project-murmur/>
 
 **Play natively** (any terminal, Windows/macOS/Linux):
 
 ```powershell
-cargo run --release -p murmur-native            # random mission
+cargo run --release -p murmur-native            # resumes your campaign
 cargo run --release -p murmur-native -- --seed 42
 ```
 
@@ -26,22 +27,43 @@ and clicking a sidebar action equals pressing its key. NPCs run generated routin
 see through facing cones, grow suspicious of trespass, crouching, drawn
 weapons, and bodies, and propagate alerts by line of sight only.
 
-Every mission derives from a seed: layout, population, schedules, items,
-and tie-breaker randomness. Replaying the accepted commands against the
-seed reproduces the identical result, turn by turn.
+Every mission derives from its contract's seed: layout, population,
+schedules, items, opportunity machines, and tie-breaker randomness.
+Replaying the accepted commands against the config reproduces the
+identical result, turn by turn. Before a mission ships, the generation
+planner certifies it is completable three ways — social stealth,
+physical stealth, and violence — plus one route that satisfies the
+contract's condition with your actual loadout.
+
+## The campaign
+
+Contracts on the board name a venue, a district, a payout, and exactly
+one condition (no gunfire, no collateral, no bodies found, kill in
+private, or a dictated exit); breaking it forfeits the pay. Cash buys
+equipment — lockpicks, noisemakers, a forged staff pass, a counterfeit
+invitation, a silenced pistol, a garrote — owned until an arrest
+confiscates what you carried. Crimes that witnesses observe heat up the
+mission (wary guards, backup at the door) and hot missions raise the
+district's persistent heat: more guards next time, cooling only while
+you work elsewhere. The campaign autosaves between contracts (a file
+natively, localStorage in the browser).
 
 ## Workspace
 
 | Crate | Role |
 | --- | --- |
-| `murmur-core` | Deterministic simulation: world, generator with reachability proof, actions, AI, perception, turn driver, replay. No engine or platform dependencies. |
-| `murmur-shell` | Backend-neutral controller and ratatui presentation shared by both delivery targets: screens, command queue, input modes, rendering. |
+| `murmur-core` | Deterministic simulation: world, venue graph grammar, route planner, actions, AI, perception, opportunities, heat, turn driver, replay. No engine or platform dependencies. |
+| `murmur-campaign` | The layer above missions: contract board, economy, district heat ledger, resolution rules, and the versioned single-slot save. |
+| `murmur-shell` | Backend-neutral controller and ratatui presentation shared by both delivery targets: hub and mission screens, command queue, input modes, rendering. |
 | `murmur-native` | Bevy executable rendering into a real terminal via `bevy_ratatui`. |
 | `murmur-web` | The same shell compiled to WebAssembly and rendered by Ratzilla; deployed to GitHub Pages by CI. |
 
-Gameplay data — the disguise permission matrix, rooms, roles, items,
-names, and every tunable number — is authored RON under [`data/`](data),
-embedded at compile time so both targets ship identical data.
+Gameplay data — venues, rooms, the disguise permission matrix, items,
+the equipment catalogue, the five opportunity machines, campaign
+economy, and every tunable number — is authored RON under
+[`data/`](data), embedded at compile time so both targets ship
+identical data. A new venue is one data entry; no venue-specific code
+exists.
 
 ## Development
 
