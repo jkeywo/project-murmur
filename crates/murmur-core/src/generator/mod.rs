@@ -79,6 +79,10 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let report = proof::prove_progression(data, &mut layout, &population, player_start, &mut rng)
         .map_err(|e| e.0)?;
 
+    // Every mission must be completable three ways: social stealth,
+    // physical stealth, and violence, each with extraction.
+    let routes = crate::planner::prove_base_routes(data, &layout, &population, player_start)?;
+
     let facts = build_facts(data, &layout, &population, &mut rng);
 
     Ok(World {
@@ -98,6 +102,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         player_violence_witnessed: false,
         facts,
         proof: report,
+        routes,
         outcome: None,
         resolution_rng: Pcg32::for_stream(seed, Stream::Resolution),
     })

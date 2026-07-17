@@ -346,3 +346,18 @@ entities:
       - kind: test
         reference: crates/murmur-core/src/generator/mod.rs
         summary: banded_realisation_keeps_the_graph_guarantees checks corridors, stubs, gradient, and extraction paths across forty seeds.
+
+  - decision: monotone-capability-closure-planner
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Planner Is a Monotone Capability Closure
+      summary: The route planner decides reachability by fixpoint closure over (reachable tiles, disguises, keys, invitation) rather than state-space search, which is exact because capabilities are only ever gained. Route classes differ by access model and kill method, social stealth demands legitimacy everywhere and a silent kill, physical stealth allows trespass but keeps locks and silence, violence accepts any weapon. Contract constraints compose as filters (forbidden items, kill-room restriction, allowed exits) over the same closure. Schedule windows are abstract, any room on the target's routine is a potential kill site. Every generated mission must certify all three classes or the attempt is retried. The garrote is treated as an innate silent capability until the equipment slice makes it loadout gear.
+      rationale:
+        - Monotone closure is deterministic, terminates by construction, and is cheap enough to run on every generation attempt and later at contract-offer time.
+        - Filters give the constrained-contract slice a single composition point instead of per-constraint planner variants.
+      references: [milestone-2-route-planner, generated-reachability-proof, milestone-2-constrained-contracts]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/planner.rs, crates/murmur-core/src/generator/proof.rs]
+      symbols: [prove_route, prove_base_routes, RouteFilters]

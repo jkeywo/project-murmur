@@ -291,6 +291,8 @@ pub struct World {
     pub facts: MissionFacts,
     /// What the generated reachability proof established.
     pub proof: crate::generator::proof::ProofReport,
+    /// The routes the planner certified at generation.
+    pub routes: crate::planner::RouteReport,
     pub outcome: Option<MissionOutcome>,
     /// Tie-breaker randomness for simultaneous resolution. Command
     /// rejection never touches it.

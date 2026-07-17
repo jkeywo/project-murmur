@@ -38,7 +38,24 @@ pub struct ProofReport {
     pub wardrobes_added: Vec<(String, String)>,
 }
 
-struct TileSet {
+/// How movement is gated during a reachability closure.
+#[derive(Clone, Copy)]
+pub(crate) enum AccessModel<'a> {
+    /// Physical connectivity: locks and zones ignored.
+    Free,
+    /// Trespass allowed, locks respected: the physical-stealth and
+    /// violence route model.
+    LocksOnly { keys: &'a [String] },
+    /// Full legitimacy: zones by disguise, locks by key, invitation for
+    /// the secure tier. The social route model.
+    Legitimate {
+        disguises: &'a [String],
+        keys: &'a [String],
+        invitation: bool,
+    },
+}
+
+pub(crate) struct TileSet {
     width: i16,
     height: i16,
     bits: Vec<bool>,
@@ -65,7 +82,7 @@ impl TileSet {
         )
     }
 
-    fn contains(&self, pos: Pos) -> bool {
+    pub(crate) fn contains(&self, pos: Pos) -> bool {
         self.index(pos).map(|i| self.bits[i]).unwrap_or(false)
     }
 
@@ -81,7 +98,7 @@ impl TileSet {
 }
 
 /// Every position an actor's schedule touches (spawn plus routine stops).
-fn schedule_positions(actor: &Actor) -> Vec<Pos> {
+pub(crate) fn schedule_positions(actor: &Actor) -> Vec<Pos> {
     let mut positions = vec![actor.pos];
     if let Some(ai) = &actor.ai {
         positions.extend(ai.routine.iter().map(|s| s.pos));
@@ -89,49 +106,59 @@ fn schedule_positions(actor: &Actor) -> Vec<Pos> {
     positions
 }
 
-/// Breadth-first reachability from `start`.
-///
-/// `ignore_access` proves physical connectivity (locks and zones ignored);
-/// otherwise movement respects the owned disguises, keys, and invitation.
-fn reachable_tiles(
+/// Breadth-first reachability from `start` under an access model.
+pub(crate) fn reachable_tiles(
     data: &GameData,
     layout: &Layout,
     start: Pos,
-    access: Option<(&[String], &[String], bool)>,
+    access: AccessModel<'_>,
 ) -> TileSet {
     let mut seen = TileSet::new(
         layout.map.width(),
         layout.map.height(),
         layout.map.floor_count(),
     );
-    let permits = |pos: Pos| -> bool {
-        let Some((disguises, keys, invitation)) = access else {
-            return true;
-        };
-        // Door locks gate the door tile itself.
+    let lock_permits = |pos: Pos, keys: &[String]| -> bool {
         if let TileKind::Door(id) = layout.map.tile(pos)
             && let Some(key) = &layout.doors[id.0 as usize].locked_by
             && !keys.contains(key)
         {
             return false;
         }
-        // Room interiors demand zone permission from some owned disguise.
-        let Some(room) = layout
-            .rooms
-            .iter()
-            .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
-        else {
-            return true;
-        };
-        disguises.iter().any(|d| {
-            data.disguise(d).is_some_and(|spec| {
-                spec.zones.contains(&room.zone)
-                    || spec.extra_rooms.contains(&room.template)
-                    || (invitation
-                        && spec.secure_with_invitation
-                        && room.zone == crate::data::Zone::Secure)
-            })
-        })
+        true
+    };
+    let permits = |pos: Pos| -> bool {
+        match access {
+            AccessModel::Free => true,
+            AccessModel::LocksOnly { keys } => lock_permits(pos, keys),
+            AccessModel::Legitimate {
+                disguises,
+                keys,
+                invitation,
+            } => {
+                if !lock_permits(pos, keys) {
+                    return false;
+                }
+                // Room interiors demand zone permission from some owned
+                // disguise.
+                let Some(room) = layout
+                    .rooms
+                    .iter()
+                    .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
+                else {
+                    return true;
+                };
+                disguises.iter().any(|d| {
+                    data.disguise(d).is_some_and(|spec| {
+                        spec.zones.contains(&room.zone)
+                            || spec.extra_rooms.contains(&room.template)
+                            || (invitation
+                                && spec.secure_with_invitation
+                                && room.zone == crate::data::Zone::Secure)
+                    })
+                })
+            }
+        }
     };
     let passable = |pos: Pos| -> bool {
         match layout.map.tile(pos) {
@@ -167,7 +194,7 @@ fn room_reachable(room: &Room, seen: &TileSet) -> bool {
 /// Runs the physical proof: all rooms and stairs mutually connected when
 /// locks and access rules are ignored.
 pub fn prove_physical(data: &GameData, layout: &Layout, start: Pos) -> Result<(), ProofError> {
-    let seen = reachable_tiles(data, layout, start, None);
+    let seen = reachable_tiles(data, layout, start, AccessModel::Free);
     for room in &layout.rooms {
         if !room_reachable(room, &seen) {
             return Err(ProofError(format!(
@@ -186,19 +213,53 @@ pub fn prove_physical(data: &GameData, layout: &Layout, start: Pos) -> Result<()
     Ok(())
 }
 
-/// One pass of the progression closure. Returns the final owned sets.
-fn progression_closure(
+/// The result of a capability closure: everything obtainable, the tiles
+/// reachable with it, and a narrated acquisition order.
+pub(crate) struct ClosureOutcome {
+    pub disguises: Vec<String>,
+    pub keys: Vec<String>,
+    pub invitation: bool,
+    pub seen: TileSet,
+    /// Human-readable acquisition steps, in dependency order.
+    pub events: Vec<String>,
+}
+
+fn room_name_at(layout: &Layout, pos: Pos) -> String {
+    layout
+        .rooms
+        .iter()
+        .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| "the corridor".to_string())
+}
+
+/// Fixpoint closure over (reachable tiles, disguises, keys, invitation).
+/// With `zone_free` the movement model is trespass-with-locks (the
+/// physical and violence route model); otherwise full legitimacy (the
+/// social route model).
+pub(crate) fn capability_closure(
     data: &GameData,
     layout: &Layout,
     population: &Population,
     start: Pos,
-) -> (Vec<String>, Vec<String>, bool, TileSet) {
+    zone_free: bool,
+) -> ClosureOutcome {
     let mut disguises: Vec<String> = vec!["civilian".to_string()];
     let mut keys: Vec<String> = Vec::new();
     let mut invitation = false;
+    let mut events: Vec<String> = Vec::new();
 
     loop {
-        let seen = reachable_tiles(data, layout, start, Some((&disguises, &keys, invitation)));
+        let access = if zone_free {
+            AccessModel::LocksOnly { keys: &keys }
+        } else {
+            AccessModel::Legitimate {
+                disguises: &disguises,
+                keys: &keys,
+                invitation,
+            }
+        };
+        let seen = reachable_tiles(data, layout, start, access);
         let mut grew = false;
 
         // Disguises from actors whose schedules cross reachable space.
@@ -211,6 +272,10 @@ fn progression_closure(
                 .any(|pos| seen.contains(*pos))
                 && !disguises.contains(&actor.worn_disguise)
             {
+                events.push(format!(
+                    "take the {} disguise from {}",
+                    actor.worn_disguise, actor.name
+                ));
                 disguises.push(actor.worn_disguise.clone());
                 grew = true;
             }
@@ -224,6 +289,10 @@ fn progression_closure(
                     .into_iter()
                     .any(|d| seen.contains(furniture.pos.step(d)))
             {
+                events.push(format!(
+                    "take the {disguise} disguise from the wardrobe in {}",
+                    room_name_at(layout, furniture.pos)
+                ));
                 disguises.push(disguise.clone());
                 grew = true;
             }
@@ -231,33 +300,45 @@ fn progression_closure(
         // Keys and invitations from carriers and the ground.
         for item in &population.items {
             let spec = data.item(&item.spec).expect("item specs validated at load");
-            let obtainable = match item.location {
-                ItemLocation::Ground(pos) => seen.contains(pos),
+            let (obtainable, source) = match item.location {
+                ItemLocation::Ground(pos) => (
+                    seen.contains(pos),
+                    format!("in {}", room_name_at(layout, pos)),
+                ),
                 ItemLocation::CarriedBy(holder) => {
                     let holder = &population.actors[holder.0 as usize];
-                    !holder.is_player()
-                        && schedule_positions(holder)
-                            .iter()
-                            .any(|pos| seen.contains(*pos))
+                    (
+                        !holder.is_player()
+                            && schedule_positions(holder)
+                                .iter()
+                                .any(|pos| seen.contains(*pos)),
+                        format!("from {}", holder.name),
+                    )
                 }
             };
             if !obtainable {
                 continue;
             }
-            if let Some(_unlocks) = &spec.unlocks
-                && !keys.contains(&spec.id)
-            {
+            if spec.unlocks.is_some() && !keys.contains(&spec.id) {
+                events.push(format!("lift the {} {source}", spec.name));
                 keys.push(spec.id.clone());
                 grew = true;
             }
             if spec.invitation && !invitation {
+                events.push(format!("lift the {} {source}", spec.name));
                 invitation = true;
                 grew = true;
             }
         }
 
         if !grew {
-            return (disguises, keys, invitation, seen);
+            return ClosureOutcome {
+                disguises,
+                keys,
+                invitation,
+                seen,
+                events,
+            };
         }
     }
 }
@@ -274,8 +355,8 @@ pub fn prove_progression(
     let mut wardrobes_added: Vec<(String, String)> = Vec::new();
 
     for _attempt in 0..=data.disguises.len() {
-        let (disguises, keys, _invitation, seen) =
-            progression_closure(data, layout, population, start);
+        let outcome = capability_closure(data, layout, population, start, false);
+        let (disguises, keys, seen) = (outcome.disguises, outcome.keys, outcome.seen);
 
         let unreachable: Vec<&Room> = layout
             .rooms

@@ -53,7 +53,7 @@ entities:
 
   - component: milestone-2-route-planner
     core:
-      status: proposed
+      status: implemented
       confidence: confirmed
       title: Abstract Capability-Graph Route Planner
       summary: >-
@@ -68,6 +68,11 @@ entities:
         - generated-reachability-proof
         - access-and-disguise-rules
         - mission-outcome-rules
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/planner.rs]
+      symbols: [RouteClass, RouteProof, RouteReport]
+      tests: [crates/murmur-core/src/planner.rs]
 
   - component: milestone-2-venue-graph-grammar
     core:
