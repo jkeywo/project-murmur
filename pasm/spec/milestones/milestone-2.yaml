@@ -27,7 +27,7 @@ entities:
 
   - component: milestone-2-campaign-state
     core:
-      status: partially-implemented
+      status: implemented
       confidence: confirmed
       title: Campaign State, Cash, and Limited Equipment
       summary: >-

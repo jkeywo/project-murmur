@@ -441,3 +441,19 @@ entities:
       paths: [crates/murmur-campaign/src/lib.rs, data/campaign.ron]
       symbols: [CampaignState, ContractOffer, MissionResolution]
       tests: [crates/murmur-campaign/src/lib.rs]
+
+  - decision: syndicate-desk-hub-flow
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Syndicate Desk Hub Flow
+      summary: The campaign runs start to hub to briefing to mission to debrief and back, ending at a tally when the operative dies. The hub is one screen, the contract board (venue, district, hook, payout, condition, heat), the stash, the fence's catalogue, and district heat, all keyboard-driven with every keyed row clickable through the same click-equals-key layout cache the mission HUD uses. Accepting a contract opens a loadout picker over the stash (up to three items, weapons preselected). The campaign autosaves after every hub-level change through the injected store, a file under the platform data directory natively and localStorage on the web; the start screen resumes any live save and offers a fresh start.
+      rationale:
+        - One hub screen keeps the between-mission loop to a handful of keys, matching the desurfaced-queue philosophy, plumbing stays invisible, choices stay visible.
+        - Store injection keeps murmur-shell platform-free while both binaries get durable single-slot saves.
+      references: [milestone-2-campaign-state, campaign-single-slot-autosave, queue-desurfacing, mouse-inspection-and-clickable-actions]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
+      symbols: [Shell, HubLayout, draw_hub]
+      tests: [crates/murmur-shell/src/lib.rs]

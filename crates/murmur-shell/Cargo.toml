@@ -7,6 +7,7 @@ description = "Backend-neutral controller and ratatui presentation for Project M
 
 [dependencies]
 murmur-core = { workspace = true }
+murmur-campaign = { workspace = true }
 ratatui = { workspace = true }
 
 [lints.rust]

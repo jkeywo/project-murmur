@@ -1548,6 +1548,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_ratatui",
+ "murmur-campaign",
  "murmur-core",
  "murmur-shell",
  "ratatui",
@@ -1557,6 +1558,7 @@ dependencies = [
 name = "murmur-shell"
 version = "0.1.0"
 dependencies = [
+ "murmur-campaign",
  "murmur-core",
  "ratatui",
 ]
@@ -1568,6 +1570,7 @@ dependencies = [
  "console_error_panic_hook",
  "critical-section",
  "js-sys",
+ "murmur-campaign",
  "murmur-core",
  "murmur-shell",
  "ratzilla",

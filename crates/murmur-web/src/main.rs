@@ -22,10 +22,41 @@ fn main() {
     }
 }
 
+/// The single-slot campaign save in the browser's localStorage.
+struct LocalStorageStore;
+
+const SAVE_KEY: &str = "murmur-campaign";
+
+impl murmur_campaign::CampaignStore for LocalStorageStore {
+    fn load(&self) -> Option<String> {
+        web_sys::window()?
+            .local_storage()
+            .ok()??
+            .get_item(SAVE_KEY)
+            .ok()?
+    }
+
+    fn save(&mut self, document: &str) {
+        if let Some(Ok(Some(storage))) = web_sys::window().map(|w| w.local_storage()) {
+            let _ = storage.set_item(SAVE_KEY, document);
+        }
+    }
+
+    fn clear(&mut self) {
+        if let Some(Ok(Some(storage))) = web_sys::window().map(|w| w.local_storage()) {
+            let _ = storage.remove_item(SAVE_KEY);
+        }
+    }
+}
+
 fn run() -> Result<(), Box<dyn Error>> {
     let data = GameData::embedded().expect("embedded game data must be valid");
     let seed = js_sys::Date::now() as u64;
-    let shell = Rc::new(RefCell::new(Shell::new(data, seed)));
+    let shell = Rc::new(RefCell::new(Shell::new(
+        data,
+        seed,
+        Box::new(LocalStorageStore),
+    )));
 
     let backend = DomBackend::new()?;
     let mut terminal = Terminal::new(backend)?;

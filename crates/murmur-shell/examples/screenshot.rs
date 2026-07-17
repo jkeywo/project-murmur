@@ -28,14 +28,21 @@ fn main() {
         .and_then(|s| s.parse().ok())
         .unwrap_or(42);
     let data = GameData::embedded().expect("embedded data");
-    let mut shell = Shell::new(data, seed);
+    let mut shell = Shell::new(
+        data,
+        seed,
+        Box::new(murmur_campaign::MemoryStore::default()),
+    );
     let backend = TestBackend::new(130, 38);
     let mut terminal = Terminal::new(backend).unwrap();
 
     print_frame(&mut terminal, &mut shell, "start");
-    shell.handle_input(ShellInput::Enter);
+    shell.handle_input(ShellInput::Enter); // hub
+    print_frame(&mut terminal, &mut shell, "hub");
+    shell.handle_input(ShellInput::Char('1')); // study the first contract
+    shell.handle_input(ShellInput::Enter); // take the job -> briefing
     print_frame(&mut terminal, &mut shell, "briefing");
-    shell.handle_input(ShellInput::Enter);
+    shell.handle_input(ShellInput::Enter); // go in
 
     // Walk a little and let the club live for a while.
     for input in [

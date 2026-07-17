@@ -29,7 +29,7 @@ use murmur_core::world::MissionOutcome;
 pub const SAVE_VERSION: u32 = 1;
 
 /// Where the single campaign save lives. Implemented per delivery target.
-pub trait CampaignStore {
+pub trait CampaignStore: Send + Sync {
     /// Returns the stored save document, if one exists.
     fn load(&self) -> Option<String>;
     /// Persists the save document, replacing any previous one.

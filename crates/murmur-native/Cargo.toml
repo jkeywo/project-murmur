@@ -7,6 +7,7 @@ description = "Native Bevy executable with a terminal presentation backend."
 
 [dependencies]
 murmur-core = { workspace = true }
+murmur-campaign = { workspace = true }
 murmur-shell = { workspace = true }
 ratatui = { workspace = true, features = ["crossterm"] }
 bevy = { version = "0.18", default-features = false }

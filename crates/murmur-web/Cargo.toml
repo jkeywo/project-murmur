@@ -7,6 +7,7 @@ description = "WebAssembly delivery of Project Murmur via Ratzilla."
 
 [dependencies]
 murmur-core = { workspace = true }
+murmur-campaign = { workspace = true }
 murmur-shell = { workspace = true }
 ratzilla = "0.3"
 js-sys = "0.3"
@@ -16,7 +17,7 @@ console_error_panic_hook = "0.1"
 # single-threaded browser main thread.
 critical-section = { version = "1", features = ["std"] }
 wasm-bindgen = "0.2"
-web-sys = { version = "0.3", features = ["Window", "Document", "KeyboardEvent", "EventTarget"] }
+web-sys = { version = "0.3", features = ["Window", "Document", "KeyboardEvent", "EventTarget", "Storage"] }
 
 [lints.rust]
 unsafe_code = "forbid"

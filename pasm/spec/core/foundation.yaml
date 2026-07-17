@@ -337,13 +337,13 @@ entities:
     core:
       status: implemented
       confidence: confirmed
-      title: Game Over Screen
-      summary: Non-gameplay terminal state that presents the precise mission-ending reason, such as target eliminated with extraction, player death, or arrest, and offers a return-to-start-screen action.
+      title: Mission Debrief and Campaign Tally Screens
+      summary: Non-gameplay terminal states presenting the precise mission-ending reason and its campaign consequences (payout, fine, confiscations, district heat), returning to the syndicate desk; when the operative dies, a campaign tally closes the run instead. Reshaped from the MVP's single game-over screen by the Milestone 2 campaign flow.
       references: [mission-outcome-rules, start-screen]
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/screens.rs]
-      symbols: [draw_game_over, outcome_summary]
+      symbols: [draw_debrief, draw_campaign_over]
 
   - component: native-console-delivery
     core:
