@@ -26,6 +26,7 @@
             "manager-office",
             "security-office",
             "loading-bay",
+            "service-corridor",
         ],
     ),
 ]

@@ -71,7 +71,7 @@ entities:
 
   - component: milestone-2-venue-graph-grammar
     core:
-      status: proposed
+      status: implemented
       confidence: confirmed
       title: Security-Gradient Venue Graph Grammar
       summary: >-
@@ -81,6 +81,11 @@ entities:
         multiple extraction paths before realising tile geometry. A venue
         definition may require room kinds and restrict its available zone kinds.
       references: [nightclub-generator, milestone-2-route-planner]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/grammar.rs, crates/murmur-core/src/generator/layout.rs, data/venues.ron, data/rooms.ron]
+      symbols: [build_graph, FloorPlan, RoomNode]
+      tests: [crates/murmur-core/src/generator/mod.rs]
 
   - component: milestone-2-planning-domain-composition
     core:

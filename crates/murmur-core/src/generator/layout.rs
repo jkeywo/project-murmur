@@ -1,26 +1,21 @@
-//! Room-graph-first layout.
+//! Graph realisation: banded shelves on a two-corridor circulation loop.
 //!
-//! The generator decides rooms — identity, zone, storey, size, lighting,
-//! waypoints, containers, cover — before any tile exists, then realises
-//! them into the grid. Each storey uses a corridor spine down the middle
-//! with rooms packed on shelves either side, which guarantees by
-//! construction that every room opens onto connected circulation space;
-//! the separate reachability proof then verifies it rather than hoping.
+//! The grammar (see [`super::grammar`]) decides the whole room graph
+//! first; this module only carves what the graph guarantees. Each storey
+//! is realised as: outer wall, staff-tier service corridor along the
+//! back, the service shelf of rooms, the public main corridor through
+//! the middle, the main shelf of rooms, outer wall. Stub passages at the
+//! west and east ends join the two corridors into a loop, stairs sit at
+//! both dead ends of the main corridor, and the ground-floor service
+//! corridor ends in a fire exit — a staff-space extraction path beside
+//! the public entrance and the loading bay.
 
 use crate::data::{GameData, Lighting, RoomTemplate, WaypointKind};
+use crate::generator::grammar::{self, RoomNode, Shelf, VenueGraph};
 use crate::geom::{FloorId, Pos};
 use crate::map::{DoorId, DoorState, GameMap, TileKind};
 use crate::rng::Pcg32;
 use crate::world::{Furniture, FurnitureId, FurnitureKind, Rect, Room, RoomId, Waypoint};
-
-/// A room the generator has decided on but not yet realised into tiles.
-struct PlannedRoom {
-    template_index: usize,
-    name: String,
-    floor: FloorId,
-    width: i16,
-    height: i16,
-}
 
 /// Layout output: the map plus room records and furniture.
 pub struct Layout {
@@ -35,11 +30,20 @@ pub struct Layout {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutError(pub String);
 
-/// First corridor row for a floor of the given interior height. The spine
-/// is two tiles tall (rows `spine_y` and `spine_y + 1`) so passing traffic
-/// can flow without deadlocking in a single-file hallway.
+/// First corridor row of the main spine. Two tiles tall so passing
+/// traffic can flow without deadlocking.
 fn spine_y(height: u16) -> i16 {
     height as i16 / 2
+}
+
+/// Packing cursors and geometry for one storey during realisation.
+struct FloorRealisation {
+    /// Next free x per shelf.
+    service_cursor: i16,
+    main_cursor: i16,
+    /// Placed room indices (into `rooms`) per shelf, west to east.
+    service_rooms: Vec<usize>,
+    main_rooms: Vec<usize>,
 }
 
 pub fn build_layout(
@@ -47,18 +51,28 @@ pub fn build_layout(
     venue: &crate::data::VenueSpec,
     rng: &mut Pcg32,
 ) -> Result<Layout, LayoutError> {
+    let graph = grammar::build_graph(data, venue, rng).map_err(LayoutError)?;
+    realise(data, venue, &graph, rng)
+}
+
+/// Realises a venue graph into tiles.
+fn realise(
+    data: &GameData,
+    venue: &crate::data::VenueSpec,
+    graph: &VenueGraph,
+    rng: &mut Pcg32,
+) -> Result<Layout, LayoutError> {
     let width = venue.floor_width;
     let height = venue.floor_height;
     let floor_count = venue.floor_count;
+    let sy = spine_y(height);
 
-    let planned = plan_rooms(data, venue, rng)?;
     let mut map = GameMap::filled_void(width, height, floor_count);
     let mut doors: Vec<DoorState> = Vec::new();
     let mut rooms: Vec<Room> = Vec::new();
 
-    // Carve the two-tile corridor spine and its walls on each storey.
+    // Main corridor spine and its walls, full width (truncated later).
     for floor in 0..floor_count {
-        let sy = spine_y(height);
         for x in 1..(width as i16 - 1) {
             map.set_tile(Pos::new(floor, x, sy), TileKind::Floor);
             map.set_tile(Pos::new(floor, x, sy + 1), TileKind::Floor);
@@ -71,45 +85,163 @@ pub fn build_layout(
         }
     }
 
-    // Pack rooms onto the two shelves of each storey.
-    let mut shelf_cursor = vec![[1i16, 1i16]; usize::from(floor_count)]; // [top, bottom] x cursors
-    for plan in &planned {
-        place_room(
-            data,
-            &mut map,
-            &mut doors,
-            &mut rooms,
-            &mut shelf_cursor,
-            plan,
-            rng,
-        )?;
+    // Pack each storey's shelves in graph order. Service shelf leaves
+    // room for the west stub (columns 3-4, walls at 2 and 5).
+    let mut realisations: Vec<FloorRealisation> = Vec::new();
+    for plan in &graph.floors {
+        let mut real = FloorRealisation {
+            service_cursor: 6,
+            main_cursor: 3,
+            service_rooms: Vec::new(),
+            main_rooms: Vec::new(),
+        };
+        for node in &plan.service_shelf {
+            let index = place_room(data, &mut map, &mut doors, &mut rooms, &mut real, node, rng)?;
+            real.service_rooms.push(index);
+        }
+        for node in &plan.main_shelf {
+            let index = place_room(data, &mut map, &mut doors, &mut rooms, &mut real, node, rng)?;
+            real.main_rooms.push(index);
+        }
+        realisations.push(real);
     }
 
-    // Truncate the corridor just past the last room so the building ends
-    // where its rooms do instead of trailing a long empty hallway. The end
-    // column is shared across storeys so the stairwells align.
-    let east_end: i16 = shelf_cursor
-        .iter()
-        .map(|c| c[0].max(c[1]))
-        .max()
-        .unwrap_or(1)
-        .min(width as i16 - 2);
+    // Service corridor, stubs, and the shared east end.
+    let mut east_end: i16 = 4;
+    let mut service_ends: Vec<i16> = Vec::new();
+    for real in &realisations {
+        let sx = real.service_cursor; // east stub columns: sx, sx+1
+        service_ends.push(sx);
+        east_end = east_end.max(real.main_cursor).max(sx + 2);
+    }
+    let east_end = east_end.min(width as i16 - 2);
+
+    for (floor, real) in realisations.iter().enumerate() {
+        let floor = floor as FloorId;
+        let sx = service_ends[usize::from(floor)];
+
+        // Corridor interior (rows 1-2) and its walls (rows 0 and 3);
+        // row 3 only fills gaps rooms have not walled already.
+        for x in 1..=(sx + 1) {
+            map.set_tile(Pos::new(floor, x, 1), TileKind::Floor);
+            map.set_tile(Pos::new(floor, x, 2), TileKind::Floor);
+            map.set_tile(Pos::new(floor, x, 0), TileKind::Wall);
+            if map.tile(Pos::new(floor, x, 3)) == TileKind::Void {
+                map.set_tile(Pos::new(floor, x, 3), TileKind::Wall);
+            }
+        }
+        for y in 0..=2 {
+            map.set_tile(Pos::new(floor, 0, y), TileKind::Wall);
+        }
+        // East wall of the service corridor and stub.
+        for y in 0..=(sy - 1) {
+            map.set_tile(Pos::new(floor, sx + 2, y), TileKind::Wall);
+        }
+
+        // Stubs join the corridors into a loop: west at columns 3-4,
+        // east at the service corridor's end.
+        for (x0, wall_w, wall_e) in [(3i16, 2i16, 5i16), (sx, sx - 1, sx + 2)] {
+            for y in 3..=(sy - 1) {
+                for x in [x0, x0 + 1] {
+                    map.set_tile(Pos::new(floor, x, y), TileKind::Floor);
+                }
+                for x in [wall_w, wall_e] {
+                    if map.tile(Pos::new(floor, x, y)) == TileKind::Void {
+                        map.set_tile(Pos::new(floor, x, y), TileKind::Wall);
+                    }
+                }
+            }
+        }
+
+        // Service doors onto the corridor (row 3) for service-shelf
+        // rooms the grammar gave a service connection.
+        let plan = &graph.floors[usize::from(floor)];
+        for (node, room_index) in plan.service_shelf.iter().zip(&real.service_rooms) {
+            if !node.service_door {
+                continue;
+            }
+            let room_bounds = rooms[*room_index].bounds;
+            let door_x = room_bounds.x + rng.below(room_bounds.w as u32) as i16;
+            let id = DoorId(doors.len() as u16);
+            doors.push(DoorState {
+                open: false,
+                locked_by: data.rooms[node.template_index].locked_by.clone(),
+            });
+            map.set_tile(Pos::new(floor, door_x, 3), TileKind::Door(id));
+            rooms[*room_index].doors.push(id);
+        }
+
+        // Pass-through doors between consecutive restricted neighbours.
+        for (shelf_rooms, passes, door_y) in [
+            (&real.service_rooms, &plan.service_pass, sy - 2),
+            (&real.main_rooms, &plan.main_pass, sy + 3),
+        ] {
+            for (i, has_door) in passes.iter().enumerate() {
+                if !has_door {
+                    continue;
+                }
+                let left = &rooms[shelf_rooms[i]];
+                let right = &rooms[shelf_rooms[i + 1]];
+                let wall_x = right.bounds.x - 1;
+                let locked_by = data.rooms[graph_template(data, right)]
+                    .locked_by
+                    .clone()
+                    .or_else(|| data.rooms[graph_template(data, left)].locked_by.clone());
+                let id = DoorId(doors.len() as u16);
+                doors.push(DoorState {
+                    open: false,
+                    locked_by,
+                });
+                map.set_tile(Pos::new(floor, wall_x, door_y), TileKind::Door(id));
+                // The deeper room owns the door so NPC implicit keys
+                // resolve against the stricter zone.
+                let owner = shelf_rooms[i + 1];
+                rooms[owner].doors.push(id);
+            }
+        }
+
+        // The service corridor is a staff-tier room: access rules, zone
+        // tinting, and waypoints all come from its template.
+        let template = &data.rooms[graph.circulation_template];
+        rooms.push(Room {
+            id: RoomId(rooms.len() as u16),
+            template: template.id.clone(),
+            name: if floor == 0 {
+                template.name.clone()
+            } else {
+                format!("upper {}", template.name)
+            },
+            zone: template.zone,
+            floor,
+            bounds: Rect {
+                x: 1,
+                y: 1,
+                w: sx + 1,
+                h: 2,
+            },
+            lighting: template.lighting,
+            waypoints: Vec::new(),
+            doors: Vec::new(),
+            external_exit: template.external_exit && floor == 0,
+        });
+    }
+
+    // Truncate the main corridor past the last construction and seal it.
     for floor in 0..floor_count {
-        let sy = spine_y(height);
         map.set_tile(Pos::new(floor, east_end + 1, sy), TileKind::Wall);
         map.set_tile(Pos::new(floor, east_end + 1, sy + 1), TileKind::Wall);
         for x in (east_end + 2)..(width as i16) {
             for y in [sy - 1, sy, sy + 1, sy + 2] {
-                map.set_tile(Pos::new(floor, x, y), TileKind::Void);
+                if map.tile(Pos::new(floor, x, y)) == TileKind::Floor {
+                    map.set_tile(Pos::new(floor, x, y), TileKind::Void);
+                }
             }
         }
     }
 
-    // Stairs occupy the dead-end tiles at both ends of the spine, so
-    // nobody changes storeys by accident while walking the corridor.
+    // Stairs at both dead ends of the spine: two vertical routes.
     let mut stairs = Vec::new();
     if floor_count == 2 {
-        let sy = spine_y(height);
         for x in [1i16, east_end] {
             for y in [sy, sy + 1] {
                 for floor in 0..floor_count {
@@ -126,19 +258,30 @@ pub fn build_layout(
         room.waypoints = pick_waypoints(template, room, rng);
     }
 
-    // Extraction exits: the interior tile of each external-exit room
-    // nearest the outer wall.
+    // Extraction exits: public rooms first (the entrance is the player's
+    // spawn), then restricted exits, then the service fire exit.
     let mut extraction_tiles = Vec::new();
-    for room in &rooms {
-        if room.external_exit {
-            let b = room.bounds;
-            let y = if b.y < spine_y(height) {
-                b.y
-            } else {
-                b.y + b.h - 1
-            };
-            extraction_tiles.push(Pos::new(room.floor, b.x + b.w / 2, y));
-        }
+    let mut ordered: Vec<&Room> = rooms.iter().filter(|r| r.external_exit).collect();
+    ordered.sort_by_key(|r| {
+        let template = &data.rooms[template_index_of(data, &r.template)];
+        (
+            template.circulation,
+            r.zone != crate::data::Zone::Public,
+            r.id.0,
+        )
+    });
+    for room in ordered {
+        let b = room.bounds;
+        let template = &data.rooms[template_index_of(data, &room.template)];
+        let tile = if template.circulation {
+            // Fire exit at the far east end of the service corridor.
+            Pos::new(room.floor, b.x + b.w - 1, b.y)
+        } else if b.y < sy {
+            Pos::new(room.floor, b.x + b.w / 2, b.y)
+        } else {
+            Pos::new(room.floor, b.x + b.w / 2, b.y + b.h - 1)
+        };
+        extraction_tiles.push(tile);
     }
 
     let mut furniture = Vec::new();
@@ -157,6 +300,10 @@ pub fn build_layout(
     })
 }
 
+fn graph_template(data: &GameData, room: &Room) -> usize {
+    template_index_of(data, &room.template)
+}
+
 fn template_index_of(data: &GameData, id: &str) -> usize {
     data.rooms
         .iter()
@@ -164,123 +311,68 @@ fn template_index_of(data: &GameData, id: &str) -> usize {
         .expect("room template ids are validated at data load")
 }
 
-/// Decide the room list: counts, floors, and sizes, before any tiles.
-/// Only templates the venue lists participate.
-fn plan_rooms(
-    data: &GameData,
-    venue: &crate::data::VenueSpec,
-    rng: &mut Pcg32,
-) -> Result<Vec<PlannedRoom>, LayoutError> {
-    let height = venue.floor_height;
-    let shelf_h = shelf_heights(height);
-    let mut planned = Vec::new();
-    for (template_index, template) in data.rooms.iter().enumerate() {
-        if !venue.room_templates.contains(&template.id) {
-            continue;
-        }
-        let count = rng.range_inclusive(template.count_min.into(), template.count_max.into());
-        let count = if template.required {
-            count.max(1)
-        } else {
-            count
-        };
-        for instance in 0..count {
-            let floor = *rng.pick(&template.floors);
-            let max_h = i16::try_from(template.max_size.1).unwrap().min(shelf_h);
-            let min_h = i16::try_from(template.min_size.1).unwrap();
-            if min_h > max_h {
-                return Err(LayoutError(format!(
-                    "room '{}' cannot fit a shelf of height {shelf_h}",
-                    template.id
-                )));
-            }
-            let name = if count > 1 {
-                format!("{} {}", template.name, instance + 1)
-            } else {
-                template.name.clone()
-            };
-            planned.push(PlannedRoom {
-                template_index,
-                name,
-                floor,
-                width: rng.range_inclusive(template.min_size.0.into(), template.max_size.0.into())
-                    as i16,
-                height: rng.range_inclusive(min_h as u32, max_h as u32) as i16,
-            });
-        }
-    }
-    // Widest rooms first pack more reliably; ties keep authored order.
-    planned.sort_by_key(|p| -(p.width));
-    Ok(planned)
-}
-
-/// The shared shelf height for a storey (the smaller of the two shelves).
-fn shelf_heights(height: u16) -> i16 {
-    let sy = spine_y(height);
-    // Top shelf: rows 1..=sy-2; bottom shelf: rows sy+3..=height-2.
-    (sy - 2).min(height as i16 - sy - 4)
-}
-
+/// Carves one room onto its shelf and punches its main-corridor door(s).
+/// Returns the index of the new room record.
 fn place_room(
     data: &GameData,
     map: &mut GameMap,
     doors: &mut Vec<DoorState>,
     rooms: &mut Vec<Room>,
-    shelf_cursor: &mut [[i16; 2]],
-    plan: &PlannedRoom,
+    real: &mut FloorRealisation,
+    node: &RoomNode,
     rng: &mut Pcg32,
-) -> Result<(), LayoutError> {
-    let template = &data.rooms[plan.template_index];
+) -> Result<usize, LayoutError> {
+    let template = &data.rooms[node.template_index];
     let width_limit = map.width() as i16 - 1;
     let sy = spine_y(map.height());
-    let cursors = &mut shelf_cursor[usize::from(plan.floor)];
-
-    // Choose the emptier shelf that still fits; try to shrink if neither.
-    let mut room_w = plan.width;
-    let shelf = loop {
-        let top_fits = cursors[0] + room_w < width_limit;
-        let bottom_fits = cursors[1] + room_w < width_limit;
-        match (top_fits, bottom_fits) {
-            (true, true) => break usize::from(cursors[0] > cursors[1]),
-            (true, false) => break 0,
-            (false, true) => break 1,
-            (false, false) => {
-                if room_w > i16::try_from(template.min_size.0).unwrap() {
-                    room_w -= 1;
-                } else {
-                    return Err(LayoutError(format!(
-                        "no shelf space left for room '{}' on floor {}",
-                        template.id, plan.floor
-                    )));
-                }
-            }
-        }
+    let cursor = match node.shelf {
+        Shelf::Service => &mut real.service_cursor,
+        Shelf::Main => &mut real.main_cursor,
     };
 
-    let x0 = cursors[shelf];
-    cursors[shelf] = x0 + room_w + 1;
-
-    // Interior anchored against the corridor-side wall.
-    let bounds = if shelf == 0 {
-        Rect {
-            x: x0,
-            y: sy - 1 - plan.height,
-            w: room_w,
-            h: plan.height,
+    // Shrink toward the minimum if the shelf is running out; the grammar
+    // fit check makes minimum sizes always land.
+    let mut room_w = node.width;
+    // Reserve two columns plus a wall for the east stub on the service
+    // shelf.
+    let reserve = match node.shelf {
+        Shelf::Service => 3,
+        Shelf::Main => 0,
+    };
+    while *cursor + room_w + reserve >= width_limit {
+        if room_w > i16::try_from(template.min_size.0).unwrap() {
+            room_w -= 1;
+        } else {
+            return Err(LayoutError(format!(
+                "no shelf space left for room '{}' on floor {}",
+                template.id, node.floor
+            )));
         }
-    } else {
-        Rect {
+    }
+
+    let x0 = *cursor;
+    *cursor = x0 + room_w + 1;
+
+    // Interior anchored against the main-corridor-side wall.
+    let bounds = match node.shelf {
+        Shelf::Service => Rect {
+            x: x0,
+            y: sy - 1 - node.height,
+            w: room_w,
+            h: node.height,
+        },
+        Shelf::Main => Rect {
             x: x0,
             y: sy + 3,
             w: room_w,
-            h: plan.height,
-        }
+            h: node.height,
+        },
     };
 
     // Carve interior and surrounding walls.
     for y in (bounds.y - 1)..=(bounds.y + bounds.h) {
         for x in (bounds.x - 1)..=(bounds.x + bounds.w) {
-            let pos = Pos::new(plan.floor, x, y);
+            let pos = Pos::new(node.floor, x, y);
             if !map.in_bounds(pos) {
                 return Err(LayoutError(format!(
                     "room '{}' escapes the grid at {pos:?}",
@@ -293,7 +385,7 @@ fn place_room(
             } else {
                 TileKind::Wall
             };
-            // Never overwrite the corridor or an existing door.
+            // Never overwrite corridors or an existing door.
             if !matches!(map.tile(pos), TileKind::Door(_)) && map.tile(pos) != TileKind::Floor
                 || interior
             {
@@ -302,8 +394,11 @@ fn place_room(
         }
     }
 
-    // Door(s) through the corridor-side wall.
-    let door_wall_y = if shelf == 0 { sy - 1 } else { sy + 2 };
+    // Door(s) through the main-corridor-side wall.
+    let door_wall_y = match node.shelf {
+        Shelf::Service => sy - 1,
+        Shelf::Main => sy + 2,
+    };
     let mut door_ids = Vec::new();
     let mut door_xs = vec![bounds.x + rng.below(bounds.w as u32) as i16];
     if bounds.w >= 6 && rng.chance(1, 4) {
@@ -319,7 +414,7 @@ fn place_room(
             locked_by: template.locked_by.clone(),
         });
         map.set_tile(
-            Pos::new(plan.floor, door_x, door_wall_y),
+            Pos::new(node.floor, door_x, door_wall_y),
             TileKind::Door(id),
         );
         door_ids.push(id);
@@ -328,16 +423,16 @@ fn place_room(
     rooms.push(Room {
         id: RoomId(rooms.len() as u16),
         template: template.id.clone(),
-        name: plan.name.clone(),
+        name: node.name.clone(),
         zone: template.zone,
-        floor: plan.floor,
+        floor: node.floor,
         bounds,
         lighting: template.lighting,
         waypoints: Vec::new(),
         doors: door_ids,
         external_exit: template.external_exit,
     });
-    Ok(())
+    Ok(rooms.len() - 1)
 }
 
 fn interior_tiles(room: &Room) -> Vec<Pos> {

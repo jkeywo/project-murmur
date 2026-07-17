@@ -327,3 +327,22 @@ entities:
       rationale:
         - Owner choice at Milestone 2 kickoff, ownership gives cash a durable purpose and arrests a sting without resetting progression.
       references: [milestone-2-campaign-state]
+
+  - decision: two-corridor-banded-realisation
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Two-Corridor Banded Graph Realisation
+      summary: The venue graph grammar decides rooms, security bands, shelf assignment, and every connection before tiles exist; realisation carves a fixed circulation topology per storey. A public main corridor runs through the middle, a staff-tier service corridor runs along the back (realised as a room so zone, access, patrol waypoints, and floor tinting all follow from its template), stub passages at both ends join the corridors into a loop, stairs sit at both main-corridor dead ends, and the ground service corridor ends in a fire exit. Rooms sort west to east by band depth on each shelf, external exits claim the outer wall, service-access rooms front the service corridor, and consecutive restricted rooms get pass-through doors owned by the deeper room so implicit-key rules resolve against the stricter zone. Extraction paths are ordered public first, keeping the player spawn at the entrance.
+      rationale:
+        - A structured realisation of a checked graph keeps generation deterministic and retry-cheap while still delivering the grammar guarantees, gradient, loops, service connections, alternate vertical routes, and three extraction paths.
+        - Corridors-are-public-circulation is amended rather than repealed, the main corridor and stubs stay public, while the service corridor is deliberately staff territory so walking it is a disguise decision.
+      references: [milestone-2-venue-graph-grammar, corridors-are-public-circulation, nightclub-generator]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/grammar.rs, crates/murmur-core/src/generator/layout.rs]
+      symbols: [build_graph, VenueGraph, realise]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/src/generator/mod.rs
+        summary: banded_realisation_keeps_the_graph_guarantees checks corridors, stubs, gradient, and extraction paths across forty seeds.
