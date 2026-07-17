@@ -113,6 +113,7 @@ fn spawn_spot(preferred: Pos, layout: &Layout, taken: &[Pos]) -> Pos {
 pub fn populate(
     data: &GameData,
     layout: &Layout,
+    constraint: Option<&crate::contract::Constraint>,
     rng: &mut Pcg32,
 ) -> Result<Population, PopulateError> {
     let mut actors: Vec<Actor> = Vec::new();
@@ -145,6 +146,7 @@ pub fn populate(
         ai: None,
         hidden_in: None,
         departed: false,
+        killed_by_player: false,
     });
 
     // The target: staff model with a richer generated schedule.
@@ -158,7 +160,39 @@ pub fn populate(
             &[WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social],
         );
         let steps = rng.range_inclusive(spec.schedule_min.into(), spec.schedule_max.into());
-        let routine = build_routine(&pool, steps as usize, 6, 14, rng);
+        let mut routine = build_routine(&pool, steps as usize, 6, 14, rng);
+
+        // A private-kill contract is incorporated before generation: the
+        // target's schedule must visit personal-tier space.
+        if matches!(constraint, Some(crate::contract::Constraint::PrivateKill)) {
+            let visits_personal = |step: &RoutineStep| {
+                layout.rooms.iter().any(|r| {
+                    r.zone == crate::data::Zone::Personal
+                        && r.floor == step.pos.floor
+                        && r.bounds.contains(step.pos.x, step.pos.y)
+                })
+            };
+            if !routine.iter().any(visits_personal) {
+                let personal_pool = waypoints_of_kinds(
+                    layout
+                        .rooms
+                        .iter()
+                        .filter(|r| r.zone == crate::data::Zone::Personal),
+                    &[WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social],
+                );
+                if personal_pool.is_empty() {
+                    return Err(PopulateError(
+                        "private-kill contract but no personal-tier waypoints".into(),
+                    ));
+                }
+                let stop = rng.pick(&personal_pool);
+                routine.push(RoutineStep {
+                    pos: stop.pos,
+                    wait: rng.range_inclusive(8, 16) as u16,
+                });
+            }
+        }
+
         let preferred = routine
             .first()
             .map(|s| s.pos)
@@ -192,6 +226,7 @@ pub fn populate(
             }),
             hidden_in: None,
             departed: false,
+            killed_by_player: false,
         });
     }
 
@@ -268,6 +303,7 @@ pub fn populate(
                 }),
                 hidden_in: None,
                 departed: false,
+                killed_by_player: false,
             });
         }
     }

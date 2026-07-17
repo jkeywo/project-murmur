@@ -174,6 +174,22 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             world.player_violence_witnessed = true;
         }
 
+        // A discovered body of the player's making breaches a
+        // no-bodies-found contract.
+        if matches!(
+            world.constraint,
+            Some(crate::contract::Constraint::NoBodiesFound)
+        ) && world.constraint_breach.is_none()
+            && let Some(pos) = evidence_pos
+            && world
+                .actors
+                .iter()
+                .any(|a| a.pos == pos && a.is_visible_body() && a.killed_by_player)
+        {
+            world.constraint_breach = Some("a body of your making was discovered".to_string());
+            messages.push("CONTRACT BREACHED: a body of your making was discovered".to_string());
+        }
+
         let ai_focus_default = if sees_player { Some(player_pos) } else { None };
         let name = world.actor(id).name.clone();
         let tuning = &data.tuning;

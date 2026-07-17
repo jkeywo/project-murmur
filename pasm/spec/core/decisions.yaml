@@ -361,3 +361,19 @@ entities:
       status: declared
       paths: [crates/murmur-core/src/planner.rs, crates/murmur-core/src/generator/proof.rs]
       symbols: [prove_route, prove_base_routes, RouteFilters]
+
+  - decision: constraint-catalogue-and-breach-semantics
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Constraint Catalogue and Breach Semantics
+      summary: Five constraint kinds cover Milestone 2, no firearms (the pistol may not be fired), no civilian casualties (only the target and guards may die by the player's hand), no bodies found (no player-made body may be discovered), private kill (the target must die in personal-tier space), and specific exit (extraction must use a named room). Exactly one rides on each contract. Breaking a constraint never ends the mission, the world records a breach with its reason, the HUD flips to BREACHED, and the contract resolves unclean with no payout. Constraints are incorporated before generation, a private-kill contract guarantees the target's schedule visits personal space, and the planner must certify a compliant route through its filters or the attempt retries.
+      rationale:
+        - Breach-not-fail keeps missions playable to the end and moves the punishment to the campaign economy where the owner's arrest-continues decision already lives.
+        - Every constraint is mechanically checkable from world state alone, no referee judgment, so replay determinism holds.
+      references: [milestone-2-constrained-contracts, monotone-capability-closure-planner, mission-outcome-rules]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/perception.rs, crates/murmur-core/src/planner.rs]
+      symbols: [Constraint, prove_constraint]
+      tests: [crates/murmur-core/tests/contracts.rs]

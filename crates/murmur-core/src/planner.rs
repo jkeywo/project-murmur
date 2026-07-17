@@ -74,6 +74,10 @@ pub struct RouteProof {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RouteReport {
     pub proofs: Vec<RouteProof>,
+    /// The route certifying the contract's mandatory constraint, when
+    /// the mission runs under contract.
+    #[serde(default)]
+    pub constraint_proof: Option<RouteProof>,
 }
 
 impl RouteReport {
@@ -189,6 +193,85 @@ pub fn prove_route(
     })
 }
 
+/// Certifies a route that satisfies the contract's mandatory constraint,
+/// composed through the standard filters over the physical-stealth model
+/// (the least demanding posture that stays silent).
+pub fn prove_constraint(
+    data: &GameData,
+    layout: &Layout,
+    population: &Population,
+    start: Pos,
+    constraint: &crate::contract::Constraint,
+) -> Result<RouteProof, String> {
+    use crate::contract::Constraint;
+    let filters = match constraint {
+        Constraint::NoFirearms => RouteFilters {
+            forbid_items: vec!["silenced-pistol".to_string()],
+            ..Default::default()
+        },
+        Constraint::NoCivilianCasualties => RouteFilters::default(),
+        Constraint::NoBodiesFound => {
+            // Discretion needs somewhere to stow the body: at least one
+            // container must be reachable under the trespass model.
+            let outcome = capability_closure(data, layout, population, start, true);
+            let stowable = layout.furniture.iter().any(|f| {
+                f.kind == crate::world::FurnitureKind::Container
+                    && crate::geom::Dir4::ALL
+                        .into_iter()
+                        .any(|d| outcome.seen.contains(f.pos.step(d)))
+            });
+            if !stowable {
+                return Err("no reachable container to hide a body in".to_string());
+            }
+            RouteFilters::default()
+        }
+        Constraint::PrivateKill => {
+            let personal: Vec<String> = layout
+                .rooms
+                .iter()
+                .filter(|r| r.zone == crate::data::Zone::Personal)
+                .map(|r| r.name.clone())
+                .collect();
+            if personal.is_empty() {
+                return Err("venue has no personal-tier rooms".to_string());
+            }
+            RouteFilters {
+                kill_rooms: Some(personal),
+                ..Default::default()
+            }
+        }
+        Constraint::SpecificExit { room_template } => {
+            let exits: Vec<Pos> = layout
+                .extraction_tiles
+                .iter()
+                .copied()
+                .filter(|tile| {
+                    layout
+                        .rooms
+                        .iter()
+                        .find(|r| r.floor == tile.floor && r.bounds.contains(tile.x, tile.y))
+                        .is_some_and(|r| &r.template == room_template)
+                })
+                .collect();
+            if exits.is_empty() {
+                return Err(format!("venue has no '{room_template}' exit"));
+            }
+            RouteFilters {
+                allowed_exits: Some(exits),
+                ..Default::default()
+            }
+        }
+    };
+    prove_route(
+        data,
+        layout,
+        population,
+        start,
+        RouteClass::Physical,
+        &filters,
+    )
+}
+
 /// Certifies the three base routes every mission must support.
 pub fn prove_base_routes(
     data: &GameData,
@@ -211,7 +294,10 @@ pub fn prove_base_routes(
             &RouteFilters::default(),
         )?);
     }
-    Ok(RouteReport { proofs })
+    Ok(RouteReport {
+        proofs,
+        constraint_proof: None,
+    })
 }
 
 #[cfg(test)]
@@ -230,7 +316,7 @@ mod tests {
             let Ok(mut layout) = layout::build_layout(&data, &venue, &mut rng) else {
                 continue;
             };
-            let Ok(population) = populate::populate(&data, &layout, &mut rng) else {
+            let Ok(population) = populate::populate(&data, &layout, None, &mut rng) else {
                 continue;
             };
             let start = population.actors[population.player.0 as usize].pos;

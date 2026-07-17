@@ -65,7 +65,8 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let mut rng = Pcg32::new(seed, ATTEMPT_STREAM_BASE + attempt);
 
     let mut layout = layout::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
-    let mut population = populate::populate(data, &layout, &mut rng).map_err(|e| e.0)?;
+    let mut population =
+        populate::populate(data, &layout, config.constraint.as_ref(), &mut rng).map_err(|e| e.0)?;
 
     // Charge weapons with their generated rounds.
     for item in &mut population.items {
@@ -80,8 +81,18 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         .map_err(|e| e.0)?;
 
     // Every mission must be completable three ways: social stealth,
-    // physical stealth, and violence, each with extraction.
-    let routes = crate::planner::prove_base_routes(data, &layout, &population, player_start)?;
+    // physical stealth, and violence, each with extraction — and, under
+    // contract, in at least one constraint-compliant way.
+    let mut routes = crate::planner::prove_base_routes(data, &layout, &population, player_start)?;
+    if let Some(constraint) = &config.constraint {
+        routes.constraint_proof = Some(crate::planner::prove_constraint(
+            data,
+            &layout,
+            &population,
+            player_start,
+            constraint,
+        )?);
+    }
 
     let facts = build_facts(data, &layout, &population, &mut rng);
 
@@ -103,6 +114,8 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         facts,
         proof: report,
         routes,
+        constraint: config.constraint.clone(),
+        constraint_breach: None,
         outcome: None,
         resolution_rng: Pcg32::for_stream(seed, Stream::Resolution),
     })

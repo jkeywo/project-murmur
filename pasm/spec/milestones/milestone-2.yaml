@@ -40,7 +40,7 @@ entities:
 
   - component: milestone-2-constrained-contracts
     core:
-      status: proposed
+      status: partially-implemented
       confidence: confirmed
       title: Constrained Assassination Contracts
       summary: >-
@@ -50,6 +50,11 @@ entities:
         that at least one route completes the contract while satisfying its
         constraint. The base objective remains eliminate the target and extract.
       references: [milestone-2-campaign-state, milestone-2-route-planner]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/contract.rs]
+      symbols: [MissionConfig, Constraint]
+      tests: [crates/murmur-core/tests/contracts.rs]
 
   - component: milestone-2-route-planner
     core:

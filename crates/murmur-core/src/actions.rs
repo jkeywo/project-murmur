@@ -687,7 +687,7 @@ fn resolve_garrote(
         fail(world, events, actor, "the garrote finds no purchase");
         return;
     }
-    kill(world, target);
+    kill(world, events, actor, target);
     let name = world.actor(target).name.clone();
     events
         .messages
@@ -732,7 +732,15 @@ fn resolve_shoot(
     if let Some(item) = world.items.iter_mut().find(|i| i.id == weapon_id) {
         item.charges -= 1;
     }
-    kill(world, target);
+    if actor == world.player
+        && matches!(
+            world.constraint,
+            Some(crate::contract::Constraint::NoFirearms)
+        )
+    {
+        breach_constraint(world, events, "the pistol was fired");
+    }
+    kill(world, events, actor, target);
     // Silenced, but still a local sound incident.
     world.incidents.push(crate::world::Incident {
         kind: crate::world::IncidentKind::Gunshot,
@@ -764,7 +772,7 @@ fn resolve_melee(
     let target_mut = world.actor_mut(target);
     target_mut.hp = target_mut.hp.saturating_sub(damage);
     if target_mut.hp == 0 {
-        kill(world, target);
+        kill(world, events, actor, target);
         let name = world.actor(target).name.clone();
         events.messages.push(format!("{name} is struck down"));
     } else {
@@ -1127,6 +1135,17 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
     }
     let target_dead = world.actor(world.target).condition == BodyCondition::Dead;
     if target_dead && world.extraction_tiles.contains(&player.pos) {
+        let player_pos = player.pos;
+        if let Some(crate::contract::Constraint::SpecificExit { room_template }) =
+            world.constraint.clone()
+        {
+            let via_required = world
+                .room_at(player_pos)
+                .is_some_and(|r| r.template == room_template);
+            if !via_required {
+                breach_constraint(world, events, "you left by the wrong exit");
+            }
+        }
         world.outcome = Some(MissionOutcome::Extracted);
         events
             .messages
@@ -1134,17 +1153,52 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
     }
 }
 
-fn kill(world: &mut World, target: ActorId) {
+/// Marks the contract constraint broken (once), with the reason on the
+/// turn's message log. The mission continues; the contract resolves
+/// unclean.
+pub(crate) fn breach_constraint(world: &mut World, events: &mut TurnEvents, reason: &str) {
+    if world.constraint_breach.is_some() {
+        return;
+    }
+    world.constraint_breach = Some(reason.to_string());
+    events.messages.push(format!("CONTRACT BREACHED: {reason}"));
+}
+
+fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: ActorId) {
     // Dying drops any carried body on the spot.
     if let Hands::CarryingBody(body) = world.actor(target).hands {
         let pos = world.actor(target).pos;
         world.actor_mut(body).pos = pos;
     }
     let pos = world.actor(target).pos;
+    let is_target = world.actor(target).is_target;
+    let victim_role = world.actor(target).role;
+    let player_kill = killer == world.player;
     let target_mut = world.actor_mut(target);
     target_mut.condition = BodyCondition::Dead;
     target_mut.hp = 0;
     target_mut.hands = Hands::Free;
+    target_mut.killed_by_player = player_kill;
+
+    if player_kill {
+        match &world.constraint {
+            Some(crate::contract::Constraint::NoCivilianCasualties)
+                if !is_target && victim_role != Some(crate::data::Role::Guard) =>
+            {
+                breach_constraint(world, events, "a bystander died by your hand");
+            }
+            Some(crate::contract::Constraint::PrivateKill) if is_target => {
+                let private = world
+                    .room_at(pos)
+                    .is_some_and(|r| r.zone == crate::data::Zone::Personal);
+                if !private {
+                    breach_constraint(world, events, "the target did not die in private");
+                }
+            }
+            _ => {}
+        }
+    }
+
     // A kill in the open is witnessable evidence this turn.
     world.incidents.push(crate::world::Incident {
         kind: crate::world::IncidentKind::Violence,

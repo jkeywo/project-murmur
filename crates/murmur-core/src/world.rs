@@ -202,6 +202,10 @@ pub struct Actor {
     /// Set when a fleeing NPC escaped through an extraction exit and left
     /// the premises for good.
     pub departed: bool,
+    /// Set when the player caused this actor's death; constraint
+    /// tracking (collateral, discovered bodies) keys off it.
+    #[serde(default)]
+    pub killed_by_player: bool,
 }
 
 impl Actor {
@@ -293,6 +297,11 @@ pub struct World {
     pub proof: crate::generator::proof::ProofReport,
     /// The routes the planner certified at generation.
     pub routes: crate::planner::RouteReport,
+    /// The contract's mandatory constraint, if any.
+    pub constraint: Option<crate::contract::Constraint>,
+    /// Set with a reason the first time the constraint is broken; the
+    /// mission continues but the contract resolves unclean.
+    pub constraint_breach: Option<String>,
     pub outcome: Option<MissionOutcome>,
     /// Tie-breaker randomness for simultaneous resolution. Command
     /// rejection never touches it.

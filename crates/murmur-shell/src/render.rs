@@ -386,6 +386,21 @@ fn draw_sidebar(
         murmur_core::access::AccessVerdict::Illegal(_) => ("area: TRESPASSING", Color::Red),
     };
     lines.push(Line::styled(legit, Style::default().fg(color)));
+
+    // The contract's mandatory constraint, and whether it still holds.
+    if let Some(constraint) = &world.constraint {
+        if world.constraint_breach.is_some() {
+            lines.push(Line::styled(
+                "contract: BREACHED".to_string(),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            lines.push(Line::styled(
+                format!("contract: {}", constraint.short()),
+                Style::default().fg(Color::LightCyan),
+            ));
+        }
+    }
     lines.push(Line::raw(""));
 
     // Inventory: six visible slots.
