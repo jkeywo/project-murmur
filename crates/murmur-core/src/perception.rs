@@ -118,6 +118,10 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             if role == Role::Guard && player_crouched {
                 gain += data.tuning.gain_crouching;
             }
+            // Visible tampering (picking a lock) alarms any witness.
+            if world.player_tampering {
+                gain += data.tuning.gain_tampering;
+            }
             // Suspicious observers recognise an impostor's disguise.
             if disguise_spec.is_some_and(|d| d.suspicious_observers.contains(&role)) {
                 gain += data.tuning.gain_disguise_recognised;
@@ -161,6 +165,19 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             .incidents
             .iter()
             .filter(|i| i.kind == IncidentKind::Gunshot)
+            .find(|i| {
+                world
+                    .actor(id)
+                    .pos
+                    .chebyshev(i.pos)
+                    .is_some_and(|d| d <= i.radius)
+            })
+            .map(|i| i.pos);
+        // Noisemaker cracks: heard within radius, worth a look, no alarm.
+        let noise_pos: Option<Pos> = world
+            .incidents
+            .iter()
+            .filter(|i| i.kind == IncidentKind::Noise)
             .find(|i| {
                 world
                     .actor(id)
@@ -236,6 +253,14 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                 ai.mood = Mood::Fleeing;
                 ai.focus = Some(pos);
                 note(&mut messages, format!("{name} flinches at the noise"));
+            }
+        } else if let Some(pos) = noise_pos {
+            // Guards and staff go to look; civilians just startle.
+            if (is_guard || role.is_staff()) && matches!(ai.mood, Mood::Relaxed | Mood::Suspicious)
+            {
+                ai.mood = Mood::Investigating;
+                ai.focus = Some(pos);
+                note(&mut messages, format!("{name} goes to check a noise"));
             }
         } else if gain > 0 {
             ai.suspicion = (ai.suspicion + gain).min(tuning.suspicion_max);

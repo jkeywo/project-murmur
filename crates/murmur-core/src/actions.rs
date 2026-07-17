@@ -43,6 +43,10 @@ pub enum Command {
     DropBody(Option<Dir4>),
     HideBody(FurnitureId),
     DrawOrHolster,
+    /// Pick a locked door open with lockpicks (slow; suspicious if seen).
+    PickLock(DoorId),
+    /// Throw a noisemaker charge at a visible tile to draw investigators.
+    ThrowNoisemaker(Pos),
 }
 
 /// Where a disguise change sources its clothes.
@@ -69,6 +73,8 @@ pub enum ActionIntent {
     DropBody(Option<Dir4>),
     HideBody(FurnitureId),
     DrawOrHolster,
+    PickLock(DoorId),
+    Throw(Pos),
     /// NPC-only in practice: turn on the spot to face a direction.
     TurnFacing(Dir4),
     /// NPC-only in practice: adjacent lethal melee.
@@ -105,6 +111,10 @@ pub enum RejectReason {
     WeaponNotDrawn,
     TargetNotVisible,
     OutOfRange,
+    NoGarrote,
+    NoLockpicks,
+    DoorNotLocked,
+    NoNoisemaker,
     MissionOver,
 }
 
@@ -134,6 +144,10 @@ impl RejectReason {
             RejectReason::WeaponNotDrawn => "your weapon is holstered",
             RejectReason::TargetNotVisible => "no line of sight",
             RejectReason::OutOfRange => "out of range",
+            RejectReason::NoGarrote => "you carry no garrote",
+            RejectReason::NoLockpicks => "you carry no lockpicks",
+            RejectReason::DoorNotLocked => "that door is not locked",
+            RejectReason::NoNoisemaker => "no noisemaker charges left",
             RejectReason::MissionOver => "the mission is over",
         }
     }
@@ -165,6 +179,8 @@ pub fn intent_duration(
         ActionIntent::DropBody(_) => durations.drop_body,
         ActionIntent::HideBody(_) => durations.hide_body,
         ActionIntent::DrawOrHolster => durations.draw_holster,
+        ActionIntent::PickLock(_) => durations.pick_lock,
+        ActionIntent::Throw(_) => durations.throw,
         ActionIntent::MeleeAttack(_) | ActionIntent::Arrest(_) => 1,
     }
 }
@@ -242,6 +258,12 @@ pub fn translate(
             Ok(ActionIntent::CloseDoor(id))
         }
         Command::Garrote(target) => {
+            let carries_garrote = world
+                .carried_items(world.player)
+                .any(|i| data.item(&i.spec).is_some_and(|s| s.weapon && !s.firearm));
+            if !carries_garrote {
+                return Err(RejectReason::NoGarrote);
+            }
             let target_ref = world.actor(target);
             if !target_ref.alive() || target_ref.hidden_in.is_some() {
                 return Err(RejectReason::TargetGone);
@@ -260,7 +282,7 @@ pub fn translate(
         Command::Shoot(target) => {
             let pistol = world
                 .carried_items(world.player)
-                .find(|i| data.item(&i.spec).is_some_and(|s| s.weapon))
+                .find(|i| data.item(&i.spec).is_some_and(|s| s.firearm))
                 .ok_or(RejectReason::NoWeaponCarried)?;
             match player.hands {
                 Hands::Drawn(id) if id == pistol.id => {}
@@ -389,13 +411,52 @@ pub fn translate(
         Command::DrawOrHolster => {
             let pistol = world
                 .carried_items(world.player)
-                .find(|i| data.item(&i.spec).is_some_and(|s| s.weapon))
+                .find(|i| data.item(&i.spec).is_some_and(|s| s.firearm))
                 .ok_or(RejectReason::NoWeaponCarried)?;
             match player.hands {
                 Hands::Free => Ok(ActionIntent::DrawOrHolster),
                 Hands::Drawn(id) if id == pistol.id => Ok(ActionIntent::DrawOrHolster),
                 _ => Err(RejectReason::HandsNotFree),
             }
+        }
+        Command::PickLock(door) => {
+            let carries_picks = world
+                .carried_items(world.player)
+                .any(|i| data.item(&i.spec).is_some_and(|s| s.lockpick));
+            if !carries_picks {
+                return Err(RejectReason::NoLockpicks);
+            }
+            adjacent_door_pos(world, player.pos, door).ok_or(RejectReason::DoorNotAdjacent)?;
+            if world.door(door).locked_by.is_none() {
+                return Err(RejectReason::DoorNotLocked);
+            }
+            if player.hands != Hands::Free {
+                return Err(RejectReason::HandsNotFree);
+            }
+            Ok(ActionIntent::PickLock(door))
+        }
+        Command::ThrowNoisemaker(pos) => {
+            let charge = world
+                .carried_items(world.player)
+                .find(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker));
+            match charge {
+                Some(item) if item.charges > 0 => {}
+                _ => return Err(RejectReason::NoNoisemaker),
+            }
+            match player.pos.chebyshev(pos) {
+                Some(d) if d <= data.tuning.noisemaker_range => {}
+                _ => return Err(RejectReason::OutOfRange),
+            }
+            if !matches!(
+                world.map.tile(pos),
+                TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
+            ) {
+                return Err(RejectReason::PathBlocked("nowhere to land a throw"));
+            }
+            if !line_of_sight(player.pos, pos, world.sight_blocker(player.crouched)) {
+                return Err(RejectReason::TargetNotVisible);
+            }
+            Ok(ActionIntent::Throw(pos))
         }
     }
 }
@@ -520,7 +581,7 @@ pub fn resolve_turn(
             ActionIntent::DrawOrHolster => {
                 let weapon = world
                     .carried_items(action.actor)
-                    .find(|i| data.item(&i.spec).is_some_and(|s| s.weapon))
+                    .find(|i| data.item(&i.spec).is_some_and(|s| s.firearm))
                     .map(|i| i.id);
                 let actor = world.actor_mut(action.actor);
                 match (actor.hands, weapon) {
@@ -543,6 +604,37 @@ pub fn resolve_turn(
                         &mut events,
                         action.actor,
                         ActionResult::Failed("your hands are not free"),
+                    ),
+                }
+            }
+            ActionIntent::Throw(pos) => {
+                let charge = world
+                    .carried_items(action.actor)
+                    .find(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker) && i.charges > 0)
+                    .map(|i| i.id);
+                match charge {
+                    Some(id) => {
+                        if let Some(item) = world.items.iter_mut().find(|i| i.id == id) {
+                            item.charges -= 1;
+                        }
+                        world.incidents.push(crate::world::Incident {
+                            kind: crate::world::IncidentKind::Noise,
+                            pos,
+                            radius: data.tuning.noise_radius,
+                            turn: world.turn,
+                        });
+                        record(world, &mut events, action.actor, ActionResult::Completed);
+                        if action.actor == world.player {
+                            events
+                                .messages
+                                .push("a sharp crack echoes off the walls".to_string());
+                        }
+                    }
+                    None => record(
+                        world,
+                        &mut events,
+                        action.actor,
+                        ActionResult::Failed("no noisemaker charges left"),
                     ),
                 }
             }
@@ -580,6 +672,26 @@ pub fn resolve_turn(
                         &mut events,
                         action.actor,
                         ActionResult::Failed("the doorway is blocked"),
+                    );
+                }
+            }
+            ActionIntent::PickLock(id) => {
+                if world.door(id).locked_by.is_some() {
+                    let door = world.door_mut(id);
+                    door.locked_by = None;
+                    door.open = true;
+                    record(world, &mut events, action.actor, ActionResult::Completed);
+                    if action.actor == world.player {
+                        events
+                            .messages
+                            .push("the lock gives way under your picks".to_string());
+                    }
+                } else {
+                    record(
+                        world,
+                        &mut events,
+                        action.actor,
+                        ActionResult::Failed("that door is not locked"),
                     );
                 }
             }
@@ -708,7 +820,7 @@ fn resolve_shoot(
     let crouched = world.actor(actor).crouched || target_ref.crouched;
     let weapon = world
         .carried_items(actor)
-        .find(|i| data.item(&i.spec).is_some_and(|s| s.weapon))
+        .find(|i| data.item(&i.spec).is_some_and(|s| s.firearm))
         .map(|i| (i.id, i.charges));
 
     let visible = target_ref.alive()

@@ -34,6 +34,7 @@ pub enum PendingAction {
     DropBody,
     OpenDoor,
     CloseDoor,
+    PickLock,
 }
 
 impl PendingAction {
@@ -47,6 +48,7 @@ impl PendingAction {
             PendingAction::DropBody => "drop body - which direction?",
             PendingAction::OpenDoor => "open - which direction?",
             PendingAction::CloseDoor => "close - which direction?",
+            PendingAction::PickLock => "pick lock - which direction?",
         }
     }
 }
@@ -57,6 +59,8 @@ pub enum InputMode {
     Normal,
     Pending(PendingAction),
     Look(Pos),
+    /// Aiming a noisemaker throw with a free cursor.
+    ThrowTarget(Pos),
     TargetSelect {
         candidates: Vec<ActorId>,
         index: usize,
@@ -269,6 +273,7 @@ impl Mission {
     pub fn inspected_tile(&self) -> Option<Pos> {
         match &self.mode {
             InputMode::Look(cursor) => Some(*cursor),
+            InputMode::ThrowTarget(cursor) => Some(*cursor),
             _ => self.hover,
         }
     }
@@ -297,6 +302,10 @@ impl Mission {
             InputMode::Look(cursor) => {
                 let cursor = *cursor;
                 self.handle_look(cursor, input);
+            }
+            InputMode::ThrowTarget(cursor) => {
+                let cursor = *cursor;
+                self.handle_throw_target(cursor, input);
             }
             InputMode::TargetSelect { candidates, index } => {
                 let (candidates, index) = (candidates.clone(), *index);
@@ -345,6 +354,10 @@ impl Mission {
             InputMode::Look(_) => {
                 self.mode = InputMode::Look(pos);
             }
+            InputMode::ThrowTarget(_) => {
+                self.mode = InputMode::Normal;
+                self.enqueue(Command::ThrowNoisemaker(pos));
+            }
             InputMode::Normal => {}
         }
     }
@@ -364,6 +377,10 @@ impl Mission {
             ShellInput::Char('h') => self.mode = InputMode::Pending(PendingAction::HideBody),
             ShellInput::Char('o') => self.mode = InputMode::Pending(PendingAction::OpenDoor),
             ShellInput::Char('k') => self.mode = InputMode::Pending(PendingAction::CloseDoor),
+            ShellInput::Char('l') => self.mode = InputMode::Pending(PendingAction::PickLock),
+            ShellInput::Char('t') => {
+                self.mode = InputMode::ThrowTarget(self.world().player_actor().pos);
+            }
             ShellInput::Char('b') => {
                 if matches!(self.world().player_actor().hands, Hands::CarryingBody(_)) {
                     self.mode = InputMode::Pending(PendingAction::DropBody);
@@ -481,6 +498,10 @@ impl Mission {
                 TileKind::Door(id) => Some(Command::CloseDoor(id)),
                 _ => None,
             },
+            PendingAction::PickLock => match world.map.tile(pos) {
+                TileKind::Door(id) => Some(Command::PickLock(id)),
+                _ => None,
+            },
             PendingAction::DropBody => {
                 // Handled directly in handle_pending; unreachable here.
                 None
@@ -507,6 +528,29 @@ impl Mission {
                 self.mode = InputMode::Normal;
                 self.queue.resume();
             }
+            _ => {}
+        }
+    }
+
+    fn handle_throw_target(&mut self, cursor: Pos, input: ShellInput) {
+        match input {
+            ShellInput::Up | ShellInput::Down | ShellInput::Left | ShellInput::Right => {
+                let dir = match input {
+                    ShellInput::Up => Dir4::North,
+                    ShellInput::Down => Dir4::South,
+                    ShellInput::Left => Dir4::West,
+                    _ => Dir4::East,
+                };
+                let next = cursor.step(dir);
+                if self.world().map.in_bounds(next) {
+                    self.mode = InputMode::ThrowTarget(next);
+                }
+            }
+            ShellInput::Enter => {
+                self.mode = InputMode::Normal;
+                self.enqueue(Command::ThrowNoisemaker(cursor));
+            }
+            ShellInput::Char('t') | ShellInput::Esc => self.mode = InputMode::Normal,
             _ => {}
         }
     }

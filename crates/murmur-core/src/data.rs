@@ -175,6 +175,26 @@ pub struct ItemSpec {
     pub invitation: bool,
     /// True for weapons (illegal when drawn, per disguise matrix).
     pub weapon: bool,
+    /// True for ranged weapons that draw, aim, and consume rounds; a
+    /// weapon without it is a silent melee tool.
+    #[serde(default)]
+    pub firearm: bool,
+    /// Campaign equipment: enters missions only through the loadout,
+    /// never generated into the venue.
+    #[serde(default)]
+    pub purchasable: bool,
+    /// Opens locked doors without their key (the pick-lock action).
+    #[serde(default)]
+    pub lockpick: bool,
+    /// Can be thrown to create a noise that draws investigators.
+    #[serde(default)]
+    pub noisemaker: bool,
+    /// Grants staff-tier legitimacy while carried, whatever is worn.
+    #[serde(default)]
+    pub staff_pass: bool,
+    /// Charges the item starts with (pistol rounds, noisemaker uses).
+    #[serde(default)]
+    pub charges: u16,
     /// Whether the item can be pickpocketed from a carrying NPC.
     pub pickpocketable: bool,
     /// Role that carries this item at generation, if any.
@@ -182,6 +202,35 @@ pub struct ItemSpec {
     /// Room template on whose floor this item is placed at generation,
     /// if any.
     pub placed_in: Option<RoomTemplateId>,
+}
+
+/// The three approaches the equipment catalogue serves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Approach {
+    Physical,
+    Social,
+    Violence,
+}
+
+impl Approach {
+    pub fn name(self) -> &'static str {
+        match self {
+            Approach::Physical => "physical stealth",
+            Approach::Social => "social stealth",
+            Approach::Violence => "violence",
+        }
+    }
+
+    pub const ALL: [Approach; 3] = [Approach::Physical, Approach::Social, Approach::Violence];
+}
+
+/// One catalogue entry: a purchasable item, its approach, and its price.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EquipmentSpec {
+    pub item: ItemSpecId,
+    pub approach: Approach,
+    pub price: i64,
 }
 
 /// How many waypoints of one kind a room offers.
@@ -308,6 +357,8 @@ pub struct ActionDurations {
     pub pickpocket: u16,
     pub door: u16,
     pub draw_holster: u16,
+    pub pick_lock: u16,
+    pub throw: u16,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -349,6 +400,11 @@ pub struct Tuning {
     pub relaxed_cadence: u16,
     /// Turns an investigator lingers at the spot they checked.
     pub investigate_linger: u16,
+    /// Noisemaker throw distance and how far its crack carries.
+    pub noisemaker_range: i16,
+    pub noise_radius: i16,
+    /// Suspicion per turn an NPC watches the player pick a lock.
+    pub gain_tampering: u16,
     /// Tiles of the player's own field of view.
     pub player_vision_range: i16,
 
@@ -362,6 +418,7 @@ pub struct GameData {
     pub venues: Vec<VenueSpec>,
     pub disguises: Vec<DisguiseSpec>,
     pub items: Vec<ItemSpec>,
+    pub equipment: Vec<EquipmentSpec>,
     pub rooms: Vec<RoomTemplate>,
     pub population: PopulationData,
     pub names: NamePools,
@@ -387,6 +444,7 @@ const TUNING_RON: &str = include_str!("../../../data/tuning.ron");
 const VENUES_RON: &str = include_str!("../../../data/venues.ron");
 const DISGUISES_RON: &str = include_str!("../../../data/disguises.ron");
 const ITEMS_RON: &str = include_str!("../../../data/items.ron");
+const EQUIPMENT_RON: &str = include_str!("../../../data/equipment.ron");
 const ROOMS_RON: &str = include_str!("../../../data/rooms.ron");
 const POPULATION_RON: &str = include_str!("../../../data/population.ron");
 const NAMES_RON: &str = include_str!("../../../data/names.ron");
@@ -407,6 +465,7 @@ impl GameData {
             VENUES_RON,
             DISGUISES_RON,
             ITEMS_RON,
+            EQUIPMENT_RON,
             ROOMS_RON,
             POPULATION_RON,
             NAMES_RON,
@@ -421,6 +480,7 @@ impl GameData {
         venues: &str,
         disguises: &str,
         items: &str,
+        equipment: &str,
         rooms: &str,
         population: &str,
         names: &str,
@@ -431,6 +491,7 @@ impl GameData {
             venues: parse("venues.ron", venues)?,
             disguises: parse("disguises.ron", disguises)?,
             items: parse("items.ron", items)?,
+            equipment: parse("equipment.ron", equipment)?,
             rooms: parse("rooms.ron", rooms)?,
             population: parse("population.ron", population)?,
             names: parse("names.ron", names)?,
@@ -558,6 +619,41 @@ impl GameData {
         if self.tuning.cone_den <= 0 || self.tuning.cone_num <= 0 {
             errors.push("cone ratio must be positive".into());
         }
+        for entry in &self.equipment {
+            match self.item(&entry.item) {
+                None => errors.push(format!(
+                    "equipment references unknown item '{}'",
+                    entry.item
+                )),
+                Some(spec) if !spec.purchasable => errors.push(format!(
+                    "equipment item '{}' must be purchasable",
+                    entry.item
+                )),
+                Some(_) => {}
+            }
+            if entry.price <= 0 {
+                errors.push(format!("equipment '{}' must cost something", entry.item));
+            }
+        }
+        for approach in Approach::ALL {
+            let count = self
+                .equipment
+                .iter()
+                .filter(|e| e.approach == approach)
+                .count();
+            if count != 2 {
+                errors.push(format!(
+                    "equipment catalogue needs exactly two {} choices, found {count}",
+                    approach.name()
+                ));
+            }
+        }
+        if let Some(pistol) = self.item("silenced-pistol")
+            && pistol.charges != self.tuning.pistol_rounds
+        {
+            errors.push("silenced pistol charges must match tuning pistol_rounds".into());
+        }
+
         if self.venues.is_empty() {
             errors.push("at least one venue must be defined".into());
         }

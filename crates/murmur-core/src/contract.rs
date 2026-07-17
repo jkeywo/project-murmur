@@ -66,6 +66,9 @@ impl Constraint {
     }
 }
 
+/// The most equipment a mission loadout may carry.
+pub const LOADOUT_SLOTS: usize = 3;
+
 /// Everything the generator needs to build one mission.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MissionConfig {
@@ -75,6 +78,11 @@ pub struct MissionConfig {
     /// contract.
     #[serde(default)]
     pub constraint: Option<Constraint>,
+    /// Equipment (item spec ids, at most [`LOADOUT_SLOTS`]) the player
+    /// carries in. The campaign chooses from owned gear; the default
+    /// matches the original briefing kit.
+    #[serde(default)]
+    pub loadout: Vec<crate::data::ItemSpecId>,
 }
 
 impl MissionConfig {
@@ -83,11 +91,17 @@ impl MissionConfig {
             seed,
             venue: venue.into(),
             constraint: None,
+            loadout: vec!["garrote".to_string(), "silenced-pistol".to_string()],
         }
     }
 
     pub fn with_constraint(mut self, constraint: Constraint) -> Self {
         self.constraint = Some(constraint);
+        self
+    }
+
+    pub fn with_loadout(mut self, loadout: Vec<crate::data::ItemSpecId>) -> Self {
+        self.loadout = loadout;
         self
     }
 }

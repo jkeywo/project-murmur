@@ -114,6 +114,7 @@ pub fn populate(
     data: &GameData,
     layout: &Layout,
     constraint: Option<&crate::contract::Constraint>,
+    loadout: &[String],
     rng: &mut Pcg32,
 ) -> Result<Population, PopulateError> {
     let mut actors: Vec<Actor> = Vec::new();
@@ -308,19 +309,27 @@ pub fn populate(
         }
     }
 
-    // Items. Explicit generation rules per spec kind:
-    //  - weapons with no carrier: the player's starting loadout;
+    // The player's loadout: campaign equipment carried in, charged per
+    // its spec (pistol rounds, noisemaker uses).
+    for spec_id in loadout {
+        let spec = data
+            .item(spec_id)
+            .ok_or_else(|| PopulateError(format!("loadout item '{spec_id}' is unknown")))?;
+        items.push(ItemInstance {
+            id: ItemId(items.len() as u32),
+            spec: spec.id.clone(),
+            location: ItemLocation::CarriedBy(player_id),
+            charges: spec.charges,
+        });
+    }
+
+    // World items. Explicit generation rules per spec kind:
+    //  - purchasable equipment never generates into the venue;
     //  - invitations: one per tagged VIP civilian;
     //  - keys: carried by one deterministic-random member of their role,
     //    or placed on the floor of a staff room if the role is absent.
     for item_spec in &data.items {
-        if item_spec.weapon && item_spec.carried_by.is_none() {
-            items.push(ItemInstance {
-                id: ItemId(items.len() as u32),
-                spec: item_spec.id.clone(),
-                location: ItemLocation::CarriedBy(player_id),
-                charges: 0,
-            });
+        if item_spec.purchasable {
             continue;
         }
         if item_spec.invitation {

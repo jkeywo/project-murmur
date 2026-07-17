@@ -1,0 +1,12 @@
+// The campaign equipment catalogue: exactly two choices per approach.
+// Every entry references a purchasable item spec; equipment must create
+// concrete starting capability, never cosmetics. Prices are campaign
+// cash; a new campaign starts owning the garrote.
+[
+    (item: "lockpicks", approach: Physical, price: 250),
+    (item: "noisemaker", approach: Physical, price: 200),
+    (item: "forged-pass", approach: Social, price: 400),
+    (item: "counterfeit-invitation", approach: Social, price: 350),
+    (item: "silenced-pistol", approach: Violence, price: 500),
+    (item: "garrote", approach: Violence, price: 150),
+]

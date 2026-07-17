@@ -19,6 +19,8 @@ pub enum AccessVerdict {
     /// Permitted despite the zone because the disguise grants this
     /// specific room (authored partial access).
     AllowedByRoomGrant,
+    /// Permitted because a carried forged staff pass covers staff space.
+    AllowedByPass,
     /// The disguise does not cover this room's zone.
     Illegal(Zone),
 }
@@ -60,6 +62,9 @@ pub fn verdict_for_pos(
         && world.carries(actor, data, |spec| spec.invitation)
     {
         return AccessVerdict::AllowedByInvitation;
+    }
+    if room.zone == Zone::Staff && world.carries(actor, data, |spec| spec.staff_pass) {
+        return AccessVerdict::AllowedByPass;
     }
     AccessVerdict::Illegal(room.zone)
 }

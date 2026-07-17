@@ -64,16 +64,24 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let venue = data.venue(&config.venue).expect("checked by generate");
     let mut rng = Pcg32::new(seed, ATTEMPT_STREAM_BASE + attempt);
 
-    let mut layout = layout::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
-    let mut population =
-        populate::populate(data, &layout, config.constraint.as_ref(), &mut rng).map_err(|e| e.0)?;
-
-    // Charge weapons with their generated rounds.
-    for item in &mut population.items {
-        if data.item(&item.spec).is_some_and(|s| s.weapon) {
-            item.charges = data.tuning.pistol_rounds;
+    if config.loadout.len() > crate::contract::LOADOUT_SLOTS {
+        return Err("loadout exceeds the three-item limit".to_string());
+    }
+    for spec_id in &config.loadout {
+        if data.item(spec_id).is_none() {
+            return Err(format!("loadout item '{spec_id}' is unknown"));
         }
     }
+
+    let mut layout = layout::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
+    let population = populate::populate(
+        data,
+        &layout,
+        config.constraint.as_ref(),
+        &config.loadout,
+        &mut rng,
+    )
+    .map_err(|e| e.0)?;
 
     let player_start = population.actors[population.player.0 as usize].pos;
     proof::prove_physical(data, &layout, player_start).map_err(|e| e.0)?;
@@ -111,6 +119,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         extraction_tiles: layout.extraction_tiles,
         incidents: Vec::new(),
         player_violence_witnessed: false,
+        player_tampering: false,
         facts,
         proof: report,
         routes,

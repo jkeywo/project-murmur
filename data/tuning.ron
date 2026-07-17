@@ -23,6 +23,10 @@
     gain_disguise_recognised: 35,
     suspicion_decay: 5,
 
+    noisemaker_range: 8,         // throw distance in tiles
+    noise_radius: 10,            // how far the crack is heard
+    gain_tampering: 40,          // suspicion per turn seen picking a lock
+
     relaxed_cadence: 2,          // [spec] relaxed NPCs act on alternating turns
     investigate_linger: 4,
     player_vision_range: 11,
@@ -39,5 +43,7 @@
         pickpocket: 1,
         door: 1,
         draw_holster: 1,
+        pick_lock: 4,
+        throw: 1,
     ),
 )

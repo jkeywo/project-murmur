@@ -190,6 +190,7 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
     let world = mission.world();
     let focus = match &mission.mode {
         InputMode::Look(cursor) => *cursor,
+        InputMode::ThrowTarget(cursor) => *cursor,
         InputMode::TargetSelect { candidates, index } => world.actor(candidates[*index]).pos,
         _ => world.player_actor().pos,
     };
@@ -271,6 +272,12 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
                 Style::default().fg(Color::LightCyan),
             ));
         }
+        InputMode::ThrowTarget(_) => {
+            lines.push(Line::styled(
+                "aim the throw - Enter or click throws, Esc cancels".to_string(),
+                Style::default().fg(Color::LightCyan),
+            ));
+        }
         InputMode::TargetSelect { candidates, index } => {
             let target = mission.world().actor(candidates[*index]);
             lines.push(Line::styled(
@@ -315,6 +322,8 @@ const ACTIONS: &[(char, &str)] = &[
     ('h', "hide body"),
     ('o', "open door"),
     ('k', "close door"),
+    ('l', "pick lock"),
+    ('t', "noisemaker"),
     (';', "look"),
 ];
 
@@ -383,6 +392,7 @@ fn draw_sidebar(
         murmur_core::access::AccessVerdict::AllowedByRoomGrant => {
             ("area: staff access", Color::Green)
         }
+        murmur_core::access::AccessVerdict::AllowedByPass => ("area: pass shown", Color::Green),
         murmur_core::access::AccessVerdict::Illegal(_) => ("area: TRESPASSING", Color::Red),
     };
     lines.push(Line::styled(legit, Style::default().fg(color)));

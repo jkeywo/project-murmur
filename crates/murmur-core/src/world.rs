@@ -230,6 +230,9 @@ pub enum IncidentKind {
     Gunshot,
     /// A kill in the open; perceived by sight like any other evidence.
     Violence,
+    /// A thrown noisemaker: heard within `radius`, draws investigators
+    /// without raising an alarm.
+    Noise,
 }
 
 /// A transient world event others can perceive during the same turn.
@@ -292,6 +295,10 @@ pub struct World {
     /// Set once any NPC has witnessed the player committing violence;
     /// guards then fight lethally instead of arresting.
     pub player_violence_witnessed: bool,
+    /// True while the player is visibly tampering (picking a lock);
+    /// witnesses gain suspicion fast.
+    #[serde(default)]
+    pub player_tampering: bool,
     pub facts: MissionFacts,
     /// What the generated reachability proof established.
     pub proof: crate::generator::proof::ProofReport,

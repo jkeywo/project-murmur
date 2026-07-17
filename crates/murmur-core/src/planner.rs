@@ -58,6 +58,11 @@ pub struct RouteFilters {
     pub kill_rooms: Option<Vec<String>>,
     /// If set, extraction must use one of these tiles.
     pub allowed_exits: Option<Vec<Pos>>,
+    /// Venue-potential mode: assume the whole equipment catalogue is
+    /// available, not just the actual loadout. The three base proofs are
+    /// statements about the venue; the loadout and constraint proofs are
+    /// statements about this run.
+    pub assume_catalogue: bool,
 }
 
 /// A certified route: class, kill site, exit, and the capability steps
@@ -74,6 +79,10 @@ pub struct RouteProof {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RouteReport {
     pub proofs: Vec<RouteProof>,
+    /// A route completable with the actual loadout (the base proofs
+    /// describe venue potential instead).
+    #[serde(default)]
+    pub loadout_proof: Option<RouteProof>,
     /// The route certifying the contract's mandatory constraint, when
     /// the mission runs under contract.
     #[serde(default)]
@@ -86,7 +95,9 @@ impl RouteReport {
     }
 }
 
-/// Weapons the player starts with, by spec id, minus anything filtered.
+/// Weapons available to the route, by spec id, minus anything filtered:
+/// the actual loadout, or the whole purchasable catalogue in
+/// venue-potential mode.
 fn player_weapons(data: &GameData, population: &Population, filters: &RouteFilters) -> Vec<String> {
     let mut weapons: Vec<String> = population
         .items
@@ -96,12 +107,16 @@ fn player_weapons(data: &GameData, population: &Population, filters: &RouteFilte
         .filter(|item| data.item(&item.spec).is_some_and(|s| s.weapon))
         .map(|item| item.spec.clone())
         .collect();
-    // The garrote is an innate capability until the equipment slice
-    // turns it into loadout gear.
-    if !weapons.iter().any(|w| w == "garrote")
-        && !filters.forbid_items.iter().any(|i| i == "garrote")
-    {
-        weapons.push("garrote".to_string());
+    if filters.assume_catalogue {
+        for spec in &data.items {
+            if spec.weapon
+                && spec.purchasable
+                && !weapons.contains(&spec.id)
+                && !filters.forbid_items.contains(&spec.id)
+            {
+                weapons.push(spec.id.clone());
+            }
+        }
     }
     weapons
 }
@@ -122,7 +137,14 @@ pub fn prove_route(
     filters: &RouteFilters,
 ) -> Result<RouteProof, String> {
     let zone_free = !matches!(class, RouteClass::Social);
-    let outcome = capability_closure(data, layout, population, start, zone_free);
+    let outcome = capability_closure(
+        data,
+        layout,
+        population,
+        start,
+        zone_free,
+        filters.assume_catalogue,
+    );
 
     // A kill capability appropriate to the class.
     let weapons = player_weapons(data, population, filters);
@@ -213,7 +235,7 @@ pub fn prove_constraint(
         Constraint::NoBodiesFound => {
             // Discretion needs somewhere to stow the body: at least one
             // container must be reachable under the trespass model.
-            let outcome = capability_closure(data, layout, population, start, true);
+            let outcome = capability_closure(data, layout, population, start, true, false);
             let stowable = layout.furniture.iter().any(|f| {
                 f.kind == crate::world::FurnitureKind::Container
                     && crate::geom::Dir4::ALL
@@ -272,13 +294,19 @@ pub fn prove_constraint(
     )
 }
 
-/// Certifies the three base routes every mission must support.
+/// Certifies the three base routes (venue potential: the catalogue is
+/// assumed available) plus one route completable with the actual
+/// loadout. A venue failing any of the four fails the attempt.
 pub fn prove_base_routes(
     data: &GameData,
     layout: &Layout,
     population: &Population,
     start: Pos,
 ) -> Result<RouteReport, String> {
+    let venue_potential = RouteFilters {
+        assume_catalogue: true,
+        ..Default::default()
+    };
     let mut proofs = Vec::new();
     for class in [
         RouteClass::Social,
@@ -291,11 +319,22 @@ pub fn prove_base_routes(
             population,
             start,
             class,
-            &RouteFilters::default(),
+            &venue_potential,
         )?);
     }
+    // And this specific run, with what the player actually carries.
+    let loadout_proof = prove_route(
+        data,
+        layout,
+        population,
+        start,
+        RouteClass::Violence,
+        &RouteFilters::default(),
+    )
+    .map_err(|e| format!("loadout cannot complete the mission: {e}"))?;
     Ok(RouteReport {
         proofs,
+        loadout_proof: Some(loadout_proof),
         constraint_proof: None,
     })
 }
@@ -311,12 +350,15 @@ mod tests {
     fn staged(seed: u64) -> (GameData, Layout, Population, Pos) {
         let data = GameData::embedded().unwrap();
         let venue = data.venue("nightclub").unwrap().clone();
+        let config_loadout = vec!["garrote".to_string(), "silenced-pistol".to_string()];
         for attempt in 0..24 {
             let mut rng = Pcg32::new(seed, 0x4d75726d75720000 + attempt);
             let Ok(mut layout) = layout::build_layout(&data, &venue, &mut rng) else {
                 continue;
             };
-            let Ok(population) = populate::populate(&data, &layout, None, &mut rng) else {
+            let Ok(population) =
+                populate::populate(&data, &layout, None, &config_loadout, &mut rng)
+            else {
                 continue;
             };
             let start = population.actors[population.player.0 as usize].pos;

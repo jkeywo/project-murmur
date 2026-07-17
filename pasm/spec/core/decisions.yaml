@@ -377,3 +377,19 @@ entities:
       paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/perception.rs, crates/murmur-core/src/planner.rs]
       symbols: [Constraint, prove_constraint]
       tests: [crates/murmur-core/tests/contracts.rs]
+
+  - decision: equipment-catalogue-composition
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Equipment Catalogue Composition and Loadout Proofs
+      summary: Six purchasable items, two per approach. Physical, lockpicks (a slow pick-lock action that permanently defeats any lock and alarms witnesses via a tampering suspicion gain) and noisemaker charges (thrown at a visible tile to pull guards and staff into investigating). Social, a forged staff pass (staff-tier legitimacy while carried, whatever is worn) and a counterfeit invitation (secure-tier access via the existing invitation rules). Violence, the silenced pistol and the garrote, both now loadout gear rather than default kit, and the garrote command requires carrying one. Equipment only enters a mission through the loadout (at most three items); purchasable items never generate into venues. The planner's three base proofs assume the full catalogue (they describe venue potential), while a separate loadout proof and the constraint proof use the actual carried kit, so a weaponless loadout fails generation until opportunity machines add in-venue kill routes.
+      rationale:
+        - Two concrete choices per approach satisfies the campaign-state requirement without cosmetic filler, every item changes what routes exist.
+        - Splitting venue-potential proofs from actual-loadout proofs keeps the venue guarantee (all three postures supported) independent of what the player happens to own.
+      references: [milestone-2-campaign-state, monotone-capability-closure-planner, equipment-buy-once-own-forever]
+    implementation:
+      status: declared
+      paths: [data/equipment.ron, data/items.ron, crates/murmur-core/src/data.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/access.rs, crates/murmur-core/src/planner.rs]
+      symbols: [EquipmentSpec, Approach]
+      tests: [crates/murmur-core/tests/equipment.rs]

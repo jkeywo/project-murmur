@@ -44,14 +44,16 @@ pub(crate) enum AccessModel<'a> {
     /// Physical connectivity: locks and zones ignored.
     Free,
     /// Trespass allowed, locks respected: the physical-stealth and
-    /// violence route model.
-    LocksOnly { keys: &'a [String] },
+    /// violence route model. Lockpicks defeat any lock.
+    LocksOnly { keys: &'a [String], lockpicks: bool },
     /// Full legitimacy: zones by disguise, locks by key, invitation for
-    /// the secure tier. The social route model.
+    /// the secure tier, forged pass for the staff tier. The social route
+    /// model (picking locks in view is never legitimate).
     Legitimate {
         disguises: &'a [String],
         keys: &'a [String],
         invitation: bool,
+        staff_pass: bool,
     },
 }
 
@@ -130,11 +132,12 @@ pub(crate) fn reachable_tiles(
     let permits = |pos: Pos| -> bool {
         match access {
             AccessModel::Free => true,
-            AccessModel::LocksOnly { keys } => lock_permits(pos, keys),
+            AccessModel::LocksOnly { keys, lockpicks } => lockpicks || lock_permits(pos, keys),
             AccessModel::Legitimate {
                 disguises,
                 keys,
                 invitation,
+                staff_pass,
             } => {
                 if !lock_permits(pos, keys) {
                     return false;
@@ -148,15 +151,16 @@ pub(crate) fn reachable_tiles(
                 else {
                     return true;
                 };
-                disguises.iter().any(|d| {
-                    data.disguise(d).is_some_and(|spec| {
-                        spec.zones.contains(&room.zone)
-                            || spec.extra_rooms.contains(&room.template)
-                            || (invitation
-                                && spec.secure_with_invitation
-                                && room.zone == crate::data::Zone::Secure)
+                (staff_pass && room.zone == crate::data::Zone::Staff)
+                    || disguises.iter().any(|d| {
+                        data.disguise(d).is_some_and(|spec| {
+                            spec.zones.contains(&room.zone)
+                                || spec.extra_rooms.contains(&room.template)
+                                || (invitation
+                                    && spec.secure_with_invitation
+                                    && room.zone == crate::data::Zone::Secure)
+                        })
                     })
-                })
             }
         }
     };
@@ -242,20 +246,41 @@ pub(crate) fn capability_closure(
     population: &Population,
     start: Pos,
     zone_free: bool,
+    assume_catalogue: bool,
 ) -> ClosureOutcome {
     let mut disguises: Vec<String> = vec!["civilian".to_string()];
     let mut keys: Vec<String> = Vec::new();
     let mut invitation = false;
     let mut events: Vec<String> = Vec::new();
 
+    // Loadout capabilities the player walks in with.
+    let player_kit = |flag: fn(&crate::data::ItemSpec) -> bool| {
+        population.items.iter().any(|item| {
+            item.location == ItemLocation::CarriedBy(population.player)
+                && data.item(&item.spec).is_some_and(flag)
+        })
+    };
+    let catalogue_kit = |flag: fn(&crate::data::ItemSpec) -> bool| {
+        assume_catalogue && data.items.iter().any(|s| s.purchasable && flag(s))
+    };
+    let lockpicks = player_kit(|s| s.lockpick) || catalogue_kit(|s| s.lockpick);
+    let staff_pass = player_kit(|s| s.staff_pass) || catalogue_kit(|s| s.staff_pass);
+    if player_kit(|s| s.invitation) || catalogue_kit(|s| s.invitation) {
+        invitation = true;
+    }
+
     loop {
         let access = if zone_free {
-            AccessModel::LocksOnly { keys: &keys }
+            AccessModel::LocksOnly {
+                keys: &keys,
+                lockpicks,
+            }
         } else {
             AccessModel::Legitimate {
                 disguises: &disguises,
                 keys: &keys,
                 invitation,
+                staff_pass,
             }
         };
         let seen = reachable_tiles(data, layout, start, access);
@@ -353,7 +378,7 @@ pub fn prove_progression(
     let mut wardrobes_added: Vec<(String, String)> = Vec::new();
 
     for _attempt in 0..=data.disguises.len() {
-        let outcome = capability_closure(data, layout, population, start, false);
+        let outcome = capability_closure(data, layout, population, start, false, false);
         let (disguises, keys, seen) = (outcome.disguises, outcome.keys, outcome.seen);
 
         let unreachable: Vec<&Room> = layout
