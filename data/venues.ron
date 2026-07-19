@@ -103,4 +103,101 @@
             ],
         )),
     ),
+    (
+        id: "embassy-villa",
+        floor_width: 58,
+        floor_height: 30,
+        floor_count: 2,
+        room_templates: [
+            "entrance",
+            "reception",
+            "bar",
+            "vip-lounge",
+            "kitchen",
+            "break-room",
+            "manager-office",
+        ],
+        role_counts: [
+            (role: Guard, count_min: 7, count_max: 9),
+            (role: Civilian, count_min: 8, count_max: 11),
+        ],
+        // Onion: one child per level, so every tier's corridor lies
+        // between you and the next one in.
+        form: Districts((
+            zone: Public,
+            rooms: ["entrance", "reception", "bar"],
+            children: [
+                (
+                    zone: Secure,
+                    rooms: ["vip-lounge"],
+                    children: [
+                        (
+                            zone: Staff,
+                            rooms: ["kitchen", "break-room"],
+                            children: [
+                                (
+                                    zone: Personal,
+                                    rooms: ["manager-office"],
+                                    own_storey: true,
+                                    locked_by: Some("office-key"),
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        )),
+    ),
+    (
+        id: "port-authority",
+        floor_width: 52,
+        floor_height: 30,
+        floor_count: 3,
+        room_templates: [
+            "entrance",
+            "dispatch-office",
+            "loading-bay",
+            "storage-floor",
+            "dock",
+            "break-room",
+            "foreman-office",
+            "security-office",
+        ],
+        role_counts: [
+            (role: Guard, count_min: 8, count_max: 10),
+            (role: Civilian, count_min: 6, count_max: 9),
+        ],
+        // Archipelago: siblings that are themselves chains, so one
+        // public plaza serves two self-contained fortresses.
+        form: Districts((
+            zone: Public,
+            rooms: ["entrance", "dispatch-office"],
+            children: [
+                (
+                    zone: Staff,
+                    rooms: ["loading-bay", "storage-floor"],
+                    children: [
+                        (
+                            zone: Personal,
+                            rooms: ["foreman-office"],
+                            locked_by: Some("foreman-key"),
+                        ),
+                    ],
+                ),
+                (
+                    zone: Staff,
+                    rooms: ["dock", "break-room"],
+                    own_storey: true,
+                    children: [
+                        (
+                            zone: Personal,
+                            rooms: ["security-office"],
+                            own_storey: true,
+                            locked_by: Some("security-key"),
+                        ),
+                    ],
+                ),
+            ],
+        )),
+    ),
 ]

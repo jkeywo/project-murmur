@@ -295,94 +295,177 @@ mod tests {
         }
     }
 
-    /// The security gradient must read outward-to-inward in the geometry,
-    /// not merely in the recipe: the shallowest way into a deeper tier is
-    /// never shorter, in doors crossed from the player's start, than the
-    /// shallowest way into a shallower one. This is the property that makes
-    /// a venue feel layered, and it is a property of the finished building,
-    /// so it holds whatever form realised it.
-    #[test]
-    fn tiers_get_no_closer_to_the_street_as_they_get_deeper() {
-        use crate::data::Zone;
+    /// Cost, in doors crossed, of reaching each tile from the player's
+    /// start. Everything but a door is free, so the number counts the
+    /// thresholds between the street and a place — which is what "deeper
+    /// into the building" means to a player.
+    fn doors_from_spawn(world: &World) -> std::collections::HashMap<crate::geom::Pos, u32> {
         use crate::geom::{Dir4, Pos};
         use std::collections::VecDeque;
 
+        let start = world.actors[world.player.0 as usize].pos;
+        let mut cost: std::collections::HashMap<Pos, u32> = std::collections::HashMap::new();
+        let mut queue: VecDeque<Pos> = VecDeque::new();
+        cost.insert(start, 0);
+        queue.push_back(start);
+        while let Some(pos) = queue.pop_front() {
+            let here = cost[&pos];
+            let mut visit = |next: Pos, step: u32, queue: &mut VecDeque<Pos>| {
+                if cost.get(&next).copied().is_none_or(|c| c > here + step) {
+                    cost.insert(next, here + step);
+                    if step == 0 {
+                        queue.push_front(next);
+                    } else {
+                        queue.push_back(next);
+                    }
+                }
+            };
+            for dir in Dir4::ALL {
+                let next = pos.step(dir);
+                match world.map.tile(next) {
+                    TileKind::Floor => visit(next, 0, &mut queue),
+                    TileKind::Stairs(_) => {
+                        visit(next, 0, &mut queue);
+                        let across = world.map.resolve_step_destination(next);
+                        if across != next {
+                            visit(across, 0, &mut queue);
+                        }
+                    }
+                    TileKind::Door(_) => visit(next, 1, &mut queue),
+                    TileKind::Wall | TileKind::Void => {}
+                }
+            }
+        }
+        cost
+    }
+
+    /// The shallowest way into any room of one tier.
+    fn cheapest_into_tier(
+        world: &World,
+        cost: &std::collections::HashMap<crate::geom::Pos, u32>,
+        tier: u8,
+    ) -> Option<u32> {
+        use crate::geom::Pos;
+        let mut best: Option<u32> = None;
+        for room in world.rooms.iter().filter(|r| r.zone.depth() == tier) {
+            let b = room.bounds;
+            for y in b.y..b.y + b.h {
+                for x in b.x..b.x + b.w {
+                    if let Some(c) = cost.get(&Pos::new(room.floor, x, y)) {
+                        best = Some(best.map_or(*c, |k: u32| k.min(*c)));
+                    }
+                }
+            }
+        }
+        best
+    }
+
+    /// The security gradient must read outward-to-inward in the geometry,
+    /// not merely in the recipe: the shallowest way into a deeper tier is
+    /// never shorter than the shallowest way into a shallower one. This is
+    /// what makes a venue feel layered, and it is a property of the
+    /// finished building, so it holds whatever form realised it.
+    #[test]
+    fn tiers_get_no_closer_to_the_street_as_they_get_deeper() {
         let data = data();
         for venue in venues(&data) {
             let venue = venue.as_str();
             for seed in 0..40u64 {
                 let world =
                     generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
-                let start = world.actors[world.player.0 as usize].pos;
-
-                // 0-1 BFS: crossing a door costs one, everything else free.
-                let mut cost: std::collections::HashMap<Pos, u32> =
-                    std::collections::HashMap::new();
-                let mut queue: VecDeque<Pos> = VecDeque::new();
-                cost.insert(start, 0);
-                queue.push_back(start);
-                while let Some(pos) = queue.pop_front() {
-                    let here = cost[&pos];
-                    let mut visit = |next: Pos, step: u32, queue: &mut VecDeque<Pos>| {
-                        let entry = cost.get(&next).copied();
-                        if entry.is_none_or(|c| c > here + step) {
-                            cost.insert(next, here + step);
-                            if step == 0 {
-                                queue.push_front(next);
-                            } else {
-                                queue.push_back(next);
-                            }
-                        }
+                let cost = doors_from_spawn(&world);
+                let mut outer = 0u32;
+                for tier in 0..3u8 {
+                    let Some(c) = cheapest_into_tier(&world, &cost, tier) else {
+                        continue;
                     };
-                    for dir in Dir4::ALL {
-                        let next = pos.step(dir);
-                        match world.map.tile(next) {
-                            TileKind::Floor => visit(next, 0, &mut queue),
-                            TileKind::Stairs(_) => {
-                                visit(next, 0, &mut queue);
-                                let across = world.map.resolve_step_destination(next);
-                                if across != next {
-                                    visit(across, 0, &mut queue);
-                                }
-                            }
-                            TileKind::Door(_) => visit(next, 1, &mut queue),
-                            TileKind::Wall | TileKind::Void => {}
-                        }
-                    }
-                }
-
-                // Cheapest way into each tier.
-                let mut cheapest: [Option<u32>; 3] = [None; 3];
-                for room in &world.rooms {
-                    let tier = usize::from(room.zone.depth());
-                    let b = room.bounds;
-                    for y in b.y..b.y + b.h {
-                        for x in b.x..b.x + b.w {
-                            if let Some(c) = cost.get(&Pos::new(room.floor, x, y)) {
-                                cheapest[tier] =
-                                    Some(cheapest[tier].map_or(*c, |best: u32| best.min(*c)));
-                            }
-                        }
-                    }
-                }
-
-                let label = |t: usize| match t {
-                    0 => Zone::Public.name(),
-                    1 => "secure/staff",
-                    _ => Zone::Personal.name(),
-                };
-                let mut deepest_so_far = 0u32;
-                for (tier, entry) in cheapest.iter().enumerate() {
-                    let Some(c) = *entry else { continue };
                     assert!(
-                        c >= deepest_so_far,
-                        "{venue} seed {seed}: {} is {c} doors from the street but the tier \
-                         outside it is {deepest_so_far} — the gradient runs backwards",
-                        label(tier),
+                        c >= outer,
+                        "{venue} seed {seed}: tier {tier} is {c} doors from the street but                          the tier outside it is {outer} — the gradient runs backwards"
                     );
-                    deepest_so_far = c;
+                    outer = c;
                 }
             }
+        }
+    }
+
+    /// An onion is a chain of districts, so each tier sits strictly
+    /// further from the street than the one wrapping it — not merely no
+    /// closer, as the catalogue-wide invariant allows for branching forms.
+    #[test]
+    fn the_onion_venue_nests_every_tier_strictly() {
+        let data = data();
+        for seed in 0..20u64 {
+            let world = generate(
+                &data,
+                &crate::contract::MissionConfig::new(seed, "embassy-villa"),
+            )
+            .unwrap();
+            let cost = doors_from_spawn(&world);
+            let mut previous: Option<u32> = None;
+            for tier in 0..3u8 {
+                let Some(c) = cheapest_into_tier(&world, &cost, tier) else {
+                    continue;
+                };
+                if let Some(p) = previous {
+                    assert!(
+                        c > p,
+                        "seed {seed}: tier {tier} is {c} doors in, the tier around it {p} —                          an onion must wrap, not branch"
+                    );
+                }
+                previous = Some(c);
+            }
+        }
+    }
+
+    /// An archipelago's fortresses are independent: each is sealed by its
+    /// own key, so taking one does not open the other.
+    #[test]
+    fn the_archipelago_venue_locks_each_fortress_separately() {
+        let data = data();
+        for seed in 0..20u64 {
+            let world = generate(
+                &data,
+                &crate::contract::MissionConfig::new(seed, "port-authority"),
+            )
+            .unwrap();
+            let mut keys: Vec<String> = Vec::new();
+            for room in &world.rooms {
+                for door in &room.doors {
+                    if let Some(key) = &world.doors[door.0 as usize].locked_by
+                        && !keys.contains(key)
+                    {
+                        keys.push(key.clone());
+                    }
+                }
+            }
+            assert!(
+                keys.len() >= 2,
+                "seed {seed}: the fortresses share a single key {keys:?}"
+            );
+        }
+    }
+
+    /// Generation retries are a safety net, not the mechanism. A recipe
+    /// that routinely needs several attempts is over-constrained, and this
+    /// is the early warning — it fails long before the 24-attempt ceiling
+    /// turns into an outright generation failure.
+    #[test]
+    fn every_venue_generates_on_the_first_attempt_almost_always() {
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            let mut retried = 0;
+            for seed in 0..40u64 {
+                let config = crate::contract::MissionConfig::new(seed, venue);
+                if try_generate(&data, &config, 0).is_err() {
+                    retried += 1;
+                }
+            }
+            assert!(
+                retried <= 3,
+                "{venue}: {retried} of 40 seeds failed their first attempt — the recipe                  is too tight for its footprint"
+            );
         }
     }
 
