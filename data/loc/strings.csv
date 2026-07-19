@@ -621,3 +621,8 @@ venue.port-authority.zone.staff,What the port calls its staff tier.,[the working
 venue.port-authority.zone.secure,What the port calls its secure tier.,[the bonded store]
 venue.port-authority.zone.personal,What the port calls its personal tier.,[the harbourmaster's offices]
 venue.port-authority.invitation,What the port calls its secure-tier invitation.,[a dock worker's chit]
+log.paged,"The paging desk summoned the target away to a private call. {name} is the target.",[the page goes out; {name} excuses themselves]
+fail.nothing_happens,An interaction that had no effect at all.,[nothing comes of it]
+opportunity.paging-desk.name,Name of the paging desk machine.,[paging desk]
+opportunity.paging-desk.risk,What using the paging desk risks.,[staff will remember who made the call]
+opportunity.paging-desk.presentation,How the paging desk appears on discovery.,[a house telephone with a staff directory beside it]

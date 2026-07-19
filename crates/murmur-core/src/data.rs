@@ -345,6 +345,9 @@ pub enum OpportunityEffect {
     PlaceKey { item: ItemSpecId },
     /// Triggers an evacuation: civilians and staff flee, guards respond.
     Evacuate,
+    /// Pages the target to the beat carrying `tag`, bringing a private
+    /// window forward instead of making the player wait for one.
+    SummonTarget { tag: String },
 }
 
 /// One authored opportunity machine.
@@ -944,14 +947,17 @@ impl GameData {
                     .filter(|o| o.approach == a)
                     .count()
             };
-            if self.opportunities.len() != 5
-                || count_of(OA::Physical) != 1
-                || count_of(OA::Social) != 1
-                || count_of(OA::Violence) != 1
-                || count_of(OA::Universal) != 2
+            // Every approach must be served, so no route class is left
+            // without a lever. The count itself is not the property worth
+            // asserting — it was five while five were authored, and pinning
+            // the number only made adding the sixth look like a failure.
+            if count_of(OA::Physical) < 1
+                || count_of(OA::Social) < 1
+                || count_of(OA::Violence) < 1
+                || count_of(OA::Universal) < 1
             {
                 errors.push(
-                    "opportunities must be exactly five: one physical, one social, one violence, two universal"
+                    "every opportunity approach needs at least one machine: physical, social, violence, universal"
                         .into(),
                 );
             }

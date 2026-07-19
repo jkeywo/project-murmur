@@ -89,8 +89,31 @@ pub fn place_opportunities(
             OpportunityEffect::AccidentDrop => {
                 // Improves violence and constraint routes: a weapon-free,
                 // deniable kill above a stop the target will visit.
+                //
+                // Escorted stops are preferred, which makes the asymmetry
+                // structural rather than incidental — the accident is the
+                // answer to a target you cannot get near, so it wants to
+                // sit where the detail is, not where the player could have
+                // used a garrote anyway.
+                let escorted: Vec<crate::geom::Pos> = target
+                    .ai
+                    .as_ref()
+                    .and_then(|ai| ai.schedule.as_ref())
+                    .map(|s| {
+                        s.beats
+                            .iter()
+                            .filter(|b| b.protection == crate::world::Protection::Escorted)
+                            .map(|b| b.pos)
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let ordered: Vec<crate::geom::Pos> = escorted
+                    .iter()
+                    .chain(target_stops.iter().filter(|p| !escorted.contains(p)))
+                    .copied()
+                    .collect();
                 let mut spots: Vec<(usize, crate::geom::Pos)> = Vec::new();
-                for stop in &target_stops {
+                for stop in &ordered {
                     if let Some((index, _)) = layout.rooms.iter().enumerate().find(|(_, r)| {
                         spec.zones.contains(&r.zone)
                             && r.floor == stop.floor
@@ -135,12 +158,20 @@ pub fn place_opportunities(
             }
             OpportunityEffect::CutLights
             | OpportunityEffect::PlaceKey { .. }
-            | OpportunityEffect::Evacuate => {
+            | OpportunityEffect::Evacuate
+            | OpportunityEffect::SummonTarget { .. } => {
                 let improves = match &spec.effect {
                     OpportunityEffect::CutLights => true, // checked per floor below
                     OpportunityEffect::PlaceKey { .. } => {
                         layout.doors.iter().any(|d| d.locked_by.is_some())
                     }
+                    // A paging desk that summons a beat this target does
+                    // not have is a lever wired to nothing.
+                    OpportunityEffect::SummonTarget { tag } => target
+                        .ai
+                        .as_ref()
+                        .and_then(|ai| ai.schedule.as_ref())
+                        .is_some_and(|s| s.beats.iter().any(|b| b.tag == *tag)),
                     _ => true,
                 };
                 if !improves {

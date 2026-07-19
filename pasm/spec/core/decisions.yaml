@@ -807,3 +807,31 @@ entities:
       status: declared
       paths: [crates/murmur-core/src/ai.rs]
       tests: [crates/murmur-core/tests/escort.rs]
+
+  - decision: the-player-can-open-the-window
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Player Can Open The Private Window, Not Only Wait For It
+      summary: A paging desk summons the target to a named beat, jumping the schedule forward and remembering where the day was so the cycle resumes rather than restarts. Because the summoned beat is an alone beat with no_follow set, the detail peels off to its posts through the escort rules already written - the summon contains no escort code whatsoever. This is the lever that makes a longer mission better rather than merely longer, because without it the answer to an unattackable target is to stand still until the schedule comes round, and patience becomes the optimal strategy. The desk is placed only when the target's schedule actually carries the tag it names, since a lever wired to nothing is worse than no lever. AccidentDrop placement now prefers escorted beats, which makes the asymmetry structural - the accident wants to sit where the detail is, not where a garrote would have worked anyway.
+      rationale:
+        - Remembering resume_index preserves the cyclic invariant the atemporal planner depends on. Restarting the cycle would silently drop the beats between where the day was and where it jumped to.
+        - The summon reuses no_follow rather than commanding the guards, which is the test of whether the escort rules were general.
+      references: [protection-not-reachability-is-the-difficulty, escort-is-an-assignment-not-a-mood]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/data.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/opportunities.rs, data/opportunities.ron]
+      tests: [crates/murmur-core/tests/escort.rs]
+
+  - decision: opportunity-coverage-not-opportunity-count
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Validate Opportunity Coverage, Not The Number Of Machines
+      summary: Cross-validation asserted exactly five opportunity machines with an exact approach breakdown. That was true while five were authored and it stopped being a property the moment a sixth was wanted - adding the paging desk failed six campaign tests for no reason connected to what the check was protecting. The rule now asserts that every approach has at least one machine, so no route class is left without a lever, and says nothing about the total.
+      rationale:
+        - Pinning a count in a milestone-scoped check turns the next authored machine into a spurious failure, which trains the reader to edit the assertion rather than to think about it.
+      references: [the-player-can-open-the-window]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/data.rs]

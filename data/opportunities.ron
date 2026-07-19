@@ -47,4 +47,12 @@
         zones: [Public, Staff],
         interact_turns: 1,
     ),
+    (
+        id: "paging-desk",
+        glyph: 'P',
+        approach: Social,
+        effect: SummonTarget(tag: "private-0"),
+        zones: [Staff],
+        interact_turns: 2,
+    ),
 ]

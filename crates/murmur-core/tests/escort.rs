@@ -404,3 +404,101 @@ fn a_panicking_principal_is_evacuated_inward_not_outward() {
         "the detail puts the principal behind an access tier: {before:?} -> {after:?},          ending in {zone:?}"
     );
 }
+
+/// The paging desk is the answer to "the target is unattackable in
+/// public" being *act* rather than *wait*. It jumps the schedule to a
+/// tagged private beat; because that beat is an alone beat with no_follow
+/// set, the detail peels off to its posts through the rules already
+/// written, with no escort code involved in the summon at all.
+#[test]
+fn paging_the_target_opens_the_private_window_early() {
+    let data = data();
+    let mut found = false;
+    for seed in 0..30u64 {
+        let mut world = world(seed, "nightclub");
+        let Some(desk) = world
+            .furniture
+            .iter()
+            .find(|f| {
+                f.machine
+                    .as_deref()
+                    .and_then(|m| data.opportunity(m))
+                    .is_some_and(|s| {
+                        matches!(
+                            s.effect,
+                            murmur_core::data::OpportunityEffect::SummonTarget { .. }
+                        )
+                    })
+            })
+            .map(|f| f.id)
+        else {
+            continue;
+        };
+        found = true;
+
+        // Put the target on a public beat, so the summon has somewhere to
+        // jump *from*.
+        let schedule = world
+            .actor(world.target)
+            .ai
+            .as_ref()
+            .unwrap()
+            .schedule
+            .clone()
+            .unwrap();
+        let public = schedule
+            .beats
+            .iter()
+            .position(|b| b.protection == Protection::Escorted)
+            .expect("the target is escorted somewhere");
+        {
+            let target = world.target;
+            let ai = world.actor_mut(target).ai.as_mut().unwrap();
+            ai.schedule.as_mut().unwrap().index = public;
+            ai.routine_index = public;
+        }
+
+        let machine_pos = world.furniture.iter().find(|f| f.id == desk).unwrap().pos;
+        let stand = Dir4::ALL
+            .into_iter()
+            .map(|d| machine_pos.step(d))
+            .find(|p| {
+                matches!(world.map.tile(*p), murmur_core::map::TileKind::Floor)
+                    && world.standing_actor_at(*p).is_none()
+                    && world.furniture_at(*p).is_none()
+            })
+            .expect("the desk is reachable");
+        let player = world.player;
+        world.actor_mut(player).pos = stand;
+
+        let mut driver = TurnDriver::new(world, &data);
+        driver.submit(&data, &Command::Interact(desk)).unwrap();
+        while driver.player_busy() {
+            driver.continue_busy(&data);
+        }
+
+        let ai = driver
+            .world()
+            .actor(driver.world().target)
+            .ai
+            .as_ref()
+            .unwrap();
+        let schedule = ai.schedule.as_ref().unwrap();
+        assert_eq!(
+            schedule.current().map(|b| b.protection),
+            Some(Protection::Alone),
+            "seed {seed}: paging must put the target on a private beat"
+        );
+        assert!(
+            schedule.current().is_some_and(|b| b.no_follow),
+            "seed {seed}: the summoned beat is one the detail does not follow into"
+        );
+        assert_eq!(
+            schedule.resume_index,
+            Some(public),
+            "seed {seed}: the day resumes where it left off — the cycle must not restart"
+        );
+        break;
+    }
+    assert!(found, "no seed placed a paging desk");
+}

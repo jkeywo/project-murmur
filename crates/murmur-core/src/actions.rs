@@ -1498,6 +1498,44 @@ fn resolve_interact(
                 .messages
                 .push(crate::tr!("log.fire_alarm").to_string());
         }
+        crate::data::OpportunityEffect::SummonTarget { tag } => {
+            // Page the target to a named beat. Because that beat is an
+            // alone beat with no_follow set, the detail peels off to its
+            // posts by the rules already written — there is no escort code
+            // here at all. This is the answer to a target that is
+            // unattackable in public being *act*, rather than *wait*.
+            let target = world.target;
+            let jumped = {
+                let Some(ai) = world.actor_mut(target).ai.as_mut() else {
+                    fail(world, events, actor, crate::tr!("fail.nothing_happens"));
+                    return;
+                };
+                let Some(schedule) = ai.schedule.as_mut() else {
+                    fail(world, events, actor, crate::tr!("fail.nothing_happens"));
+                    return;
+                };
+                match schedule.beats.iter().position(|b| b.tag == *tag) {
+                    Some(index) if index != schedule.index => {
+                        // Remember where the day was, so the cycle resumes
+                        // rather than restarting: the schedule guarantee
+                        // rests on every sequential beat still coming round.
+                        schedule.resume_index = Some(schedule.index);
+                        schedule.index = index;
+                        schedule.dwell_remaining = schedule.beats[index].dwell;
+                        ai.routine_index = index;
+                        ai.wait_remaining = 0;
+                        true
+                    }
+                    _ => false,
+                }
+            };
+            if !jumped {
+                fail(world, events, actor, crate::tr!("fail.nothing_happens"));
+                return;
+            }
+            let name = world.actor(target).name.clone();
+            events.messages.push(crate::trf!("log.paged", name = name));
+        }
         crate::data::OpportunityEffect::PlaceKey { item } => {
             if world.carried_items(actor).count() >= INVENTORY_SLOTS {
                 // Same words as the pickpocket refusal today, but a
