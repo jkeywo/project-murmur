@@ -48,14 +48,6 @@ impl Pos {
     pub fn is_adjacent(self, other: Pos) -> bool {
         self.floor == other.floor && (self.x - other.x).abs() + (self.y - other.y).abs() == 1
     }
-
-    /// The direction from `self` towards an orthogonally adjacent `other`.
-    pub fn dir_towards_adjacent(self, other: Pos) -> Option<Dir4> {
-        if !self.is_adjacent(other) {
-            return None;
-        }
-        Dir4::ALL.into_iter().find(|dir| self.step(*dir) == other)
-    }
 }
 
 /// One of the four cardinal directions.
@@ -204,15 +196,6 @@ mod tests {
         assert!(!p(3, 3).is_adjacent(p(4, 4)));
         assert!(!p(3, 3).is_adjacent(p(3, 3)));
         assert!(!Pos::new(0, 3, 3).is_adjacent(Pos::new(1, 3, 4)));
-    }
-
-    #[test]
-    fn step_and_dir_towards_adjacent_agree() {
-        for dir in Dir4::ALL {
-            let from = p(5, 5);
-            let to = from.step(dir);
-            assert_eq!(from.dir_towards_adjacent(to), Some(dir));
-        }
     }
 
     #[test]

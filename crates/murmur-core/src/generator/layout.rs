@@ -1,16 +1,15 @@
-//! Graph realisation: banded shelves on a two-corridor circulation loop.
+//! Layout finishing: the shared tail of venue realisation.
 //!
-//! The grammar (see [`super::grammar`]) decides the whole room graph
-//! first; this module only carves what the graph guarantees. Each storey
-//! is realised as: outer wall, staff-tier service corridor along the
-//! back, the service shelf of rooms, the public main corridor through
-//! the middle, the main shelf of rooms, outer wall. Stub passages at the
-//! west and east ends join the two corridors into a loop, stairs sit at
-//! both dead ends of the main corridor, and the ground-floor service
-//! corridor ends in a fire exit — a staff-space extraction path beside
-//! the public entrance and the loading bay.
+//! The district engine (see [`super::district`]) carves the map, doors,
+//! and room records; this module turns that carved shell into a playable
+//! layout — routine waypoints, extraction tiles ordered public-first so
+//! the player spawns at the front door, and furniture placed so every
+//! room keeps its doors, waypoints, and exits mutually reachable. It
+//! also owns the shared placement rule (`find_free_spot`,
+//! `insert_wardrobe`) the proof and opportunity phases use when they
+//! patch furniture in after the fact.
 
-use crate::data::{GameData, Lighting, RoomTemplate, WaypointKind};
+use crate::data::{GameData, RoomTemplate, WaypointKind};
 use crate::geom::Pos;
 use crate::map::{DoorState, GameMap, TileKind};
 use crate::rng::Pcg32;
@@ -23,16 +22,14 @@ pub struct Layout {
     pub rooms: Vec<Room>,
     pub furniture: Vec<Furniture>,
     pub extraction_tiles: Vec<Pos>,
-    pub stairs: Vec<Pos>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutError(pub String);
 
-/// First corridor row of the main spine. Two tiles tall so passing
-/// The shared tail of every realiser: waypoints, extraction tiles, and
-/// furniture. Form-agnostic — it reads only the finished rooms and map,
-/// so any topology can hand off to it.
+/// The form-agnostic tail of realisation: waypoints, extraction tiles,
+/// and furniture. It reads only the finished rooms and map, so it does
+/// not care what carved them.
 pub(crate) fn finish_layout(
     data: &GameData,
     map: GameMap,
@@ -68,14 +65,12 @@ pub(crate) fn finish_layout(
         place_furniture(template, room, &map, &extraction_tiles, &mut furniture, rng);
     }
 
-    let stairs = map.stair_links().iter().map(|link| link.a).collect();
     Ok(Layout {
         map,
         doors,
         rooms,
         furniture,
         extraction_tiles,
-        stairs,
     })
 }
 
@@ -334,15 +329,6 @@ pub fn insert_wardrobe(
         }
     }
     false
-}
-
-/// Lighting of the room containing `pos`, defaulting to bright corridors.
-pub fn lighting_at(rooms: &[Room], pos: Pos) -> Lighting {
-    rooms
-        .iter()
-        .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
-        .map(|r| r.lighting)
-        .unwrap_or(Lighting::Bright)
 }
 
 /// All waypoints of the given kinds in the given rooms.

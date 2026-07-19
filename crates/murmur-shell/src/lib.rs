@@ -304,7 +304,7 @@ impl Shell {
                 // shell carries out the answer.
                 mission.handle_input(&self.data, input);
                 if mission.take_confirmed() == Some(mission::ConfirmAction::AbandonRun) {
-                    self.finish_mission(None);
+                    self.finish_mission();
                 }
             }
             Screen::Debrief { .. } => {
@@ -452,9 +452,8 @@ impl Shell {
     }
 
     /// Resolves the finished (or abandoned) mission into the campaign
-    /// and shows the debrief. `outcome` is `None` for an abandoned run.
-    fn finish_mission(&mut self, forced_outcome: Option<()>) {
-        let _ = forced_outcome;
+    /// and shows the debrief.
+    fn finish_mission(&mut self) {
         let Screen::Playing {
             mission,
             offer,
@@ -500,7 +499,7 @@ impl Shell {
         if let Screen::Playing { mission, .. } = &mut self.screen {
             mission.tick(&self.data);
             if mission.world().outcome.is_some() {
-                self.finish_mission(None);
+                self.finish_mission();
             }
         }
     }

@@ -416,13 +416,8 @@ pub struct RoomTemplate {
     pub external_exit: bool,
     /// Item id of the key that locks this room's doors, if locked.
     pub locked_by: Option<ItemSpecId>,
-    /// Whether this room gets a service connection (a door onto the
-    /// service corridor) when the graph grammar places it on the service
-    /// side of a storey.
-    #[serde(default)]
-    pub service_access: bool,
-    /// Circulation templates (service corridors) are realised
-    /// structurally by the grammar, not packed as rooms.
+    /// Marks circulation space rather than a destination room; such
+    /// templates are excluded when contract text names extraction exits.
     #[serde(default)]
     pub circulation: bool,
 }

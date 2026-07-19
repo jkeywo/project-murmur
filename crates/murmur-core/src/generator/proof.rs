@@ -21,7 +21,7 @@ use crate::data::GameData;
 use crate::geom::{Dir4, Pos};
 use crate::map::TileKind;
 use crate::rng::Pcg32;
-use crate::world::{Actor, FurnitureKind, ItemInstance, ItemLocation, Room};
+use crate::world::{Actor, FurnitureKind, ItemLocation, Room};
 
 use super::layout::{Layout, insert_wardrobe};
 use super::populate::Population;
@@ -499,9 +499,4 @@ pub fn prove_progression(
     Err(ProofError(
         "wardrobe patching failed to converge".to_string(),
     ))
-}
-
-/// Convenience for tests: the items a population holds, by spec id.
-pub fn item_spec_ids(items: &[ItemInstance]) -> Vec<&str> {
-    items.iter().map(|i| i.spec.as_str()).collect()
 }

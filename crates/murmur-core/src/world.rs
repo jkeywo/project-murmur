@@ -179,14 +179,6 @@ impl Mood {
     }
 }
 
-impl Mood {
-    /// Whether this mood prepares an action every turn rather than on the
-    /// relaxed cadence.
-    pub fn acts_every_turn(self) -> bool {
-        !matches!(self, Mood::Relaxed)
-    }
-}
-
 /// One step of a generated routine: go somewhere, then linger.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RoutineStep {
