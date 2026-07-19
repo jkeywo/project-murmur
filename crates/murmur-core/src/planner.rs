@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::data::GameData;
 use crate::generator::layout::Layout;
 use crate::generator::populate::Population;
-use crate::generator::proof::{capability_closure, schedule_positions};
+use crate::generator::proof::{capability_closure, schedule_positions, vulnerable_positions};
 use crate::geom::Pos;
 use crate::world::ItemLocation;
 
@@ -164,10 +164,14 @@ pub fn prove_route(
     // kills without one.
     let target = &population.actors[population.target.0 as usize];
     let stops = schedule_positions(target);
+    // A weapon needs the target alone; an accident does not, which is why
+    // the two proofs read different position sets. This is the whole
+    // mechanical asymmetry of the milestone, expressed in two lines.
+    let vulnerable = vulnerable_positions(target);
     let weapon_kill = if usable.is_empty() {
         None
     } else {
-        stops
+        vulnerable
             .iter()
             .filter(|pos| outcome.seen.contains(**pos))
             .find_map(|pos| {

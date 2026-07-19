@@ -12,6 +12,7 @@ pub mod layout;
 pub mod opportunities;
 pub mod populate;
 pub mod proof;
+pub mod schedule;
 
 use crate::contract::MissionConfig;
 use crate::data::GameData;
@@ -455,16 +456,151 @@ mod tests {
         for venue in venues(&data) {
             let venue = venue.as_str();
             let mut retried = 0;
+            let mut reasons: Vec<String> = Vec::new();
             for seed in 0..40u64 {
                 let config = crate::contract::MissionConfig::new(seed, venue);
-                if try_generate(&data, &config, 0).is_err() {
+                if let Err(why) = try_generate(&data, &config, 0) {
                     retried += 1;
+                    reasons.push(why);
                 }
             }
             assert!(
                 retried <= 3,
-                "{venue}: {retried} of 40 seeds failed their first attempt — the recipe                  is too tight for its footprint"
+                "{venue}: {retried} of 40 seeds failed their first attempt — the recipe                  is too tight for its footprint: {reasons:?}"
             );
+        }
+    }
+
+    /// The mission's whole difficulty rests on this: if the target is
+    /// never alone somewhere the player can eventually stand, no weapon
+    /// route exists and the mission is only winnable by accident. The
+    /// route planner cannot catch it — reachability says nothing about
+    /// protection — so generation must.
+    #[test]
+    fn every_target_is_alone_somewhere_reachable() {
+        use crate::generator::proof::vulnerable_positions;
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..20u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let target = world.actor(world.target);
+                let schedule = target
+                    .ai
+                    .as_ref()
+                    .and_then(|ai| ai.schedule.as_ref())
+                    .unwrap_or_else(|| panic!("{venue} seed {seed}: the target has no schedule"));
+                assert!(
+                    schedule.alone_beats().count() >= 1,
+                    "{venue} seed {seed}: the target is never alone"
+                );
+                // Vulnerable positions are spawn plus the alone beats, and
+                // they must be somewhere the player can get to.
+                let cost = doors_from_spawn(&world);
+                assert!(
+                    vulnerable_positions(target)
+                        .iter()
+                        .any(|p| cost.contains_key(p)),
+                    "{venue} seed {seed}: every alone beat is unreachable"
+                );
+            }
+        }
+    }
+
+    /// Beats and the routine are index-aligned by construction. Systems
+    /// that predate beats read the routine and systems that care about
+    /// protection read the beats; if the two drift they disagree about
+    /// where the target is, and nothing would say so.
+    #[test]
+    fn the_targets_beats_and_routine_stay_aligned() {
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..20u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let ai = world.actor(world.target).ai.as_ref().unwrap();
+                let schedule = ai.schedule.as_ref().unwrap();
+                crate::generator::schedule::assert_aligned(schedule, &ai.routine)
+                    .unwrap_or_else(|e| panic!("{venue} seed {seed}: {}", e.0));
+            }
+        }
+    }
+
+    /// Every beat generated is sequential, so the cycle recurs forever and
+    /// a reachable alone beat is one that eventually arrives. An interrupt
+    /// beat may be added later, but it must never replace a cycle beat —
+    /// that is what would break the atemporal planner's guarantee.
+    #[test]
+    fn schedules_are_cyclic() {
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..20u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let ai = world.actor(world.target).ai.as_ref().unwrap();
+                let schedule = ai.schedule.as_ref().unwrap();
+                assert!(
+                    schedule
+                        .beats
+                        .iter()
+                        .any(|b| b.trigger == crate::world::BeatTrigger::Sequential),
+                    "{venue} seed {seed}: a schedule of pure interrupts never recurs"
+                );
+                assert!(
+                    schedule.beats.iter().all(|b| b.dwell > 0),
+                    "{venue} seed {seed}: a zero dwell is a beat the player can never catch"
+                );
+            }
+        }
+    }
+
+    /// The mechanical asymmetry of the milestone, asserted end to end:
+    /// a route that kills with a weapon must name a room the target is
+    /// *alone* in, because a bodyguard ring denies the adjacency a garrote
+    /// needs and a bullet finds a guard first. Accidents are exempt — a
+    /// crate falls on an escorted target just as well, which is what makes
+    /// them the answer to a target you cannot get near.
+    #[test]
+    fn weapon_routes_kill_where_the_target_is_alone() {
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..20u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let schedule = world
+                    .actor(world.target)
+                    .ai
+                    .as_ref()
+                    .and_then(|ai| ai.schedule.as_ref())
+                    .unwrap();
+                let alone_rooms: Vec<&str> = schedule
+                    .alone_beats()
+                    .filter_map(|b| {
+                        world
+                            .rooms
+                            .iter()
+                            .find(|r| r.floor == b.pos.floor && r.bounds.contains(b.pos.x, b.pos.y))
+                    })
+                    .map(|r| r.name.as_str())
+                    .collect();
+                for proof in &world.routes.proofs {
+                    if proof.steps.iter().any(|s| s.contains("rigged accident"))
+                        || proof.kill_room.contains("rigged")
+                    {
+                        continue;
+                    }
+                    assert!(
+                        alone_rooms.contains(&proof.kill_room.as_str()),
+                        "{venue} seed {seed}: {} route kills in '{}', which is not a room the                          target is ever alone in {alone_rooms:?}",
+                        proof.class.name(),
+                        proof.kill_room
+                    );
+                }
+            }
         }
     }
 

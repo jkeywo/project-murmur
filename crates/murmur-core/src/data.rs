@@ -464,6 +464,15 @@ pub struct PopulationData {
     pub vip_civilians_min: u8,
     pub vip_civilians_max: u8,
     pub target: TargetSpec,
+    /// Turns one full pass of the target's schedule should take. Dwells
+    /// are fitted to hit this budget, so mission length is authored here
+    /// rather than falling out of how far apart rooms landed.
+    pub cycle_turns_min: u16,
+    pub cycle_turns_max: u16,
+    /// How many beats of the cycle the target spends alone — the windows
+    /// a weapon kill needs.
+    pub private_beats_min: u8,
+    pub private_beats_max: u8,
 }
 
 /// Given and family name pools for generated actors. Both come wholly from

@@ -62,8 +62,14 @@
     vip_civilians_max: 3,
     target: (
         glyph: 'T',
-        schedule_min: 4,
-        schedule_max: 6,
+        schedule_min: 6,
+        schedule_max: 8,
         disguise: Some("staff"),
     ),
+    // A cycle of roughly this many turns, plus approach and extraction,
+    // is what puts a mission in the intended band.
+    cycle_turns_min: 130,
+    cycle_turns_max: 190,
+    private_beats_min: 1,
+    private_beats_max: 2,
 )

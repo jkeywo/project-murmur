@@ -176,63 +176,36 @@ pub fn populate(
         let spec = &data.population.target;
         let disguise = spec.disguise.clone().unwrap_or_else(|| "staff".to_string());
         let rooms = rooms_for_disguise(data, layout, &disguise, false);
-        let pool = waypoints_of_kinds(
-            rooms.iter().copied(),
+        let public_stops: Vec<Pos> = waypoints_of_kinds(
+            rooms
+                .iter()
+                .copied()
+                .filter(|r| r.zone == crate::data::Zone::Public),
             &[WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social],
-        );
-        let steps = rng.range_inclusive(spec.schedule_min.into(), spec.schedule_max.into());
-        let mut routine = build_routine(&pool, steps as usize, 6, 14, rng);
+        )
+        .iter()
+        .map(|w| w.pos)
+        .collect();
 
-        // A private-kill contract is incorporated before generation: the
-        // target's schedule must visit personal-tier space.
-        if matches!(constraint, Some(crate::contract::Constraint::PrivateKill)) {
-            let visits_personal = |step: &RoutineStep| {
-                layout.rooms.iter().any(|r| {
-                    r.zone == crate::data::Zone::Personal
-                        && r.floor == step.pos.floor
-                        && r.bounds.contains(step.pos.x, step.pos.y)
-                })
-            };
-            if !routine.iter().any(visits_personal) {
-                // The target may enter its own sealed office - it is the
-                // one person who would hold that key - but an unsealed
-                // personal room is preferred, so the key stays scarce.
-                let kinds = [WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social];
-                let personal = |sealed_ok: bool| {
-                    waypoints_of_kinds(
-                        layout.rooms.iter().filter(|r| {
-                            r.zone == crate::data::Zone::Personal
-                                && (sealed_ok || !is_sealed(layout, r))
-                        }),
-                        &kinds,
-                    )
-                };
-                let mut personal_pool = personal(false);
-                if personal_pool.is_empty() {
-                    personal_pool = personal(true);
-                }
-                if personal_pool.is_empty() {
-                    return Err(PopulateError(
-                        "private-kill contract but no personal-tier waypoints".into(),
-                    ));
-                }
-                let stop = rng.pick(&personal_pool);
-                routine.push(RoutineStep {
-                    pos: stop.pos,
-                    wait: rng.range_inclusive(8, 16) as u16,
-                });
-            }
-        }
+        // The target's day is a cycle of beats: escorted in public, alone
+        // in private. A private-kill contract narrows where the alone beat
+        // may fall, so it is incorporated before generation rather than
+        // checked afterwards.
+        let private_kill = matches!(constraint, Some(crate::contract::Constraint::PrivateKill));
+        let schedule =
+            super::schedule::build_schedule(data, layout, &public_stops, private_kill, rng)
+                .map_err(|e| PopulateError(e.0))?;
+        let routine = super::schedule::routine_for(&schedule);
+        super::schedule::assert_aligned(&schedule, &routine).map_err(|e| PopulateError(e.0))?;
 
-        // Whatever the target's schedule ends up crossing, the target can
-        // open: a person is not locked out of their own office. This is
-        // the only place a key is granted by need rather than by role, and
-        // it makes the target's key worth lifting.
-        for step in &routine {
+        // A person is not locked out of the rooms their own day takes them
+        // through. This is the only key granted by need rather than by
+        // role, and it makes the target's key worth lifting.
+        for beat in &schedule.beats {
             for room in layout
                 .rooms
                 .iter()
-                .filter(|r| r.floor == step.pos.floor && r.bounds.contains(step.pos.x, step.pos.y))
+                .filter(|r| r.floor == beat.pos.floor && r.bounds.contains(beat.pos.x, beat.pos.y))
             {
                 for door in &room.doors {
                     if let Some(key) = &layout.doors[door.0 as usize].locked_by
@@ -274,6 +247,7 @@ pub fn populate(
                 suspicion: 0,
                 focus: None,
                 knows_player_hostile: false,
+                schedule: Some(schedule),
             }),
             hidden_in: None,
             departed: false,
@@ -364,6 +338,7 @@ pub fn populate(
                     suspicion: 0,
                     focus: None,
                     knows_player_hostile: false,
+                    schedule: None,
                 }),
                 hidden_in: None,
                 departed: false,
@@ -421,17 +396,25 @@ pub fn populate(
                     role.name()
                 )));
             }
-            let holder = if target_keys.contains(&item_spec.id) {
-                target_id
-            } else {
-                *rng.pick(&holders)
-            };
             items.push(ItemInstance {
                 id: ItemId(items.len() as u32),
                 spec: item_spec.id.clone(),
-                location: ItemLocation::CarriedBy(holder),
+                location: ItemLocation::CarriedBy(*rng.pick(&holders)),
                 charges: 0,
             });
+            // The target carries its *own copy* of any key its day needs.
+            // It must be a copy: the role's key is the one the player can
+            // plan around, and moving it onto the target would strand it
+            // inside the very room it opens, since the target is only
+            // pickpocketable at an alone beat — which is in that room.
+            if target_keys.contains(&item_spec.id) {
+                items.push(ItemInstance {
+                    id: ItemId(items.len() as u32),
+                    spec: item_spec.id.clone(),
+                    location: ItemLocation::CarriedBy(target_id),
+                    charges: 0,
+                });
+            }
         } else if let Some(room_template) = &item_spec.placed_in {
             let candidates: Vec<Pos> = layout
                 .rooms

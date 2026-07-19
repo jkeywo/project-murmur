@@ -194,6 +194,77 @@ pub struct RoutineStep {
     pub wait: u16,
 }
 
+/// Whether the target is surrounded when it stands here. The whole
+/// difficulty of a mission turns on this: escorted beats are attackable
+/// only by accident, alone beats are where weapons work.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Protection {
+    #[default]
+    Escorted,
+    Alone,
+}
+
+pub type SignalId = String;
+
+/// What advances the schedule onto a beat.
+///
+/// `Sequential` beats are visited every cycle, forever. `OnSignal` beats
+/// are interrupts — strictly additive, never replacing the cycle. That
+/// distinction is load-bearing: the route planner reasons atemporally, so
+/// it may only assume a beat is *eventually* reachable in time if the
+/// cycle guarantees it recurs. A trigger that fires once, or after a
+/// deadline, would collapse that guarantee — which is why there is no
+/// `AfterTurn` variant and must never be one.
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum BeatTrigger {
+    #[default]
+    Sequential,
+    OnSignal(SignalId),
+}
+
+/// One stop on the target's day: where, how long, and how guarded.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Beat {
+    pub pos: Pos,
+    pub dwell: u16,
+    pub protection: Protection,
+    /// Bodyguards hold at the door rather than follow inside.
+    pub no_follow: bool,
+    pub trigger: BeatTrigger,
+    /// Names this beat so an opportunity can summon the target to it.
+    pub tag: String,
+}
+
+/// The target's day, as labelled beats.
+///
+/// `beats` is index-aligned with [`AiState::routine`] — same length, same
+/// positions, same dwells — so everything that already reads the routine
+/// (pathing, briefing facts, reachability proofs) keeps working untouched,
+/// while systems that care about protection read the beat at the same
+/// index. Generation asserts the alignment.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Schedule {
+    pub beats: Vec<Beat>,
+    pub index: usize,
+    pub dwell_remaining: u16,
+    /// Where to resume after an interrupt beat finishes.
+    pub resume_index: Option<usize>,
+}
+
+impl Schedule {
+    /// The beat the target is currently on, if the schedule is non-empty.
+    pub fn current(&self) -> Option<&Beat> {
+        self.beats.get(self.index)
+    }
+
+    /// Every beat where the target stands without its detail.
+    pub fn alone_beats(&self) -> impl Iterator<Item = &Beat> {
+        self.beats
+            .iter()
+            .filter(|b| b.protection == Protection::Alone)
+    }
+}
+
 /// Mutable NPC mind: routine progress, mood, memory, and knowledge.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AiState {
@@ -209,6 +280,10 @@ pub struct AiState {
     pub focus: Option<Pos>,
     /// Whether this NPC has concluded the player is hostile.
     pub knows_player_hostile: bool,
+    /// The target's labelled day. Ordinary NPCs have none and run purely
+    /// off `routine`.
+    #[serde(default)]
+    pub schedule: Option<Schedule>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

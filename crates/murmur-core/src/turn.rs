@@ -256,6 +256,7 @@ fn spawn_reinforcements(world: &mut World, data: &GameData) {
                 suspicion: data.tuning.suspicion_investigate_at,
                 focus,
                 knows_player_hostile: false,
+                schedule: None,
             }),
             hidden_in: None,
             departed: false,
@@ -286,6 +287,38 @@ mod tests {
         (data, driver)
     }
 
+    /// A driver whose NPCs all stand still. These tests time the player's
+    /// own actions, and simultaneous resolution means an NPC walking into
+    /// the tile the player aimed at blocks the step — a real mechanic, but
+    /// not the one under test, and one that turns a cadence assertion into
+    /// a coin flip on the seed. The freeze has to happen before the driver
+    /// is built, because construction primes each NPC's first action.
+    fn frozen_driver(seed: u64) -> (GameData, TurnDriver) {
+        let data = GameData::embedded().unwrap();
+        let mut world = generate(
+            &data,
+            &crate::contract::MissionConfig::new(seed, "nightclub"),
+        )
+        .unwrap();
+        let ids: Vec<crate::world::ActorId> = world
+            .actors
+            .iter()
+            .filter(|a| !a.is_player())
+            .map(|a| a.id)
+            .collect();
+        for id in ids {
+            if let Some(ai) = world.actor_mut(id).ai.as_mut() {
+                ai.routine.clear();
+                ai.schedule = None;
+                ai.mood = crate::world::Mood::Relaxed;
+                ai.suspicion = 0;
+                ai.focus = None;
+            }
+        }
+        let driver = TurnDriver::new(world, &data);
+        (data, driver)
+    }
+
     /// A direction the player can actually walk from spawn.
     fn open_direction(driver: &TurnDriver) -> Dir4 {
         let world = driver.world();
@@ -296,14 +329,17 @@ mod tests {
                 let dest = from.step(*d);
                 matches!(world.map.tile(dest), TileKind::Floor)
                     && world.furniture_at(dest).is_none()
-                    && world.standing_actor_at(dest).is_none()
+                    // Any actor at all, not just a standing one: a body or
+                    // someone hidden still owns the tile as far as movement
+                    // is concerned.
+                    && !world.actors.iter().any(|a| a.pos == dest)
             })
             .expect("spawn has at least one open side")
     }
 
     #[test]
     fn valid_move_advances_exactly_one_turn() {
-        let (data, mut driver) = driver(3);
+        let (data, mut driver) = frozen_driver(3);
         let dir = open_direction(&driver);
         let before = driver.world().player_actor().pos;
         let report = driver.submit(&data, &Command::Move(dir)).unwrap();
@@ -463,13 +499,15 @@ mod tests {
 
     #[test]
     fn carrying_a_body_halves_movement_cadence() {
-        let (data, mut driver) = driver(3);
+        let (data, mut driver) = frozen_driver(3);
         // Kill an adjacent-ish NPC via the world, carry it, and time a step.
         let victim = driver
             .world()
             .actors
             .iter()
-            .filter(|a| !a.is_player())
+            // Never the target: killing it ends the mission, and this test
+            // is about how fast a body can be carried.
+            .filter(|a| !a.is_player() && !a.is_target)
             .min_by_key(|a| {
                 a.pos
                     .chebyshev(driver.world().player_actor().pos)

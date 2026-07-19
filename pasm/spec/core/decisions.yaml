@@ -712,3 +712,36 @@ entities:
       paths: [crates/murmur-core/src/data.rs, crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/mod.rs]
       symbols: [depth, expand]
       tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/generator/district.rs]
+
+  - decision: protection-not-reachability-is-the-difficulty
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Difficulty Lives In Protection, Not In Reachability
+      summary: The target's day is a cycle of beats, each labelled escorted or alone. The route planner reads two different position sets depending on the method - a weapon kill must land on an alone beat, an accident may land anywhere the schedule goes - and that two-line asymmetry is the whole mechanical shape of the milestone. Reaching the target was never the hard part and the planner already guaranteed it; being there when the target is alone is. Generation carries a hard obligation that at least one alone beat exists somewhere the player can eventually stand, because reachability proofs say nothing about protection and would otherwise certify a mission that cannot be finished with a weapon.
+      rationale:
+        - The obvious alternative - making the target tougher or the guards sharper - scales frustration rather than difficulty, and leaves the player without a plan to form.
+        - Accidents staying valid against an escorted target is what makes them the answer to a target you cannot get near, rather than a strictly worse weapon.
+        - The spawn position is deliberately excluded from the vulnerable set. The target spawns standing on beat zero, which is escorted like any other public beat; including it silently readmitted guarded kill sites and made the guarding test pass against an unfixed planner.
+      references: [monotone-capability-closure-planner, district-engine-is-one-recursive-rule]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/proof.rs, crates/murmur-core/src/planner.rs, data/population.ron]
+      symbols: [Beat, Schedule, Protection, BeatTrigger, build_schedule]
+      tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/generator/schedule.rs]
+
+  - decision: beats-mirror-the-routine-index-for-index
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Beats Mirror The Routine, Index For Index
+      summary: A schedule's beats are index-aligned with the actor's routine - same length, same positions, same dwells - and generation refuses a target whose two representations disagree. Everything written before beats existed (pathfinding, briefing facts, reachability proofs, replay) keeps reading the routine untouched, while systems that care about protection read the beat at the same index. The alternative, a flag day where every reader moved to beats at once, would have put the schedule work and a rewrite of four subsystems in the same commit.
+      rationale:
+        - Duplicated state is a real cost, so it is paid down by an explicit alignment check at generation rather than by hoping the two stay in step.
+        - Keeping the AI driving off the routine in this slice means the target's observable behaviour is unchanged, which is what makes the beat labelling reviewable on its own.
+      references: [protection-not-reachability-is-the-difficulty]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/populate.rs]
+      symbols: [routine_for, assert_aligned]
+      tests: [crates/murmur-core/src/generator/mod.rs]

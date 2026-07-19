@@ -100,6 +100,26 @@ impl TileSet {
 }
 
 /// Every position an actor's schedule touches (spawn plus routine stops).
+/// Where this actor can actually be attacked.
+///
+/// For a target with a schedule that is exactly its *alone* beats —
+/// never the escorted ones, because a ring of bodyguards denies the
+/// adjacency a garrote needs and a bullet finds a bodyguard first, and
+/// deliberately not the spawn either: the target spawns standing on beat
+/// zero, which is escorted like any other public beat. Actors without a
+/// schedule fall back to their whole routine, which is the right answer
+/// for anyone who has no detail.
+///
+/// The distinction matters because reachability says nothing about
+/// protection: without it the planner would cheerfully certify a weapon
+/// route to a target the player can stand beside but never touch.
+pub(crate) fn vulnerable_positions(actor: &Actor) -> Vec<Pos> {
+    let Some(schedule) = actor.ai.as_ref().and_then(|ai| ai.schedule.as_ref()) else {
+        return schedule_positions(actor);
+    };
+    schedule.alone_beats().map(|b| b.pos).collect()
+}
+
 pub(crate) fn schedule_positions(actor: &Actor) -> Vec<Pos> {
     let mut positions = vec![actor.pos];
     if let Some(ai) = &actor.ai {
@@ -358,7 +378,7 @@ pub(crate) fn capability_closure(
                     let holder = &population.actors[holder.0 as usize];
                     (
                         !holder.is_player()
-                            && schedule_positions(holder)
+                            && vulnerable_positions(holder)
                                 .iter()
                                 .any(|pos| seen.contains(*pos)),
                         format!("from {}", holder.name),
