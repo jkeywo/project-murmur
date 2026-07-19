@@ -376,13 +376,16 @@ pub fn populate(
         .map(|a| a.id)
         .take(escort_slots)
         .collect();
+    let mut detail: Vec<ActorId> = Vec::new();
     for (slot, guard) in guards.into_iter().enumerate() {
         if let Some(ai) = actors[guard.0 as usize].ai.as_mut() {
             ai.detail = Some(crate::world::DetailRole::Bodyguard {
                 principal: target_id,
                 slot: slot as u8,
                 post: None,
+                waited: 0,
             });
+            detail.push(guard);
         }
     }
 
@@ -426,6 +429,23 @@ pub fn populate(
                 location: ItemLocation::CarriedBy(*rng.pick(&holders)),
                 charges: 0,
             });
+            // A detail can follow its principal anywhere the principal
+            // goes, so it carries the same keys. Without this a bodyguard
+            // simply cannot reach a locked private beat — it stands across
+            // the building pathing at a door it may not open, and the
+            // escort-search clock runs out with nobody able to act on it.
+            // It also puts those keys on someone the player can follow and
+            // pickpocket, which is the intended way in.
+            if target_keys.contains(&item_spec.id) {
+                for guard in &detail {
+                    items.push(ItemInstance {
+                        id: ItemId(items.len() as u32),
+                        spec: item_spec.id.clone(),
+                        location: ItemLocation::CarriedBy(*guard),
+                        charges: 0,
+                    });
+                }
+            }
             // The target carries its *own copy* of any key its day needs.
             // It must be a copy: the role's key is the one the player can
             // plan around, and moving it onto the target would strand it

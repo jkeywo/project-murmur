@@ -921,7 +921,15 @@ fn resolve_shoot(
     {
         breach_constraint(world, events, crate::tr!("contract.no_firearms.breach"));
     }
-    kill(world, events, actor, target);
+    // Whoever is standing on the line takes the round. Actors do not block
+    // sight — that is deliberate and symmetric, and adding it would rewrite
+    // suspicion and alert propagation against every tuned number — but a
+    // body absolutely stops a bullet. This is what makes a bodyguard
+    // detail worth walking through: firing into it costs a round, a
+    // gunshot, a witnessed death, and leaves the principal alive.
+    let hit = interposed_actor(world, shooter_pos, target_pos).unwrap_or(target);
+
+    kill(world, events, actor, hit);
     // Silenced, but still a local sound incident.
     world.incidents.push(crate::world::Incident {
         kind: crate::world::IncidentKind::Gunshot,
@@ -929,9 +937,32 @@ fn resolve_shoot(
         radius: data.tuning.gunshot_sound_radius,
         turn: world.turn,
     });
-    let name = world.actor(target).name.clone();
-    events.messages.push(crate::trf!("log.shot", name = name));
+    let name = world.actor(hit).name.clone();
+    if hit == target {
+        events.messages.push(crate::trf!("log.shot", name = name));
+    } else {
+        events
+            .messages
+            .push(crate::trf!("log.shot_interposed", name = name));
+    }
     complete(world, events, actor);
+}
+
+/// The first standing actor strictly between shooter and target, if any.
+/// Tiles are walked from the shooter outwards, so the nearest body is the
+/// one that stops the round.
+fn interposed_actor(world: &World, from: Pos, to: Pos) -> Option<ActorId> {
+    if from.floor != to.floor {
+        return None;
+    }
+    crate::geom::supercover_between(from, to)
+        .into_iter()
+        .find_map(|pos| {
+            world
+                .standing_actor_at(pos)
+                .filter(|a| !a.is_player())
+                .map(|a| a.id)
+        })
 }
 
 fn resolve_melee(

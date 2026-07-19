@@ -285,6 +285,10 @@ pub enum DetailRole {
         /// Where to wait while the principal is somewhere guards do not
         /// follow. Resolved when the principal enters such a beat.
         post: Option<Pos>,
+        /// Turns spent holding that post. A detail waits, but not
+        /// indefinitely — this is the clock that ends a player's window.
+        #[serde(default)]
+        waited: u16,
     },
 }
 

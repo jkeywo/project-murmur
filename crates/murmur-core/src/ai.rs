@@ -98,31 +98,52 @@ fn routine_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionInte
 const FORMATION: [Dir4; 4] = [Dir4::North, Dir4::South, Dir4::East, Dir4::West];
 
 /// Where a guard waits while the principal is somewhere it does not
-/// follow: just outside a door of the room the principal is in. Doors are
-/// taken in their stored order and offset by the slot, so two guards on
-/// the same room pick different doors when it has more than one.
+/// follow: on a free tile outside the room the principal is in.
+///
+/// Each slot gets a *distinct* tile. Handing the whole detail the same
+/// post means only one guard can ever stand it and the rest mill about
+/// outside pathing at an occupied tile forever.
 fn no_follow_post(world: &World, principal: Pos, slot: u8) -> Option<Pos> {
     let room = world.room_at(principal)?;
-    if room.doors.is_empty() {
-        return None;
-    }
-    let door_index = usize::from(slot) % room.doors.len();
-    let door_id = room.doors[door_index];
-    // Find the door's tile, then step to the side of it outside the room.
+    let mut candidates: Vec<Pos> = Vec::new();
     for pos in world.map.floor_positions(room.floor) {
-        if world.map.tile(pos) != crate::map::TileKind::Door(door_id) {
+        let crate::map::TileKind::Door(id) = world.map.tile(pos) else {
+            continue;
+        };
+        if !room.doors.contains(&id) {
             continue;
         }
         for dir in FORMATION {
             let outside = pos.step(dir);
-            if !room.bounds.contains(outside.x, outside.y)
-                && matches!(world.map.tile(outside), crate::map::TileKind::Floor)
+            if room.bounds.contains(outside.x, outside.y) {
+                continue;
+            }
+            if matches!(world.map.tile(outside), crate::map::TileKind::Floor)
+                && world.furniture_at(outside).is_none()
+                && !candidates.contains(&outside)
             {
-                return Some(outside);
+                candidates.push(outside);
+            }
+            // A second rank, so a three-guard detail is not fighting over
+            // the two tiles either side of one door.
+            for second in FORMATION {
+                let back = outside.step(second);
+                if room.bounds.contains(back.x, back.y) {
+                    continue;
+                }
+                if matches!(world.map.tile(back), crate::map::TileKind::Floor)
+                    && world.furniture_at(back).is_none()
+                    && !candidates.contains(&back)
+                {
+                    candidates.push(back);
+                }
             }
         }
     }
-    None
+    if candidates.is_empty() {
+        return None;
+    }
+    Some(candidates[usize::from(slot) % candidates.len()])
 }
 
 /// The tile this guard should stand on beside its principal.
@@ -188,32 +209,54 @@ fn escort_intent(
     let goal = if no_follow {
         // Resolve the post once and remember it, so the detail does not
         // drift while the principal is out of sight.
-        let cached = match world
+        let (cached, waited) = match world
             .actor(id)
             .ai
             .as_ref()
             .and_then(|ai| ai.detail.as_ref())
         {
-            Some(DetailRole::Bodyguard { post, .. }) => *post,
-            None => None,
+            Some(DetailRole::Bodyguard { post, waited, .. }) => (*post, *waited),
+            None => (None, 0),
         };
-        match cached.or_else(|| no_follow_post(world, principal_pos, slot)) {
-            Some(post) => {
-                if let Some(ai) = world.actor_mut(id).ai.as_mut()
-                    && let Some(DetailRole::Bodyguard { post: p, .. }) = ai.detail.as_mut()
-                {
-                    *p = Some(post);
-                }
-                post
-            }
+
+        // Escort-search: a detail waits, but not forever. Once the clock
+        // runs out the guard goes in to check on its principal, which is
+        // what stops a private beat being an unlimited window and gives
+        // the player a reason to hurry rather than simply to wait.
+        if waited >= data.tuning.escort_search_turns {
+            return match first_step_towards(world, data, id, principal_pos) {
+                Some(dir) => ActionIntent::Step(dir),
+                None => ActionIntent::Wait,
+            };
+        }
+
+        // The clock measures how long the *principal* has been out of
+        // sight, not how long this guard has had its feet on a particular
+        // tile. Tying it to the tile means a guard that cannot reach its
+        // post — crowded out, or across a door it must queue for — waits
+        // forever and the window never closes.
+        let post = cached.or_else(|| no_follow_post(world, principal_pos, slot));
+        if let Some(ai) = world.actor_mut(id).ai.as_mut()
+            && let Some(DetailRole::Bodyguard {
+                post: p, waited: w, ..
+            }) = ai.detail.as_mut()
+        {
+            *p = post;
+            *w = w.saturating_add(1);
+        }
+        match post {
+            Some(post) => post,
             None => return ActionIntent::Wait,
         }
     } else {
         // Back in formation; forget any post from the last private beat.
         if let Some(ai) = world.actor_mut(id).ai.as_mut()
-            && let Some(DetailRole::Bodyguard { post: p, .. }) = ai.detail.as_mut()
+            && let Some(DetailRole::Bodyguard {
+                post: p, waited: w, ..
+            }) = ai.detail.as_mut()
         {
             *p = None;
+            *w = 0;
         }
         match formation_tile(world, id, principal_pos, slot) {
             Some(tile) => tile,
@@ -348,8 +391,55 @@ fn chase_focus(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent 
 }
 
 /// Fleeing actors run for the nearest extraction exit and cower there.
+/// Whether this actor still has at least one bodyguard on its feet.
+fn has_live_detail(world: &World, principal: ActorId) -> bool {
+    world.actors.iter().any(|a| {
+        a.alive()
+            && !a.departed
+            && a.ai
+                .as_ref()
+                .and_then(|ai| ai.detail.as_ref())
+                .is_some_and(|DetailRole::Bodyguard { principal: p, .. }| *p == principal)
+    })
+}
+
+/// The deepest room a principal can be put behind: personal tier first,
+/// then secure. Rooms are taken in generation order, never by distance,
+/// so the choice does not depend on where the panic started.
+fn safe_room_tile(world: &World, from: Pos) -> Option<Pos> {
+    for zone in [crate::data::Zone::Personal, crate::data::Zone::Secure] {
+        for room in world.rooms.iter().filter(|r| r.zone == zone) {
+            if let Some(w) = room.waypoints.first()
+                && w.pos != from
+            {
+                return Some(w.pos);
+            }
+        }
+    }
+    None
+}
+
 fn flee_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent {
     let pos = world.actor(id).pos;
+
+    // Evacuate: a principal with a detail left on its feet is not a
+    // civilian running for the street — the detail walks them somewhere
+    // defensible and further in. This deliberately makes the fire alarm
+    // double-edged: it empties the crowd, which helps, and it hardens the
+    // target, which does not. If nothing defensible is reachable the
+    // principal flees like anyone else, and a target that reaches the
+    // street still ends the mission.
+    if has_live_detail(world, id)
+        && let Some(safe) = safe_room_tile(world, pos)
+    {
+        if pos == safe {
+            return ActionIntent::Wait;
+        }
+        if let Some(dir) = first_step_towards(world, data, id, safe) {
+            return ActionIntent::Step(dir);
+        }
+    }
+
     let mut exits = world.extraction_tiles.clone();
     exits.sort_by_key(|e| {
         // Storeys apart cost proportionally: with three or more floors a

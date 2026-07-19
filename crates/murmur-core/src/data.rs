@@ -539,6 +539,10 @@ pub struct Tuning {
 
     /// Suspicion meter bounds and state thresholds.
     pub suspicion_max: u16,
+    /// Turns a bodyguard will hold its post outside a no-follow beat
+    /// before going in to look. This is the clock on the player's private
+    /// window: the detail is not patient forever.
+    pub escort_search_turns: u16,
     /// How many bodyguards walk with the target. The formation table holds
     /// four slots; asking for more simply leaves the extras unassigned.
     pub escort_slots: u8,

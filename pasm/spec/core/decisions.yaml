@@ -762,3 +762,48 @@ entities:
       paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/ai.rs, crates/murmur-core/src/generator/populate.rs, data/tuning.ron]
       symbols: [DetailRole]
       tests: [crates/murmur-core/tests/escort.rs]
+
+  - decision: bodies-stop-bullets-but-not-sight
+    core:
+      status: implemented
+      confidence: confirmed
+      title: A Body Stops A Bullet, But Never A Line Of Sight
+      summary: The first standing actor on a bullet's path takes the round, walked outwards from the shooter along the existing supercover ray. Actors deliberately still do not block line of sight - sight_blocker consults terrain and furniture only, and it is symmetric, so making actors opaque would silently rewrite suspicion accumulation and alert propagation against every tuned number in tuning.ron. Interposition is the local, general alternative, and it is what makes a bodyguard detail worth walking around rather than shooting through, since firing into it costs a round, a gunshot incident, a witnessed death and leaves the principal alive.
+      rationale:
+        - Confining the change to shoot resolution means no perception number needed retuning, which is the whole reason to prefer it over opaque actors.
+        - It quietly strengthens NoCivilianCasualties without that constraint needing to know anything about escorts.
+      references: [escort-is-an-assignment-not-a-mood]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions.rs, data/loc/strings.csv]
+      tests: [crates/murmur-core/tests/escort.rs]
+
+  - decision: the-private-window-has-a-clock
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Private Window Has A Clock, And The Detail Carries The Keys
+      summary: A detail holding station outside a no-follow beat counts turns and eventually goes in to look. The clock measures how long the principal has been out of sight rather than how long a particular guard has had its feet on a particular tile, because a guard that cannot reach its post - crowded out, or queueing at a door - would otherwise wait forever and the window would never close. Bodyguards also carry copies of whatever keys their principal's day needs, since a detail that cannot follow its principal through a locked door is not a detail at all, and without the keys the search clock expired with nobody able to act on it. Those keys sit on someone the player can follow and pickpocket, which is the intended way in.
+      rationale:
+        - Difficulty should reward acting rather than waiting. An unlimited private window makes patience strictly optimal, which is the failure mode a longer mission most needs to avoid.
+        - Posts are distinct per slot. One shared post means only one guard can stand it and the rest mill about pathing at an occupied tile.
+      references: [escort-is-an-assignment-not-a-mood, protection-not-reachability-is-the-difficulty]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/generator/populate.rs, data/tuning.ron]
+      tests: [crates/murmur-core/tests/escort.rs]
+
+  - decision: a-guarded-principal-is-evacuated-inward
+    core:
+      status: implemented
+      confidence: confirmed
+      title: A Guarded Principal Is Evacuated Inward, Not Out The Door
+      summary: A principal with at least one bodyguard still on its feet does not run for the street like a civilian - the detail walks it into the deepest reachable tier instead. This makes the fire alarm deliberately double-edged - it empties the crowd, which helps the player, and it hardens the target, which does not. The existing rule that a target reaching the street ends the mission is preserved rather than replaced, and a principal whose detail is dead, or with nowhere defensible to reach, flees like anyone else.
+      rationale:
+        - Evacuation is the behaviour that makes panicking the target a real decision instead of a free win or an instant loss.
+        - Keeping the escape-is-game-over rule intact matters because it was explicit playtest feedback; evacuation narrows when it fires rather than removing it.
+      references: [escort-is-an-assignment-not-a-mood]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/ai.rs]
+      tests: [crates/murmur-core/tests/escort.rs]
