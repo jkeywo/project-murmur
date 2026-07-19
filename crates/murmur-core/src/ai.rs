@@ -200,8 +200,11 @@ fn flee_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent 
     let pos = world.actor(id).pos;
     let mut exits = world.extraction_tiles.clone();
     exits.sort_by_key(|e| {
+        // Storeys apart cost proportionally: with three or more floors a
+        // flat penalty would rank the top floor and the next one down as
+        // equally far away.
         e.chebyshev(pos).map(i32::from).unwrap_or(i32::MAX / 2)
-            + if e.floor == pos.floor { 0 } else { 100 }
+            + i32::from(e.floor.abs_diff(pos.floor)) * 100
     });
     for exit in exits {
         if pos == exit {

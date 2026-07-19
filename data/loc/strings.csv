@@ -127,6 +127,7 @@ campaign.err.no_cash,Shop refusal: not enough money.,[not enough cash]
 # --- mission sidebar -------------------------------------------------------
 ui.mission.panel.map.ground,Title of the map panel on the ground storey.,[ground floor]
 ui.mission.panel.map.upper,Title of the map panel on the upper storey.,[upper floor]
+ui.mission.panel.map.numbered,"Map panel title above two storeys. {n} is the storey number.",[floor {n}]
 ui.mission.panel.events,Title of the event log panel.,[events]
 ui.mission.panel.agent,Title of the right-hand status sidebar.,[agent]
 ui.mission.status,"Sidebar top line. {turn} is the turn number, {seed} the mission seed.",[turn {turn}   seed {seed}]

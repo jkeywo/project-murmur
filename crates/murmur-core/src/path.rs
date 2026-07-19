@@ -31,7 +31,7 @@ pub fn first_step_towards(
             TileKind::Door(id) => {
                 world.furniture_at(pos).is_none() && access::can_pass_door(world, data, actor, id)
             }
-            TileKind::Floor | TileKind::Stairs => world.furniture_at(pos).is_none(),
+            TileKind::Floor | TileKind::Stairs(_) => world.furniture_at(pos).is_none(),
         }
     };
 

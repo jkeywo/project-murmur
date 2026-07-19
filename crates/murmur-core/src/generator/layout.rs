@@ -257,17 +257,16 @@ fn realise(
         }
     }
 
-    // Stairs at both dead ends of the spine: two vertical routes.
+    // Stairwells at both dead ends of the spine: two vertical routes.
+    // Each storey uses a distinct tile to go up (row `sy`) and to come
+    // down (row `sy + 1`), so a stairwell can serve any number of
+    // storeys — a middle floor needs both and they cannot share a tile.
     let mut stairs = Vec::new();
-    if floor_count == 2 {
-        for x in [1i16, east_end] {
-            for y in [sy, sy + 1] {
-                for floor in 0..floor_count {
-                    map.set_tile(Pos::new(floor, x, y), TileKind::Stairs);
-                }
-            }
-            stairs.push(Pos::new(0, x, sy));
+    for x in [1i16, east_end] {
+        for floor in 0..floor_count.saturating_sub(1) {
+            map.link_stairs(Pos::new(floor, x, sy), Pos::new(floor + 1, x, sy + 1));
         }
+        stairs.push(Pos::new(0, x, sy));
     }
 
     // Waypoints before furniture so lingering spots stay clear.

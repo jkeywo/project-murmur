@@ -77,7 +77,7 @@ fn main() {
                                 '+'
                             }
                         }
-                        TileKind::Stairs => '<',
+                        TileKind::Stairs(_) => '<',
                     }
                 };
                 row.push(ch);

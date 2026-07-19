@@ -170,7 +170,7 @@ pub(crate) fn reachable_tiles(
     let passable = |pos: Pos| -> bool {
         match layout.map.tile(pos) {
             TileKind::Wall | TileKind::Void => false,
-            TileKind::Floor | TileKind::Stairs | TileKind::Door(_) => {
+            TileKind::Floor | TileKind::Stairs(_) | TileKind::Door(_) => {
                 layout.furniture.iter().all(|f| f.pos != pos) && permits(pos)
             }
         }

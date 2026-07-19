@@ -243,6 +243,48 @@ mod tests {
         GameData::embedded().unwrap()
     }
 
+    /// Stairwells join consecutive storeys through linked pairs, with a
+    /// distinct tile for up and for down. That is what lets a venue be
+    /// taller than two floors: a middle storey needs both, and they
+    /// cannot share one tile.
+    #[test]
+    fn stairwells_link_every_consecutive_storey() {
+        let data = data();
+        for venue in ["nightclub", "warehouse"] {
+            for seed in 0..8u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let floors = world.map.floor_count();
+                assert!(
+                    !world.map.stair_links().is_empty(),
+                    "{venue}: a multi-storey venue needs stairs"
+                );
+                for link in world.map.stair_links() {
+                    assert_eq!(
+                        link.a.floor + 1,
+                        link.b.floor,
+                        "{venue}: a link joins adjacent storeys"
+                    );
+                    assert_ne!(link.a, link.b);
+                    // Stepping either end lands on the other.
+                    assert_eq!(world.map.resolve_step_destination(link.a), link.b);
+                    assert_eq!(world.map.resolve_step_destination(link.b), link.a);
+                }
+                // Every storey above the ground is served by a stairwell.
+                for floor in 1..floors {
+                    assert!(
+                        world
+                            .map
+                            .stair_links()
+                            .iter()
+                            .any(|l| l.b.floor == floor || l.a.floor == floor),
+                        "{venue} seed {seed}: storey {floor} has no stairs"
+                    );
+                }
+            }
+        }
+    }
+
     /// Every door must connect two walkable tiles across it — no door
     /// opens onto void or a wall on either side (a "door to nowhere").
     #[test]
@@ -255,7 +297,7 @@ mod tests {
                 let walkable = |pos: crate::geom::Pos| {
                     matches!(
                         world.map.tile(pos),
-                        TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
+                        TileKind::Floor | TileKind::Stairs(_) | TileKind::Door(_)
                     )
                 };
                 for floor in 0..world.map.floor_count() {

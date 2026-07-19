@@ -1,10 +1,17 @@
-//! The static tile map: two storeys of walls, floors, doors, and stairs.
+//! The static tile map: two to four storeys of walls, floors, doors, and
+//! stairs.
 //!
 //! The map records what generation decided about terrain. Dynamic state
 //! that changes during play (door open/closed, locks) lives in [`DoorState`]
 //! records owned by the world alongside the map. Furniture, actors, and
 //! items are world entities, not tiles; sight and movement queries accept
 //! closures so callers decide how those entities block.
+//!
+//! Stairs are *linked pairs* rather than matching coordinates, so a
+//! stairwell can serve any number of storeys: the tile carries a
+//! [`StairId`] and the map owns the [`StairLink`] naming both ends. A
+//! middle storey therefore has a distinct tile for up and for down, which
+//! coordinate-matching could never express.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +21,18 @@ use crate::geom::{FloorId, Pos, supercover_between};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct DoorId(pub u16);
 
+/// Stable identifier of one stair link on the map.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct StairId(pub u16);
+
+/// The two tiles one stairwell step connects. Stepping onto either end
+/// carries the mover to the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StairLink {
+    pub a: Pos,
+    pub b: Pos,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TileKind {
     /// Outside the building or otherwise nonexistent.
@@ -21,10 +40,10 @@ pub enum TileKind {
     Wall,
     Floor,
     Door(DoorId),
-    /// Stairs connect the same coordinates on both storeys: stepping onto a
-    /// stairs tile carries the mover to the other floor (recorded decision;
-    /// it keeps Move the only travel verb).
-    Stairs,
+    /// One end of a stair link: stepping onto it carries the mover to the
+    /// link's other end (recorded decision; it keeps Move the only travel
+    /// verb).
+    Stairs(StairId),
 }
 
 /// The current state of one door.
@@ -49,6 +68,9 @@ pub struct GameMap {
     width: u16,
     height: u16,
     floors: Vec<FloorGrid>,
+    /// Indexed by [`StairId`]; generation order, so deterministic.
+    #[serde(default)]
+    stair_links: Vec<StairLink>,
 }
 
 impl GameMap {
@@ -63,7 +85,23 @@ impl GameMap {
                     tiles: tiles.clone(),
                 })
                 .collect(),
+            stair_links: Vec::new(),
         }
+    }
+
+    /// Links two tiles into one stairwell step and marks both as stairs.
+    /// Returns the new link's id.
+    pub fn link_stairs(&mut self, a: Pos, b: Pos) -> StairId {
+        debug_assert!(self.in_bounds(a) && self.in_bounds(b), "stair link off-map");
+        let id = StairId(self.stair_links.len() as u16);
+        self.stair_links.push(StairLink { a, b });
+        self.set_tile(a, TileKind::Stairs(id));
+        self.set_tile(b, TileKind::Stairs(id));
+        id
+    }
+
+    pub fn stair_links(&self) -> &[StairLink] {
+        &self.stair_links
     }
 
     pub fn width(&self) -> u16 {
@@ -108,7 +146,7 @@ impl GameMap {
     /// depends on dynamic state, so callers supply the door lookup.
     pub fn walkable(&self, pos: Pos, door_open: impl Fn(DoorId) -> bool) -> bool {
         match self.tile(pos) {
-            TileKind::Floor | TileKind::Stairs => true,
+            TileKind::Floor | TileKind::Stairs(_) => true,
             TileKind::Door(id) => door_open(id),
             TileKind::Wall | TileKind::Void => false,
         }
@@ -117,22 +155,34 @@ impl GameMap {
     /// True when terrain at `pos` blocks sight (walls, closed doors, void).
     pub fn terrain_blocks_sight(&self, pos: Pos, door_open: impl Fn(DoorId) -> bool) -> bool {
         match self.tile(pos) {
-            TileKind::Floor | TileKind::Stairs => false,
+            TileKind::Floor | TileKind::Stairs(_) => false,
             TileKind::Door(id) => !door_open(id),
             TileKind::Wall | TileKind::Void => true,
         }
     }
 
-    /// Where a mover ends up after stepping onto `pos`: stairs carry the
-    /// mover to the matching tile on the other storey.
+    /// Where a mover ends up after stepping onto `pos`: a stair tile
+    /// carries the mover to its link's other end. A stair whose link is
+    /// missing or malformed leaves the mover where they stand.
     pub fn resolve_step_destination(&self, pos: Pos) -> Pos {
-        if self.tile(pos) == TileKind::Stairs && self.floors.len() == 2 {
-            let other = Pos::new(if pos.floor == 0 { 1 } else { 0 }, pos.x, pos.y);
-            if self.tile(other) == TileKind::Stairs {
-                return other;
-            }
+        let TileKind::Stairs(id) = self.tile(pos) else {
+            return pos;
+        };
+        let Some(link) = self.stair_links.get(usize::from(id.0)) else {
+            return pos;
+        };
+        let other = if link.a == pos {
+            link.b
+        } else if link.b == pos {
+            link.a
+        } else {
+            return pos;
+        };
+        if matches!(self.tile(other), TileKind::Stairs(other_id) if other_id == id) {
+            other
+        } else {
+            pos
         }
-        pos
     }
 
     /// All in-bounds positions of one floor in row-major (deterministic)
@@ -188,8 +238,9 @@ mod tests {
     use crate::geom::Dir4;
 
     /// Builds a single-floor map from rows of characters:
-    /// `#` wall, `.` floor, `+` closed door, `'` open door, `<` stairs,
-    /// space void.
+    /// `#` wall, `.` floor, `+` closed door, `'` open door, space void.
+    /// Stairs need a partner tile, so they are linked with
+    /// [`GameMap::link_stairs`] rather than drawn.
     pub fn map_from_rows(rows: &[&str]) -> (GameMap, Vec<DoorState>) {
         let height = rows.len() as u16;
         let width = rows.iter().map(|r| r.len()).max().unwrap_or(0) as u16;
@@ -201,7 +252,6 @@ mod tests {
                 let tile = match ch {
                     '#' => TileKind::Wall,
                     '.' => TileKind::Floor,
-                    '<' => TileKind::Stairs,
                     '+' | '\'' => {
                         doors.push(DoorState {
                             open: ch == '\'',
@@ -282,10 +332,9 @@ mod tests {
     }
 
     #[test]
-    fn stairs_transition_between_matching_tiles() {
+    fn stairs_transition_between_linked_tiles() {
         let mut map = GameMap::filled_void(3, 3, 2);
-        map.set_tile(Pos::new(0, 1, 1), TileKind::Stairs);
-        map.set_tile(Pos::new(1, 1, 1), TileKind::Stairs);
+        map.link_stairs(Pos::new(0, 1, 1), Pos::new(1, 1, 1));
         assert_eq!(
             map.resolve_step_destination(Pos::new(0, 1, 1)),
             Pos::new(1, 1, 1)
@@ -294,7 +343,7 @@ mod tests {
             map.resolve_step_destination(Pos::new(1, 1, 1)),
             Pos::new(0, 1, 1)
         );
-        // A lone stairs tile without a partner stays put.
+        // A stair whose partner was overwritten stays put.
         map.set_tile(Pos::new(1, 1, 1), TileKind::Wall);
         assert_eq!(
             map.resolve_step_destination(Pos::new(0, 1, 1)),
@@ -302,15 +351,53 @@ mod tests {
         );
     }
 
+    /// A middle storey needs a separate tile for up and for down, which
+    /// the old coordinate-matching model could not express.
+    #[test]
+    fn stairs_link_three_storeys_with_distinct_up_and_down_tiles() {
+        let mut map = GameMap::filled_void(4, 4, 3);
+        // Ground up -> first down; first up -> second down.
+        map.link_stairs(Pos::new(0, 1, 1), Pos::new(1, 1, 2));
+        map.link_stairs(Pos::new(1, 1, 1), Pos::new(2, 1, 2));
+
+        // Climb the whole building and come back down.
+        let first = map.resolve_step_destination(Pos::new(0, 1, 1));
+        assert_eq!(first, Pos::new(1, 1, 2));
+        let second = map.resolve_step_destination(Pos::new(1, 1, 1));
+        assert_eq!(second, Pos::new(2, 1, 2));
+        assert_eq!(
+            map.resolve_step_destination(second),
+            Pos::new(1, 1, 1),
+            "the top storey's down tile returns to the first"
+        );
+        assert_eq!(
+            map.resolve_step_destination(first),
+            Pos::new(0, 1, 1),
+            "the first storey's down tile returns to the ground"
+        );
+        // Every stair tile is walkable terrain.
+        for link in map.stair_links() {
+            assert!(map.walkable(link.a, |_| true));
+            assert!(map.walkable(link.b, |_| true));
+        }
+    }
+
     #[test]
     fn walkability_by_tile_kind() {
-        let (map, doors) = map_from_rows(&["#.+<"]);
+        let (map, doors) = map_from_rows(&["#.+."]);
         let open = |id: DoorId| doors[id.0 as usize].open;
         assert!(!map.walkable(Pos::new(0, 0, 0), open));
         assert!(map.walkable(Pos::new(0, 1, 0), open));
         assert!(!map.walkable(Pos::new(0, 2, 0), open), "closed door blocks");
         assert!(map.walkable(Pos::new(0, 3, 0), open));
         assert!(!map.walkable(Pos::new(0, 9, 0), open), "out of bounds");
+
+        // Stairs are walkable terrain too, but they come in linked pairs
+        // rather than being drawn as a lone glyph.
+        let mut stairwell = GameMap::filled_void(2, 2, 2);
+        stairwell.link_stairs(Pos::new(0, 0, 0), Pos::new(1, 0, 1));
+        assert!(stairwell.walkable(Pos::new(0, 0, 0), open));
+        assert!(stairwell.walkable(Pos::new(1, 0, 1), open));
     }
 
     #[test]

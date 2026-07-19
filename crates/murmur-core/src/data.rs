@@ -951,6 +951,15 @@ impl GameData {
             if venue.floor_width == 0 || venue.floor_height == 0 || venue.floor_count == 0 {
                 errors.push(format!("venue '{}' has a degenerate footprint", venue.id));
             }
+            // Stair links carry any height, but the map panel only names
+            // storeys sensibly this far and taller venues stop being
+            // navigable in a terminal.
+            if venue.floor_count > 4 {
+                errors.push(format!(
+                    "venue '{}' has {} storeys; four is the ceiling",
+                    venue.id, venue.floor_count
+                ));
+            }
             if venue.room_templates.is_empty() {
                 errors.push(format!("venue '{}' places no rooms", venue.id));
             }

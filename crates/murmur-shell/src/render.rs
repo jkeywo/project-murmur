@@ -244,7 +244,7 @@ fn tile_cell(
             let zone = world.zone_at(pos);
             ('.', Style::default().fg(zone_floor_color(zone, visible)))
         }
-        TileKind::Stairs => {
+        TileKind::Stairs(_) => {
             let style = if visible {
                 Style::default().fg(Color::LightBlue)
             } else {
@@ -337,10 +337,12 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
         }
         lines.push(Line::from(spans));
     }
-    let floor_name = if focus.floor == 0 {
-        tr!("ui.mission.panel.map.ground")
-    } else {
-        tr!("ui.mission.panel.map.upper")
+    // Two-storey venues keep the plain "upper floor"; taller ones number
+    // their storeys, since "upper" stops being unambiguous above two.
+    let floor_name = match (focus.floor, world.map.floor_count()) {
+        (0, _) => tr!("ui.mission.panel.map.ground").to_string(),
+        (_, 2) => tr!("ui.mission.panel.map.upper").to_string(),
+        (n, _) => trf!("ui.mission.panel.map.numbered", n = n),
     };
     let block = Block::default()
         .borders(Borders::ALL)

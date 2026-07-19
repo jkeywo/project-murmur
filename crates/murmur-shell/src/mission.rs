@@ -1095,12 +1095,12 @@ impl Mission {
                 "ui.mission.tile.room",
                 &[("room", &room.name), ("zone", zone_label)],
             ));
-        } else if matches!(world.map.tile(pos), TileKind::Floor | TileKind::Stairs) {
+        } else if matches!(world.map.tile(pos), TileKind::Floor | TileKind::Stairs(_)) {
             parts.push(tr!("ui.mission.tile.corridor").to_string());
         }
         match world.map.tile(pos) {
             TileKind::Wall => parts.push(tr!("ui.mission.tile.wall").to_string()),
-            TileKind::Stairs => parts.push(tr!("ui.mission.tile.stairs").to_string()),
+            TileKind::Stairs(_) => parts.push(tr!("ui.mission.tile.stairs").to_string()),
             TileKind::Door(id) => {
                 let door = world.door(id);
                 let state = if door.open {

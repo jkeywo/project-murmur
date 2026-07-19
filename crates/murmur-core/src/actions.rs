@@ -266,7 +266,7 @@ pub fn translate(
                     }
                     Ok(ActionIntent::Step(dir))
                 }
-                TileKind::Floor | TileKind::Stairs => {
+                TileKind::Floor | TileKind::Stairs(_) => {
                     validate_step_destination(world, dest)?;
                     Ok(ActionIntent::Step(dir))
                 }
@@ -487,7 +487,7 @@ pub fn translate(
             }
             if !matches!(
                 world.map.tile(pos),
-                TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
+                TileKind::Floor | TileKind::Stairs(_) | TileKind::Door(_)
             ) {
                 return Err(RejectReason::PathBlocked(Blockage::NoThrowTarget));
             }
@@ -1184,7 +1184,7 @@ fn resolve_movement(
             }
             let terrain_open = matches!(
                 world.map.tile(ahead),
-                TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
+                TileKind::Floor | TileKind::Stairs(_) | TileKind::Door(_)
             ) && world.furniture_at(ahead).is_none();
             if !terrain_open {
                 fail(
