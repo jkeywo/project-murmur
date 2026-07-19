@@ -165,6 +165,14 @@ pub fn build_schedule(
     let dwells = spread(dwell_budget, n);
     for (beat, dwell) in beats.iter_mut().zip(dwells) {
         beat.dwell = dwell.max(1);
+        // A private call runs long. Mechanically this is the whole window
+        // the mission turns on: entering behind the target, crossing the
+        // room, and killing quietly all have to fit inside one dwell, and
+        // an even split leaves the most important beat the same length as
+        // a lap of the dance floor.
+        if beat.protection == Protection::Alone {
+            beat.dwell = (beat.dwell * 3).max(12);
+        }
     }
 
     // Start the day away from the door. The player spawns on an

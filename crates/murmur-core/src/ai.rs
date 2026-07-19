@@ -259,12 +259,47 @@ fn escort_intent(
             *p = None;
             *w = 0;
         }
-        match formation_tile(world, id, principal_pos, slot) {
-            Some(tile) => tile,
-            // Nowhere to stand: hold position rather than crowd. Walking
-            // at an impossible tile is what a naive slot lookup does, and
-            // it strands the guard several tiles out forever.
-            None => return ActionIntent::Wait,
+        // While the principal is walking, the detail *trails* instead of
+        // ringing. A ring around a moving principal contests its next
+        // tile every turn — the winners shuffle hands the tile to a guard
+        // about half the time, and the escorted target crawls through its
+        // own day at a fraction of its budgeted pace. Trailing guards aim
+        // only at tiles the principal has already vacated, so the column
+        // moves at full speed; the ring forms again the moment it stops.
+        let standing = world
+            .actor(principal)
+            .ai
+            .as_ref()
+            .and_then(|ai| ai.routine.get(ai.routine_index))
+            .is_none_or(|step| step.pos == principal_pos);
+        if standing {
+            match formation_tile(world, id, principal_pos, slot) {
+                Some(tile) => tile,
+                // Nowhere to stand: hold position rather than crowd.
+                // Walking at an impossible tile is what a naive slot
+                // lookup does, and it strands the guard forever.
+                None => return ActionIntent::Wait,
+            }
+        } else {
+            let back = world
+                .actor(principal)
+                .facing
+                .map(|f| f.opposite())
+                .unwrap_or(Dir4::South);
+            let mut trail = principal_pos;
+            for _ in 0..=usize::from(slot) {
+                let next = trail.step(back);
+                if !matches!(world.map.tile(next), crate::map::TileKind::Floor) {
+                    break;
+                }
+                trail = next;
+            }
+            if trail == principal_pos {
+                // No room behind (a doorway, a corner): hang back where
+                // we are rather than crowd the principal's path.
+                return ActionIntent::Wait;
+            }
+            trail
         }
     };
 

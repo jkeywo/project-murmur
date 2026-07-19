@@ -232,14 +232,17 @@ fn escort_survives_a_false_alarm() {
         world.actor(guard).ai.as_ref().unwrap().detail.is_some(),
         "the assignment outlives the alarm"
     );
-    // Escorting is the only behaviour that ends with a guard *on* its
+    // Escorting is the only behaviour that brings a guard back to its
     // principal's shoulder. A guard merely walking its own routine gets
     // no closer than chance allows, which is what makes this assertion a
-    // real check on resumption rather than on wandering.
+    // real check on resumption rather than on wandering. Escort distance
+    // is a small band, not exact adjacency: a detail trails a *walking*
+    // principal in column, up to a slot's length behind.
     let now = world.actor(world.target).pos;
     let after = world.actor(guard).pos;
+    assert_eq!(after.floor, now.floor, "the guard crossed the venue back");
     assert!(
-        after.chebyshev(now).unwrap_or(i16::MAX) <= 2,
+        after.chebyshev(now).unwrap_or(i16::MAX) <= 4,
         "a calmed guard rejoins its principal: guard {after:?}, principal {now:?},          left at {before:?}"
     );
 }

@@ -210,9 +210,17 @@ pub fn build_layout(
     }
 
     // Storey jumps: a stairwell from the parent's spine to the child's.
+    //
+    // Anchors fill from the spine's western tip, both rows of a column
+    // before the next column east. The tip is a dead end — nothing lies
+    // beyond it, so no route ever needs to walk *through* a stair tile.
+    // Mid-spine anchors were tried and sever the corridor: a stair tile
+    // teleports anyone who steps on it, and two adjacent inline columns
+    // once walled a venue's spine and froze the target's whole day
+    // behind its own stairwell.
     for (parent, child) in stair_anchors {
-        let up = spine_free_tile(&map, &nodes[parent], 2);
-        let down = spine_free_tile(&map, &nodes[child], 3);
+        let up = spine_free_tile(&map, &nodes[parent], 0);
+        let down = spine_free_tile(&map, &nodes[child], 0);
         match (up, down) {
             (Some(a), Some(b)) => {
                 map.link_stairs(a, b);
@@ -231,8 +239,11 @@ pub fn build_layout(
 /// A walkable spine tile at least `inset` columns in from the district's
 /// west end, reserved for a stairwell.
 fn spine_free_tile(map: &GameMap, node: &Node, inset: i16) -> Option<Pos> {
-    for y in [node.spine_y, node.spine_y + 1] {
-        for dx in 0..node.rect.w {
+    // Column-major from the western tip: both rows of x before x + 1, so
+    // consecutive anchors stack in the dead-end column instead of lining
+    // up along the walked row.
+    for dx in 0..node.rect.w {
+        for y in [node.spine_y, node.spine_y + 1] {
             let pos = Pos::new(node.floor, node.rect.x + inset + dx, y);
             if map.tile(pos) == TileKind::Floor {
                 return Some(pos);
