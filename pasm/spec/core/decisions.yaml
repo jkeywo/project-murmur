@@ -330,22 +330,14 @@ entities:
 
   - decision: two-corridor-banded-realisation
     core:
-      status: implemented
+      status: removed
       confidence: confirmed
-      title: Two-Corridor Banded Graph Realisation
-      summary: The venue graph grammar decides rooms, security bands, shelf assignment, and every connection before tiles exist; realisation carves a fixed circulation topology per storey. A public main corridor runs through the middle, a staff-tier service corridor runs along the back (realised as a room so zone, access, patrol waypoints, and floor tinting all follow from its template), stub passages at both ends join the corridors into a loop, stairs sit at both main-corridor dead ends, and the ground service corridor ends in a fire exit. Rooms sort west to east by band depth on each shelf, external exits claim the outer wall, service-access rooms front the service corridor, and consecutive restricted rooms get pass-through doors owned by the deeper room so implicit-key rules resolve against the stricter zone. Extraction paths are ordered public first, keeping the player spawn at the entrance.
+      title: Two-Corridor Banded Graph Realisation (Retired)
+      summary: The original realiser carved a fixed circulation topology per storey - a public main corridor through the middle, a staff service corridor along the back, stub passages joining them into a loop, stairs at both dead ends, and rooms sorted west to east by band depth on each shelf. It delivered the gradient, but only ever as one shape - rooms exactly one room deep, packed left to right, with no way to express a building you work your way into. It was retired once every shipped venue had been re-authored as a district tree, and grammar.rs deleted with it. Its guarantees did not lapse - they became invariants asserted over the finished building rather than properties of one realiser, which is what let the replacement be checked at all.
       rationale:
-        - A structured realisation of a checked graph keeps generation deterministic and retry-cheap while still delivering the grammar guarantees, gradient, loops, service connections, alternate vertical routes, and three extraction paths.
-        - Corridors-are-public-circulation is amended rather than repealed, the main corridor and stubs stay public, while the service corridor is deliberately staff territory so walking it is a disguise decision.
-      references: [milestone-2-venue-graph-grammar, corridors-are-public-circulation, nightclub-generator]
-    implementation:
-      status: declared
-      paths: [crates/murmur-core/src/generator/grammar.rs, crates/murmur-core/src/generator/layout.rs]
-      symbols: [build_graph, VenueGraph, realise]
-    evidence:
-      - kind: test
-        reference: crates/murmur-core/src/generator/mod.rs
-        summary: banded_realisation_keeps_the_graph_guarantees checks corridors, stubs, gradient, and extraction paths across forty seeds.
+        - Keeping it alive alongside the district engine bought a regression canary for three slices and cost nothing; keeping it past that would have meant maintaining two realisers to serve zero venues.
+        - Retiring it in a slice of its own kept the re-baselining of every integration suite separate from the engine work that caused it.
+      references: [district-engine-is-one-recursive-rule, corridors-are-public-circulation, nightclub-generator]
 
   - decision: monotone-capability-closure-planner
     core:
@@ -694,7 +686,7 @@ entities:
       status: implemented
       confidence: confirmed
       title: One Recursive District Rule Expresses Every Venue Topology
-      summary: A district is a rectangle on one storey owning a two-tile corridor - its spine - along its top edge, and everything it contains hangs below that spine as a cell reached through a single doorway - either a leaf room or a nested child district. That one rule is the entire engine. The three Hitman topologies come out of the authored tree's shape alone - a chain is an onion, a star is a festival, and siblings that are themselves chains are an archipelago - so there is no match on form anywhere in the carving code. A district marked own-storey is laid out on its own floor and reached by a stairwell from its parent's spine, which is how a venue gains height without giving up the gradient. The engine is selected by a form field on the venue and lives alongside the original banded realiser rather than replacing it, so the two shipped venues carry on unchanged as the regression canary.
+      summary: A district is a rectangle on one storey owning a two-tile corridor - its spine - along its top edge, and everything it contains hangs below that spine as a cell reached through a single doorway - either a leaf room or a nested child district. That one rule is the entire engine. The three Hitman topologies come out of the authored tree's shape alone - a chain is an onion, a star is a festival, and siblings that are themselves chains are an archipelago - so there is no match on form anywhere in the carving code. A district marked own-storey is laid out on its own floor and reached by a stairwell from its parent's spine, which is how a venue gains height without giving up the gradient. The engine is read off the venue's `districts` field. It shipped alongside the original banded realiser for three slices, so the two existing venues acted as a regression canary; once both had been re-authored as district trees the old realiser was deleted and the form indirection with it.
       rationale:
         - Authoring three topologies as three code paths would have made the engine a collection of special cases, and the acceptance test for generality is precisely that onion and archipelago can then be added as data with no engine change.
         - Building alongside the banded realiser keeps seed-stable layout for every existing replay and contract test, so a bug in the new engine cannot present as a regression in the old venues.
@@ -703,7 +695,7 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-core/src/data.rs, data/venues.ron]
-      symbols: [Form, DistrictPattern, build_layout]
+      symbols: [DistrictPattern, build_layout]
       tests: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/mod.rs]
 
   - decision: gradient-is-checked-as-tree-and-as-geometry

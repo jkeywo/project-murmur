@@ -163,9 +163,9 @@ fn min_depth(data: &GameData, nodes: &[Node], index: usize) -> i16 {
 pub fn build_layout(
     data: &GameData,
     venue: &VenueSpec,
-    pattern: &DistrictPattern,
     rng: &mut Pcg32,
 ) -> Result<Layout, LayoutError> {
+    let pattern = &venue.districts;
     let mut nodes: Vec<Node> = Vec::new();
     let mut next_floor: FloorId = 0;
     let root = expand(data, venue, pattern, 0, &mut next_floor, &mut nodes, rng)?;
@@ -476,7 +476,7 @@ fn place_room(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::{Form, Zone};
+    use crate::data::Zone;
 
     fn hotel(data: &GameData) -> VenueSpec {
         data.venue("grand-hotel")
@@ -499,23 +499,16 @@ mod tests {
     fn a_district_may_not_nest_into_a_shallower_tier() {
         let data = GameData::embedded().unwrap();
         let mut venue = hotel(&data);
-        let Form::Districts(pattern) = &mut venue.form else {
-            panic!("grand-hotel is authored as a district venue");
-        };
-
         // Hang a public district off the innermost tier: reaching the
         // street would mean going further in.
-        let deepest = innermost(pattern);
+        let deepest = innermost(&mut venue.districts);
         let mut backwards = deepest.clone();
         backwards.zone = Zone::Public;
         backwards.children.clear();
         deepest.children.push(backwards);
 
         let mut rng = Pcg32::new(1, 1);
-        let Form::Districts(pattern) = &venue.form else {
-            unreachable!()
-        };
-        let Err(err) = build_layout(&data, &venue, pattern, &mut rng) else {
+        let Err(err) = build_layout(&data, &venue, &mut rng) else {
             panic!("a backwards gradient must be refused");
         };
         assert!(
@@ -532,12 +525,9 @@ mod tests {
     fn every_room_is_entered_through_its_own_boundary() {
         let data = GameData::embedded().unwrap();
         let venue = hotel(&data);
-        let Form::Districts(pattern) = &venue.form else {
-            panic!("grand-hotel is authored as a district venue");
-        };
         for seed in 0..20u64 {
             let mut rng = Pcg32::new(seed, 7);
-            let layout = build_layout(&data, &venue, pattern, &mut rng)
+            let layout = build_layout(&data, &venue, &mut rng)
                 .unwrap_or_else(|e| panic!("seed {seed}: {}", e.0));
             for room in &layout.rooms {
                 assert!(

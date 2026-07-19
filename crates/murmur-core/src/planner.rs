@@ -375,7 +375,7 @@ pub fn prove_base_routes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::{layout, populate, proof};
+    use crate::generator::{populate, proof};
     use crate::rng::Pcg32;
 
     /// Mirrors the generator's front half: a proven venue plus its
@@ -386,7 +386,8 @@ mod tests {
         let config_loadout = vec!["garrote".to_string(), "silenced-pistol".to_string()];
         for attempt in 0..24 {
             let mut rng = Pcg32::new(seed, 0x4d75726d75720000 + attempt);
-            let Ok(mut layout) = layout::build_layout(&data, &venue, &mut rng) else {
+            let Ok(mut layout) = crate::generator::district::build_layout(&data, &venue, &mut rng)
+            else {
                 continue;
             };
             let Ok(population) =

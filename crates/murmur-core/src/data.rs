@@ -140,9 +140,9 @@ pub struct ZoneLabels {
 }
 
 /// A venue definition: its footprint, which room templates it draws
-/// from, and its presentation flavour. The same contract, planner,
-/// grammar, opportunity, heat, and campaign systems apply to every
-/// venue; nothing outside data may special-case one.
+/// from, its district tree, and its presentation flavour. The same
+/// contract, planner, opportunity, heat, and campaign systems apply to
+/// every venue; nothing outside data may special-case one.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VenueSpec {
@@ -167,42 +167,15 @@ pub struct VenueSpec {
     /// has few guests and more guards than a nightclub).
     #[serde(default)]
     pub role_counts: Vec<RoleCountOverride>,
-    /// How the venue is laid out. Defaults to the original banded
-    /// two-corridor realisation so existing venues need no change.
-    #[serde(default)]
-    pub form: Form,
+    /// The district tree this venue is carved from. Its shape alone
+    /// decides the topology — see `generator::district`.
+    pub districts: DistrictPattern,
 }
 
-/// Which realiser builds a venue's tiles.
-#[derive(Clone, Debug, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub enum Form {
-    /// The original two-corridor, two-shelf storey.
-    #[default]
-    Banded,
-    /// A recursive tree of districts. One engine, three topologies: a
-    /// chain of nested districts is an onion, a spine with sibling
-    /// branches is a festival, and siblings that are themselves chains
-    /// are an archipelago. The shape is entirely in this pattern.
-    Districts(DistrictPattern),
-}
-
-/// One node of a venue's district tree.
-///
-/// Every district owns a two-tile corridor (its *spine*) along its
-/// leading edge; its rooms and its child districts hang off that spine
-/// as cells, each reached through a doorway in the spine's far wall. The
-/// topology is therefore entirely a property of the tree's *shape*:
-///
-/// * a **chain** (one child per level) is an onion — every tier's
-///   corridor must be crossed to reach the next;
-/// * a **star** (several children on one spine) is a festival — a public
-///   spine with branching backstage;
-/// * **siblings that are themselves chains** is an archipelago — a public
-///   plaza serving several self-contained fortresses.
-///
-/// `count_min`/`count_max` let one authored level expand into several
-/// sibling branches.
+/// One district in a venue's tree. The tree's *shape* is the venue's
+/// topology: a chain nests (onion), siblings branch off one spine
+/// (festival), and siblings that are themselves chains give independent
+/// fortresses (archipelago). The engine reads no form flag.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct DistrictPattern {
@@ -1157,7 +1130,6 @@ mod tests {
             "presentation:",
             "invitation_label:",
             "zone_labels:",
-            "districts:",
         ];
         for (file, source) in files {
             for (number, line) in source.lines().enumerate() {

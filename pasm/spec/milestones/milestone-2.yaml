@@ -102,8 +102,8 @@ entities:
       references: [nightclub-generator, milestone-2-route-planner]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/generator/grammar.rs, crates/murmur-core/src/generator/layout.rs, data/venues.ron, data/rooms.ron]
-      symbols: [build_graph, FloorPlan, RoomNode]
+      paths: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-core/src/data.rs, data/venues.ron, data/rooms.ron]
+      symbols: [build_layout, DistrictPattern]
       tests: [crates/murmur-core/src/generator/mod.rs]
 
   - component: milestone-2-planning-domain-composition

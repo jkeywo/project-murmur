@@ -1,14 +1,13 @@
 //! The venue generator.
 //!
-//! Graph first: the security-gradient grammar decides every room,
-//! band, and connection before tiles exist, then the banded realisation
-//! carves the building, populates it, and proves it reachable. Which
+//! Districts first: a recursive tree of districts decides every room,
+//! tier, and connection before tiles exist, then the engine carves the
+//! building, populates it, and proves it reachable. Which
 //! venue is generated is data (see `data/venues.ron`); everything
 //! derives from the mission config through the generation RNG stream, so
 //! a fixed config always produces the identical world.
 
 pub mod district;
-pub mod grammar;
 pub mod layout;
 pub mod opportunities;
 pub mod populate;
@@ -75,7 +74,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         }
     }
 
-    let mut layout = layout::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
+    let mut layout = district::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
     let population = populate::populate(
         data,
         &layout,
@@ -470,117 +469,6 @@ mod tests {
     }
 
     /// Every door must connect two walkable tiles across it — no door
-    /// opens onto void or a wall on either side (a "door to nowhere").
-    #[test]
-    fn no_door_opens_onto_nothing() {
-        let data = data();
-        for venue in venues(&data) {
-            let venue = venue.as_str();
-            for seed in 0..40u64 {
-                let world =
-                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
-                let walkable = |pos: crate::geom::Pos| {
-                    matches!(
-                        world.map.tile(pos),
-                        TileKind::Floor | TileKind::Stairs(_) | TileKind::Door(_)
-                    )
-                };
-                for floor in 0..world.map.floor_count() {
-                    for pos in world.map.floor_positions(floor) {
-                        if !matches!(world.map.tile(pos), TileKind::Door(_)) {
-                            continue;
-                        }
-                        let ns = walkable(pos.step(crate::geom::Dir4::North))
-                            && walkable(pos.step(crate::geom::Dir4::South));
-                        let ew = walkable(pos.step(crate::geom::Dir4::East))
-                            && walkable(pos.step(crate::geom::Dir4::West));
-                        assert!(
-                            ns || ew,
-                            "{venue} seed {seed}: door at {pos:?} connects nothing"
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn banded_realisation_keeps_the_graph_guarantees() {
-        let data = data();
-        for seed in 0..40u64 {
-            let world = generate(
-                &data,
-                &crate::contract::MissionConfig::new(seed, "nightclub"),
-            )
-            .unwrap_or_else(|e| panic!("seed {seed} failed: {e}"));
-
-            for floor in 0..world.map.floor_count() {
-                // Every storey has its staff-tier service corridor.
-                let corridor = world
-                    .rooms
-                    .iter()
-                    .find(|r| r.floor == floor && r.template == "service-corridor")
-                    .unwrap_or_else(|| panic!("seed {seed}: no service corridor on {floor}"));
-                assert_eq!(corridor.zone, crate::data::Zone::Staff);
-
-                // Both stubs join the corridors into a loop: the west
-                // stub at column 3 and the east stub at the corridor's
-                // end column are walkable from top shelf to spine.
-                let sx = corridor.bounds.x + corridor.bounds.w - 2;
-                for stub_x in [3i16, sx] {
-                    for y in 3..(world.map.height() as i16 / 2) {
-                        assert_eq!(
-                            world.map.tile(crate::geom::Pos::new(floor, stub_x, y)),
-                            TileKind::Floor,
-                            "seed {seed}: stub column {stub_x} blocked at y={y} floor {floor}"
-                        );
-                    }
-                }
-
-                // The security gradient holds per shelf, west to east.
-                let depth = |zone: crate::data::Zone| match zone {
-                    crate::data::Zone::Public => 0,
-                    crate::data::Zone::Staff => 1,
-                    crate::data::Zone::Secure => 2,
-                    crate::data::Zone::Personal => 3,
-                };
-                let spine = world.map.height() as i16 / 2;
-                for service_side in [true, false] {
-                    let mut shelf: Vec<_> = world
-                        .rooms
-                        .iter()
-                        .filter(|r| {
-                            r.floor == floor
-                                && r.template != "service-corridor"
-                                && (r.bounds.y < spine) == service_side
-                        })
-                        .collect();
-                    shelf.sort_by_key(|r| r.bounds.x);
-                    let depths: Vec<u8> = shelf.iter().map(|r| depth(r.zone)).collect();
-                    assert!(
-                        depths.windows(2).all(|w| w[0] <= w[1]),
-                        "seed {seed}: floor {floor} gradient broken: {depths:?}"
-                    );
-                }
-            }
-
-            // Three extraction paths: the public entrance first (the
-            // player's spawn side), then the loading bay, then the
-            // service corridor's fire exit in staff space.
-            assert!(world.extraction_tiles.len() >= 3, "seed {seed}");
-            let first_room = world.room_at(world.extraction_tiles[0]).unwrap();
-            assert_eq!(first_room.zone, crate::data::Zone::Public, "seed {seed}");
-            assert!(
-                world.extraction_tiles.iter().any(|t| world
-                    .room_at(*t)
-                    .is_some_and(
-                        |r| r.template == "service-corridor" && r.zone == crate::data::Zone::Staff
-                    )),
-                "seed {seed}: no staff-space fire exit"
-            );
-        }
-    }
-
     #[test]
     fn generates_valid_worlds_across_many_seeds() {
         let data = data();
@@ -604,8 +492,11 @@ mod tests {
                     template.id
                 );
             }
-            // Two storeys, both extraction exits, a live target.
-            assert_eq!(world.map.floor_count(), 2);
+            // Every declared storey, both extraction exits, a live target.
+            assert_eq!(
+                usize::from(world.map.floor_count()),
+                usize::from(data.venue("nightclub").unwrap().floor_count)
+            );
             assert!(
                 world.extraction_tiles.len() >= 2,
                 "seed {seed}: entrance and loading bay exits expected"

@@ -46,6 +46,27 @@ fn stand_beside(world: &World, pos: Pos) -> Pos {
         .expect("machine has a free adjacent tile")
 }
 
+/// Parks every NPC but `keep` on the topmost storey. The hoist test is
+/// about the crate and the tile under it, so nobody else may be close
+/// enough to walk into the target and displace it off the drop tile
+/// while the player is busy rigging the machine.
+fn park_all_but(world: &mut World, keep: ActorId) {
+    let ids: Vec<ActorId> = world
+        .actors
+        .iter()
+        .filter(|a| !a.is_player() && a.id != keep)
+        .map(|a| a.id)
+        .collect();
+    let mut spare: Vec<Pos> = world
+        .map
+        .floor_positions(world.map.floor_count() - 1)
+        .filter(|p| matches!(world.map.tile(*p), TileKind::Floor))
+        .collect();
+    for id in ids {
+        world.actor_mut(id).pos = spare.pop().expect("room on the top storey");
+    }
+}
+
 fn find_machine(
     world: &World,
     data: &GameData,
@@ -190,6 +211,7 @@ fn the_rigged_hoist_kills_deniably_under_any_constraint() {
         let stand = stand_beside(driver.world(), machine_pos);
         driver.world_mut().actor_mut(player).pos = stand;
         driver.world_mut().actor_mut(target).pos = drop_tile;
+        park_all_but(driver.world_mut(), target);
 
         driver.submit(&data, &Command::Interact(id)).unwrap();
         while driver.player_busy() {

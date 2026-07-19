@@ -20,26 +20,42 @@ pub struct Population {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PopulateError(pub String);
 
+/// Whether every door into this room is locked. Zone permission says an
+/// NPC is *allowed* in a room; it says nothing about whether they can open
+/// the door, and only one member of a role carries any given key. A
+/// routine stop nobody can walk to is a stuck NPC, so sealed rooms are
+/// kept out of routine pools entirely and stay quiet — which is what a
+/// locked room should be.
+fn is_sealed(layout: &Layout, room: &Room) -> bool {
+    !room.doors.is_empty()
+        && room
+            .doors
+            .iter()
+            .all(|d| layout.doors[d.0 as usize].locked_by.is_some())
+}
+
 /// Rooms an NPC in `disguise` may legitimately spend time in. Mirrors the
 /// access rules: zone from the permission matrix, plus authored extra
-/// rooms.
+/// rooms, minus anything sealed behind a lock.
 fn rooms_for_disguise<'a>(
     data: &GameData,
-    rooms: &'a [Room],
+    layout: &'a Layout,
     disguise: &str,
     with_invitation: bool,
 ) -> Vec<&'a Room> {
     let Some(spec) = data.disguise(disguise) else {
         return Vec::new();
     };
-    rooms
+    layout
+        .rooms
         .iter()
         .filter(|room| {
-            spec.zones.contains(&room.zone)
+            (spec.zones.contains(&room.zone)
                 || spec.extra_rooms.contains(&room.template)
                 || (with_invitation
                     && spec.secure_with_invitation
-                    && room.zone == crate::data::Zone::Secure)
+                    && room.zone == crate::data::Zone::Secure))
+                && !is_sealed(layout, room)
         })
         .collect()
 }
@@ -155,10 +171,11 @@ pub fn populate(
 
     // The target: staff model with a richer generated schedule.
     let target_id = ActorId(actors.len() as u32);
+    let mut target_keys: Vec<String> = Vec::new();
     {
         let spec = &data.population.target;
         let disguise = spec.disguise.clone().unwrap_or_else(|| "staff".to_string());
-        let rooms = rooms_for_disguise(data, &layout.rooms, &disguise, false);
+        let rooms = rooms_for_disguise(data, layout, &disguise, false);
         let pool = waypoints_of_kinds(
             rooms.iter().copied(),
             &[WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social],
@@ -177,13 +194,23 @@ pub fn populate(
                 })
             };
             if !routine.iter().any(visits_personal) {
-                let personal_pool = waypoints_of_kinds(
-                    layout
-                        .rooms
-                        .iter()
-                        .filter(|r| r.zone == crate::data::Zone::Personal),
-                    &[WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social],
-                );
+                // The target may enter its own sealed office - it is the
+                // one person who would hold that key - but an unsealed
+                // personal room is preferred, so the key stays scarce.
+                let kinds = [WaypointKind::Work, WaypointKind::Idle, WaypointKind::Social];
+                let personal = |sealed_ok: bool| {
+                    waypoints_of_kinds(
+                        layout.rooms.iter().filter(|r| {
+                            r.zone == crate::data::Zone::Personal
+                                && (sealed_ok || !is_sealed(layout, r))
+                        }),
+                        &kinds,
+                    )
+                };
+                let mut personal_pool = personal(false);
+                if personal_pool.is_empty() {
+                    personal_pool = personal(true);
+                }
                 if personal_pool.is_empty() {
                     return Err(PopulateError(
                         "private-kill contract but no personal-tier waypoints".into(),
@@ -194,6 +221,26 @@ pub fn populate(
                     pos: stop.pos,
                     wait: rng.range_inclusive(8, 16) as u16,
                 });
+            }
+        }
+
+        // Whatever the target's schedule ends up crossing, the target can
+        // open: a person is not locked out of their own office. This is
+        // the only place a key is granted by need rather than by role, and
+        // it makes the target's key worth lifting.
+        for step in &routine {
+            for room in layout
+                .rooms
+                .iter()
+                .filter(|r| r.floor == step.pos.floor && r.bounds.contains(step.pos.x, step.pos.y))
+            {
+                for door in &room.doors {
+                    if let Some(key) = &layout.doors[door.0 as usize].locked_by
+                        && !target_keys.contains(key)
+                    {
+                        target_keys.push(key.clone());
+                    }
+                }
             }
         }
 
@@ -263,7 +310,7 @@ pub fn populate(
                 .disguise
                 .clone()
                 .unwrap_or_else(|| "civilian".to_string());
-            let rooms = rooms_for_disguise(data, &layout.rooms, &disguise, is_vip);
+            let rooms = rooms_for_disguise(data, layout, &disguise, is_vip);
             let mut pool = waypoints_of_kinds(rooms.iter().copied(), &role_spec.waypoint_kinds);
             if pool.is_empty() {
                 pool = waypoints_of_kinds(
@@ -374,10 +421,15 @@ pub fn populate(
                     role.name()
                 )));
             }
+            let holder = if target_keys.contains(&item_spec.id) {
+                target_id
+            } else {
+                *rng.pick(&holders)
+            };
             items.push(ItemInstance {
                 id: ItemId(items.len() as u32),
                 spec: item_spec.id.clone(),
-                location: ItemLocation::CarriedBy(*rng.pick(&holders)),
+                location: ItemLocation::CarriedBy(holder),
                 charges: 0,
             });
         } else if let Some(room_template) = &item_spec.placed_in {

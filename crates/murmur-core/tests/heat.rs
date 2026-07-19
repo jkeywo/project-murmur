@@ -7,6 +7,7 @@ use murmur_core::contract::MissionConfig;
 use murmur_core::data::{GameData, Role};
 use murmur_core::generator::generate;
 use murmur_core::geom::{Dir4, Pos};
+use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
 use murmur_core::world::{ActorId, Mood, World};
 
@@ -33,8 +34,10 @@ fn quiet_all_npcs(world: &mut World) {
     }
 }
 
-/// Parks every NPC except `keep` far away on the other storey so nothing
-/// is seen or heard.
+/// Parks every NPC except `keep` far away on the topmost storey so
+/// nothing is seen or heard. Derived from the map rather than pinned to
+/// coordinates, so re-shaping a venue cannot silently park someone in
+/// earshot and turn a heat assertion into a false pass.
 fn park_npcs_far(world: &mut World, keep: &[ActorId]) {
     let ids: Vec<ActorId> = world
         .actors
@@ -42,11 +45,54 @@ fn park_npcs_far(world: &mut World, keep: &[ActorId]) {
         .filter(|a| !a.is_player() && !keep.contains(&a.id))
         .map(|a| a.id)
         .collect();
-    // The upper service corridor's west end is a quiet, distant spot.
-    for (x, id) in (2i16..).zip(ids) {
-        world.actor_mut(id).pos = Pos::new(1, x.min(30), 1);
+    let top = world.map.floor_count() - 1;
+    let spots: Vec<Pos> = world
+        .map
+        .floor_positions(top)
+        .filter(|p| matches!(world.map.tile(*p), TileKind::Floor))
+        .collect();
+    assert!(
+        spots.len() >= ids.len(),
+        "the top storey must hold every parked NPC"
+    );
+    for (pos, id) in spots.into_iter().zip(ids) {
+        world.actor_mut(id).pos = pos;
         world.actor_mut(id).facing = Some(Dir4::North);
     }
+}
+
+/// A floor tile close enough to `spot` to witness what happens there,
+/// but off the firing line itself.
+fn witness_spot(world: &World, spot: Pos) -> Pos {
+    let line = [
+        spot,
+        spot.step(Dir4::East),
+        spot.step(Dir4::East).step(Dir4::East),
+    ];
+    for radius in 1..6i16 {
+        for dy in -radius..=radius {
+            for dx in -radius..=radius {
+                let pos = Pos::new(spot.floor, spot.x + dx, spot.y + dy);
+                if matches!(world.map.tile(pos), TileKind::Floor) && !line.contains(&pos) {
+                    return pos;
+                }
+            }
+        }
+    }
+    panic!("no witness position near {spot:?}");
+}
+
+/// A ground-floor tile with two clear floor tiles to its east: room for a
+/// shooter, a victim, and an unobstructed line between them.
+fn firing_line(world: &World) -> Pos {
+    world
+        .map
+        .floor_positions(0)
+        .find(|p| {
+            let clear = |q: Pos| matches!(world.map.tile(q), TileKind::Floor);
+            clear(*p) && clear(p.step(Dir4::East)) && clear(p.step(Dir4::East).step(Dir4::East))
+        })
+        .expect("the ground floor has somewhere to stand three abreast")
 }
 
 #[test]
@@ -58,10 +104,9 @@ fn heard_gunshots_accumulate_heat_and_unheard_ones_do_not() {
 
     // Nobody anywhere near: a shot adds no heat.
     park_npcs_far(driver.world_mut(), &[]);
-    let spot = Pos::new(0, 8, 14); // main corridor, ground floor
+    let spot = firing_line(driver.world());
     driver.world_mut().actor_mut(player).pos = spot;
     driver.world_mut().actor_mut(target).pos = spot.step(Dir4::East).step(Dir4::East);
-    driver.world_mut().actor_mut(target).pos.floor = 0;
     driver.submit(&data, &Command::DrawOrHolster).unwrap();
     driver.submit(&data, &Command::Shoot(target)).unwrap();
     assert_eq!(
@@ -83,10 +128,11 @@ fn heard_gunshots_accumulate_heat_and_unheard_ones_do_not() {
         .unwrap()
         .id;
     park_npcs_far(driver2.world_mut(), &[guard]);
-    let spot2 = Pos::new(0, 8, 14);
+    let spot2 = firing_line(driver2.world());
+    let post = witness_spot(driver2.world(), spot2);
     driver2.world_mut().actor_mut(player2).pos = spot2;
     driver2.world_mut().actor_mut(target2).pos = spot2.step(Dir4::East).step(Dir4::East);
-    driver2.world_mut().actor_mut(guard).pos = Pos::new(0, 14, 14);
+    driver2.world_mut().actor_mut(guard).pos = post;
     driver2.submit(&data2, &Command::DrawOrHolster).unwrap();
     driver2.submit(&data2, &Command::Shoot(target2)).unwrap();
     assert!(
@@ -114,10 +160,11 @@ fn tier_two_heat_brings_reinforcements_through_the_door() {
     let before = driver.world().actors.len();
     driver.world_mut().mission_heat = data.tuning.heat_tier2 - 1;
 
-    let spot = Pos::new(0, 8, 14);
+    let spot = firing_line(driver.world());
     driver.world_mut().actor_mut(player).pos = spot;
     driver.world_mut().actor_mut(target).pos = spot.step(Dir4::East).step(Dir4::East);
-    driver.world_mut().actor_mut(guard).pos = Pos::new(0, 14, 14);
+    let post = witness_spot(driver.world(), spot);
+    driver.world_mut().actor_mut(guard).pos = post;
     driver.submit(&data, &Command::DrawOrHolster).unwrap();
     driver.submit(&data, &Command::Shoot(target)).unwrap();
 
