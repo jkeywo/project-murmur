@@ -534,3 +534,110 @@ entities:
       paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/mission.rs]
       symbols: [ScreenLayout, body_and_footer, render_footer]
       tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: keymap-is-one-table
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Key Bindings Live in One Table
+      summary: The fifteen mission key literals were written out in four places that could drift apart - the clickable palette in render, the dispatch match in mission, the availability probe action_block, and the start screen's key list. They now come from one table, murmur-shell keymap, whose entries carry the key, a short palette label, a one-line description, and a category. The palette, the start screen, the in-mission help overlay, and the inventory-slot inspection line all render from it. Availability deliberately stays out of the table and remains in action_block, because it depends on live world state; the two are keyed by the same char. A test presses every table key from a clean normal-mode state and asserts something observable happened, which is what actually holds the table and the dispatch match together.
+      rationale:
+        - Four hand-maintained copies of the same list is a drift bug waiting to happen, and the start screen's copy had no test at all.
+        - Describing an item by the key it enables rather than by flavour text falls out of the table for free, and follows any future rebinding.
+      references: [round-two-playtest-fixes, mouse-inspection-and-clickable-actions, ascii-presentation]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/keymap.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/mission.rs]
+      symbols: [ActionKey, Category, ACTIONS, CONTROLS]
+      tests: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/keymap.rs]
+
+  - decision: overlay-modes-are-self-resuming
+    core:
+      status: accepted
+      confidence: confirmed
+      title: Overlay Input Modes Must Resume on Exit
+      summary: InputMode gains Help (the key list, opened with the question-mark key) and Confirm (a yes/no guard on something irreversible). Both pause queue consumption while they are up and resume it on every exit path, extending the contract look mode already followed. Help closes on any key or click; Confirm treats y and Enter as yes and anything else, including a map click, as no. Each has a regression test asserting the queue is not left paused, mirroring the look-mode test.
+      rationale:
+        - The queue has no visible state, so a pause the player cannot see and cannot leave is indistinguishable from a hang - the same reasoning that ruled out a manual pause toggle.
+        - Any future overlay mode inherits this requirement.
+      references: [queue-desurfacing, look-is-controller-inspection, queue-input-contract]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs]
+      symbols: [InputMode, ConfirmAction]
+      tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: irreversible-choices-ask-first
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Irreversible Choices Ask First
+      summary: Two single keys used to destroy unrecoverable state with no confirmation. Q ended a mission outright, and n on the start screen wiped the only campaign save. Both now ask. Q opens an in-mission Confirm prompt; the mission owns the question and the shell carries out the answer through take_confirmed, keeping the consequence where the campaign lives. Starting over routes through a ConfirmNewCampaign screen, but only when a save actually exists - with nothing to lose the prompt would be noise.
+      rationale:
+        - Under permadeath and a single autosave slot there is no undo, so a mistyped key should not be able to end a run or a campaign.
+        - Prompting only when there is something to protect keeps the guard from becoming a reflex the player clicks through.
+      references: [campaign-single-slot-autosave, campaign-death-ends-arrest-continues, overlay-modes-are-self-resuming]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/screens.rs]
+      symbols: [ConfirmAction, draw_confirm_new_campaign, start_new_campaign]
+      tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: log-entries-carry-severity-and-collapse
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Log Entries Carry Severity and Collapse
+      summary: The event log was a plain string list rendered with no styling into a fixed eight-row panel, so a detection line looked exactly like ambient chatter and repeated messages scrolled everything else away. Entries are now a LogEntry carrying text, a LogKind of Routine, Notice, or Alarm, and a repeat count; an identical consecutive message bumps the count instead of appending. Perception messages classify as Alarm because the core documents that channel as alarms, screams, and their propagation; shell-side refusals classify as Notice; a contract breach is Alarm, picked out by prefix but guarded by the world's own breach state. Alarms are bold as well as red so severity does not rest on hue alone. Scrollback is deliberately not implemented - the panel is a fixed eight rows and a scroll mode would need its own pause-and-resume handling, while dedup and colour recover most of the value.
+      rationale:
+        - The reported problem was that the player could not tell what mattered and it scrolled away, which severity and collapsing address directly.
+        - Classifying by the core's existing message channels avoids string-matching arbitrary text, and keeps murmur-core untouched.
+      references: [ascii-presentation, round-two-playtest-fixes]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs]
+      symbols: [LogEntry, LogKind, push_log_kind, log_style]
+      tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: threat-state-is-named-not-counted
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Threat State Is Named, Not Counted
+      summary: The sidebar reported a bare count of hunting NPCs, which told the player they were in trouble but not with whom. It now lists who is in sight, nearest first with distance and a plain-language state (unaware, suspicious, investigating, alerted, escorting, attacking, fleeing), capped at four with an overflow line so the action palette is not pushed off the panel. It reuses visible_actors, the same list the shooting UI targets from, so the panel and the map cannot disagree about who is visible. The venue-wide hunting count is kept alongside it, because someone hunting the player may be out of sight. On the map, hostile states are bold as well as coloured. All of this is presentation over the latest completed world state and does not alter what NPCs perceive.
+      rationale:
+        - Why the player got caught was the second reported comprehension gap; alert state existed in AiState but was only reachable by hovering one NPC at a time.
+        - Pairing colour with a modifier and a word keeps the state readable without relying on hue.
+      references: [liberal-player-wall-visibility, single-cell-tiles-and-inspection, mouse-inspection-and-clickable-actions]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/render.rs]
+      symbols: [mood_label, mood_is_hostile]
+      tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: inventory-slots-are-inspectable-not-usable
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Inventory Slots Are Inspectable, Not Usable
+      summary: The sidebar rendered numbered slots one to six while the digits did nothing in a mission, an affordance that promised an interaction the game did not have. The digits now inspect - they report what the slot holds and, derived from the item spec's capability flags, which palette key carrying it enables. This costs no turn and produces no simulation action, following the precedent look set. Actual item use and drop were considered and rejected for this slice - items are passive enablers by design, so a Use or Drop verb would need a new Command and ActionIntent, a duration entry in tuning, and its own spec work. That is a gameplay feature, not an interface one.
+      rationale:
+        - A numbered list the player cannot address is worse than no numbers; inspection makes the numbering honest at controller-layer cost.
+        - Naming the enabled key rather than writing flavour text means the description follows the keymap table automatically.
+      references: [look-is-controller-inspection, keymap-is-one-table, primitive-action-catalog]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs]
+      symbols: [inspected_slot_text]
+      tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: no-movement-automation
+    core:
+      status: accepted
+      confidence: confirmed
+      title: No Autoexplore, Travel-To, or Rest Automation
+      summary: The genre's headline quality-of-life features - autoexplore, travel-to with interrupts, rest-until - were surveyed and deliberately rejected for Murmur. In a stealth game, walking on autopilot is precisely the failure state - the interesting decision is which tile to stand on while someone is looking. Automation would either have to stop on danger, which the foundation forbids the simulation from doing, or walk the player into detection, which is worse than the tedium it removes. Click-to-move already covers deliberate repositioning at one step per click, inside the queue model. The controller-level TravelTo the foundation reserves remains available if a later design wants it, but it is not wanted now.
+      rationale:
+        - The simulation never tries to infer tactical significance or automatically protect the player from detection; an interrupt policy in the controller would be that protection by another name.
+        - The reported problems were comprehension, not tedium, so the effort went to surfacing information instead.
+      references: [queue-desurfacing, mouse-parity-across-every-screen, threat-state-is-named-not-counted]

@@ -10,6 +10,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
+use crate::keymap;
 use crate::{ScreenLayout, ShellInput};
 
 const TITLE: &str = "P R O J E C T   M U R M U R";
@@ -105,10 +106,86 @@ fn render_footer(
     frame.render_widget(Paragraph::new(lines).alignment(alignment), footer);
 }
 
+/// Guards the start screen's "start over": one save slot means a fresh
+/// campaign destroys the existing one with no way back.
+pub fn draw_confirm_new_campaign(frame: &mut Frame) -> ScreenLayout {
+    let mut layout = ScreenLayout::default();
+    let area = centered(frame.area(), 54, 11);
+    let lines = vec![
+        Line::styled(
+            "Start over?",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        ),
+        Line::raw(""),
+        Line::raw("This discards your saved campaign — the money,"),
+        Line::raw("the kit, and everyone you have already dealt with."),
+        Line::raw("There is only one save, and no way back."),
+    ];
+    let prompts = vec![
+        (
+            ShellInput::Char('y'),
+            "y: yes, start over".to_string(),
+            Style::default().fg(Color::Red),
+        ),
+        (
+            ShellInput::Esc,
+            "any other key: keep my campaign".to_string(),
+            Style::default().fg(Color::LightGreen),
+        ),
+    ];
+    frame.render_widget(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Red)),
+        area,
+    );
+    let (body, footer) = body_and_footer(area, prompts.len() as u16 + 1);
+    frame.render_widget(Paragraph::new(lines).alignment(Alignment::Center), body);
+    render_footer(frame, &mut layout, footer, Alignment::Center, &prompts);
+    layout
+}
+
+/// A compact "key label   key label" summary of every binding, packed to
+/// `width` columns. Derived from the keymap table so the start screen and
+/// the in-mission help can never disagree about what a key does.
+fn keymap_summary(width: usize) -> Vec<String> {
+    let mut cells: Vec<String> = keymap::ACTIONS
+        .iter()
+        .map(|a| format!("{} {}", a.key, a.label))
+        .collect();
+    cells.extend(
+        keymap::CONTROLS
+            .iter()
+            .map(|(key, short, _)| format!("{key} {short}")),
+    );
+    // Packed to natural width rather than fixed columns: this panel is
+    // centred, and padded cells centre raggedly.
+    let mut out: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for cell in cells {
+        let addition = if line.is_empty() {
+            cell.chars().count()
+        } else {
+            cell.chars().count() + 3
+        };
+        if !line.is_empty() && line.chars().count() + addition > width {
+            out.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push_str("   ");
+        }
+        line.push_str(&cell);
+    }
+    if !line.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
 pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
     let mut layout = ScreenLayout::default();
-    let area = centered(frame.area(), 66, 28);
-    let lines = vec![
+    let area = centered(frame.area(), 66, 30);
+    let mut lines = vec![
         Line::styled(
             TITLE,
             Style::default()
@@ -125,16 +202,19 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
         Line::raw("Arrest costs your kit and a fine. Death ends everything."),
         Line::raw(""),
         Line::styled("keys", Style::default().add_modifier(Modifier::UNDERLINED)),
-        Line::raw("arrows move    . or Space wait    c crouch    r draw/holster"),
-        Line::raw("o/k open/close door   g garrote   f shoot   p pickpocket"),
-        Line::raw("d change disguise   b carry/drop body   h hide body"),
-        Line::raw("l pick lock   t throw noisemaker   u use machine"),
-        Line::raw("; look   [ ] speed   Esc cancel   Q abandon the run"),
+    ];
+    // Built from the keymap table rather than written out again, so this
+    // list cannot drift from what the keys actually do. Press ? in a
+    // mission for the same bindings with full descriptions.
+    lines.extend(keymap_summary(60).into_iter().map(Line::raw));
+    lines.extend([
+        Line::raw(""),
+        Line::raw("Press ? during a mission for the full list."),
         Line::raw(""),
         Line::raw("The mouse works too: hover anything to inspect it,"),
         Line::raw("click a seen tile to walk there, and click any prompt"),
         Line::raw("or action instead of pressing its key."),
-    ];
+    ]);
     let green = Style::default().fg(Color::LightGreen);
     let mut prompts = vec![(
         ShellInput::Enter,

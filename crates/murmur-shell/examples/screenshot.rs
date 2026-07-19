@@ -59,4 +59,13 @@ fn main() {
         shell.tick();
     }
     print_frame(&mut terminal, &mut shell, "playing");
+
+    // Reading a slot, the key list, and the guard on abandoning a run.
+    shell.handle_input(ShellInput::Char('1'));
+    print_frame(&mut terminal, &mut shell, "inventory slot inspected");
+    shell.handle_input(ShellInput::Char('?'));
+    print_frame(&mut terminal, &mut shell, "help");
+    shell.handle_input(ShellInput::Esc); // dismiss help
+    shell.handle_input(ShellInput::Char('Q'));
+    print_frame(&mut terminal, &mut shell, "abandon confirm");
 }

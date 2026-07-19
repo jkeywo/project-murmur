@@ -14,6 +14,7 @@
 //! dies and the campaign ends at a tally. The campaign autosaves through
 //! the injected [`CampaignStore`] after every hub-level change.
 
+pub mod keymap;
 pub mod mission;
 pub mod queue;
 mod render;
@@ -88,6 +89,9 @@ pub struct PendingAccept {
 /// an interface mode only: it never advances simulation time.
 pub enum Screen {
     Start,
+    /// Guarding the one irreversible choice on the start screen: there is
+    /// a single save slot, so starting over destroys the only campaign.
+    ConfirmNewCampaign,
     Hub {
         /// Set while picking a loadout for an accepted offer.
         accepting: Option<PendingAccept>,
@@ -164,6 +168,18 @@ impl Shell {
         self.store.save(&self.campaign.to_save());
     }
 
+    /// Discards any saved campaign and opens a fresh one at the hub.
+    fn start_new_campaign(&mut self) {
+        let seed = split_mix_64(self.campaign.seed);
+        self.campaign = CampaignState::new(seed, &self.data);
+        self.store.clear();
+        self.autosave();
+        self.screen = Screen::Hub {
+            accepting: None,
+            message: Some("a fresh start".to_string()),
+        };
+    }
+
     /// Handles one input event in the current screen.
     pub fn handle_input(&mut self, input: ShellInput) {
         // Outside the mission every screen is a list of prompts: a click
@@ -189,18 +205,23 @@ impl Shell {
                     };
                 }
                 ShellInput::Char('n') => {
-                    // Abandon any saved campaign and start over.
-                    let seed = split_mix_64(self.campaign.seed);
-                    self.campaign = CampaignState::new(seed, &self.data);
-                    self.store.clear();
-                    self.autosave();
-                    self.screen = Screen::Hub {
-                        accepting: None,
-                        message: Some("a fresh start".to_string()),
-                    };
+                    // There is one save slot and no undo, so starting over
+                    // is unrecoverable: ask before discarding a campaign.
+                    // With nothing saved there is nothing to lose, so the
+                    // prompt only appears when it would actually protect
+                    // something.
+                    if self.store.load().is_some() {
+                        self.screen = Screen::ConfirmNewCampaign;
+                    } else {
+                        self.start_new_campaign();
+                    }
                 }
                 ShellInput::Char('q') => self.quit_requested = true,
                 _ => {}
+            },
+            Screen::ConfirmNewCampaign => match input {
+                ShellInput::Char('y') | ShellInput::Enter => self.start_new_campaign(),
+                _ => self.screen = Screen::Start,
             },
             Screen::Hub { .. } => self.handle_hub_input(input),
             Screen::Briefing { .. } => match input {
@@ -230,15 +251,13 @@ impl Shell {
                 _ => {}
             },
             Screen::Playing { mission, .. } => {
-                if input == ShellInput::Char('Q') {
-                    let _ = mission;
-                    self.finish_mission(None);
-                    return;
-                }
-                let Screen::Playing { mission, .. } = &mut self.screen else {
-                    unreachable!()
-                };
+                // Q asks first: under permadeath a mistyped key should not
+                // be able to end a run. The mission owns the prompt; the
+                // shell carries out the answer.
                 mission.handle_input(&self.data, input);
+                if mission.take_confirmed() == Some(mission::ConfirmAction::AbandonRun) {
+                    self.finish_mission(None);
+                }
             }
             Screen::Debrief { .. } => {
                 if input == ShellInput::Enter {
@@ -444,6 +463,9 @@ impl Shell {
             Screen::Start => {
                 self.screen_layout = screens::draw_start(frame, self.store.load().is_some());
             }
+            Screen::ConfirmNewCampaign => {
+                self.screen_layout = screens::draw_confirm_new_campaign(frame);
+            }
             Screen::Hub { accepting, message } => {
                 self.screen_layout = screens::draw_hub(
                     frame,
@@ -548,14 +570,17 @@ mod tests {
         assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
         let log = &mission(&shell).log;
         assert!(log.len() > before);
-        assert!(log.last().unwrap().contains("lockpicks"));
+        assert!(log.last().unwrap().text.contains("lockpicks"));
     }
 
     #[test]
     fn abandoning_resolves_into_a_debrief_and_back_to_the_hub() {
         let mut shell = shell();
         start_mission(&mut shell);
+        // Q asks before it ends the run.
         shell.handle_input(ShellInput::Char('Q'));
+        assert!(matches!(shell.screen(), Screen::Playing { .. }));
+        shell.handle_input(ShellInput::Char('y'));
         assert!(matches!(shell.screen(), Screen::Debrief { .. }));
         assert_eq!(shell.campaign().history.len(), 1);
         shell.handle_input(ShellInput::Enter);
@@ -607,7 +632,7 @@ mod tests {
             mission
                 .log
                 .iter()
-                .any(|line| line.contains("can't plan any further")),
+                .any(|line| line.text.contains("can't plan any further")),
             "overflow is reported without queue jargon"
         );
     }
@@ -658,6 +683,154 @@ mod tests {
             shell.tick();
         }
         assert_eq!(mission(&shell).world().turn, 1, "play resumes immediately");
+    }
+
+    /// Help pauses to be read and resumes on exit, exactly as look does.
+    /// A mode that pauses without resuming is indistinguishable from a
+    /// hang, because the queue has no visible state.
+    #[test]
+    fn help_pauses_internally_and_any_key_resumes() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char('?'));
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Help));
+        assert!(mission(&shell).queue.is_paused());
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 0, "help holds the run still");
+        // Any key at all closes it.
+        shell.handle_input(ShellInput::Char('z'));
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(
+            !mission(&shell).queue.is_paused(),
+            "leaving help must never strand the player in a paused state"
+        );
+        shell.handle_input(ShellInput::Char('.'));
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 1, "play resumes immediately");
+    }
+
+    /// Abandoning a run is unrecoverable under permadeath, so Q asks. Both
+    /// answers must leave the prompt and resume.
+    #[test]
+    fn abandoning_asks_first_and_declining_resumes() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        shell.handle_input(ShellInput::Char('Q'));
+        assert!(
+            matches!(mission(&shell).mode, mission::InputMode::Confirm { .. }),
+            "Q must not end the run on its own"
+        );
+        assert!(mission(&shell).queue.is_paused());
+        // Anything that is not a yes declines.
+        shell.handle_input(ShellInput::Char('n'));
+        assert!(matches!(shell.screen(), Screen::Playing { .. }));
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(
+            !mission(&shell).queue.is_paused(),
+            "declining must never strand the player in a paused state"
+        );
+        shell.handle_input(ShellInput::Char('.'));
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 1, "play resumes immediately");
+    }
+
+    /// Starting over destroys the only save, so it asks — but only when
+    /// there is actually a campaign to lose.
+    #[test]
+    fn starting_over_asks_before_discarding_a_save() {
+        let mut shell = shell();
+        // A fresh shell has saved nothing yet: nothing to protect.
+        shell.handle_input(ShellInput::Char('n'));
+        assert!(matches!(shell.screen(), Screen::Hub { .. }));
+        // Now a campaign exists, so the same key asks first.
+        shell.handle_input(ShellInput::Esc);
+        let seed_before = shell.campaign().seed;
+        shell.screen = Screen::Start;
+        shell.handle_input(ShellInput::Char('n'));
+        assert!(matches!(shell.screen(), Screen::ConfirmNewCampaign));
+        shell.handle_input(ShellInput::Char('x')); // anything but yes
+        assert!(matches!(shell.screen(), Screen::Start));
+        assert_eq!(
+            shell.campaign().seed,
+            seed_before,
+            "declining must leave the campaign untouched"
+        );
+        // Confirming goes through.
+        shell.handle_input(ShellInput::Char('n'));
+        shell.handle_input(ShellInput::Char('y'));
+        assert!(matches!(shell.screen(), Screen::Hub { .. }));
+        assert_ne!(shell.campaign().seed, seed_before);
+    }
+
+    /// Every key in the palette must have a dispatch arm. The table and
+    /// the match are separate, so this is what stops them drifting: each
+    /// key has to visibly do something from a clean normal-mode state.
+    #[test]
+    fn keymap_matches_dispatch() {
+        for entry in keymap::ACTIONS {
+            let mut shell = shell();
+            start_mission(&mut shell);
+            let before_log = mission(&shell).log.len();
+            let before_queue = mission(&shell).queue.len();
+            shell.handle_input(ShellInput::Char(entry.key));
+            let after = mission(&shell);
+            let acted = !matches!(after.mode, mission::InputMode::Normal)
+                || after.queue.len() != before_queue
+                || after.log.len() != before_log;
+            assert!(
+                acted,
+                "key {:?} ({}) is in the keymap but handle_normal ignores it",
+                entry.key, entry.label
+            );
+        }
+    }
+
+    /// Identical consecutive messages collapse instead of scrolling an
+    /// eight-row panel clean.
+    #[test]
+    fn repeated_log_lines_collapse_into_a_count() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        let data = shell.data().clone();
+        // Pick-lock is unavailable with the default loadout, so pressing
+        // it repeatedly produces the same refusal every time.
+        assert!(!mission(&shell).action_available(&data, 'l'));
+        for _ in 0..3 {
+            shell.handle_input(ShellInput::Char('l'));
+        }
+        let log = &mission(&shell).log;
+        let last = log.last().unwrap();
+        assert_eq!(last.count, 3, "three identical refusals are one entry");
+        assert_eq!(last.kind, mission::LogKind::Notice);
+        assert!(last.display().ends_with("(x3)"));
+        // A different message still starts a new entry.
+        let entries = log.len();
+        shell.handle_input(ShellInput::Char('g'));
+        assert!(mission(&shell).log.len() > entries);
+    }
+
+    /// Reading an inventory slot is inspection: it costs no time and
+    /// produces no action.
+    #[test]
+    fn inspecting_an_inventory_slot_costs_nothing() {
+        let mut shell = shell();
+        start_mission(&mut shell);
+        let data = shell.data().clone();
+        shell.handle_input(ShellInput::Char('1'));
+        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(mission(&shell).queue.is_empty());
+        let text = mission(&shell).inspected_slot_text(&data);
+        assert!(text.is_some_and(|t| t.starts_with("slot 1:")));
+        for _ in 0..10 {
+            shell.tick();
+        }
+        assert_eq!(mission(&shell).world().turn, 0, "reading a slot is free");
     }
 
     #[test]

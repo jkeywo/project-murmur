@@ -57,6 +57,10 @@ impl PendingAction {
 }
 
 /// The mission input mode.
+///
+/// Every mode that pauses queue consumption must resume it on exit. With
+/// no visible queue state, a pause the player cannot see and cannot leave
+/// is indistinguishable from a hang.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InputMode {
     Normal,
@@ -68,6 +72,54 @@ pub enum InputMode {
         candidates: Vec<ActorId>,
         index: usize,
     },
+    /// The key list, overlaid on the map. Any key dismisses it.
+    Help,
+    /// A yes/no question guarding something that cannot be undone.
+    Confirm {
+        prompt: &'static str,
+        on_yes: ConfirmAction,
+    },
+}
+
+/// What a confirmed prompt actually does. Kept separate from the prompt
+/// text so the shell can act on the answer without re-parsing it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConfirmAction {
+    /// Walk out of the mission, forfeiting the contract.
+    AbandonRun,
+}
+
+/// How loudly a log line should read. Most events are routine; the ones
+/// that change your situation should not look the same as footsteps.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LogKind {
+    /// Ambient chatter and confirmations.
+    #[default]
+    Routine,
+    /// Something worth reading: a refusal, a plan cancelled, a discovery.
+    Notice,
+    /// Something has gone wrong: detection, injury, a broken contract.
+    Alarm,
+}
+
+/// One line in the event log. Identical consecutive messages collapse into
+/// a single entry with a count rather than scrolling the panel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LogEntry {
+    pub text: String,
+    pub kind: LogKind,
+    pub count: u16,
+}
+
+impl LogEntry {
+    /// The line as rendered, including the repeat marker.
+    pub fn display(&self) -> String {
+        if self.count > 1 {
+            format!("{} (x{})", self.text, self.count)
+        } else {
+            self.text.clone()
+        }
+    }
 }
 
 /// Presentation pacing: how many due simulation turns run per frame.
@@ -163,11 +215,16 @@ pub struct Mission {
     pub queue: CommandQueue,
     pub mode: InputMode,
     pub speed: Speed,
-    pub log: Vec<String>,
+    pub log: Vec<LogEntry>,
     /// The map tile under the mouse cursor, for hover inspection.
     pub hover: Option<Pos>,
     /// Last frame's layout, for mouse hit-testing.
     pub ui: UiLayout,
+    /// A confirmed prompt waiting for the shell to act on it.
+    confirmed: Option<ConfirmAction>,
+    /// The inventory slot the player last asked about, shown in the
+    /// inspection line until they look at something else.
+    inspected_slot: Option<usize>,
     explored: Vec<Vec<bool>>,
     frame: u64,
 }
@@ -184,9 +241,15 @@ impl Mission {
             queue: CommandQueue::new(usize::from(data.tuning.queue_capacity)),
             mode: InputMode::Normal,
             speed: Speed::Fast,
-            log: vec!["you slip in through the entrance".to_string()],
+            log: vec![LogEntry {
+                text: "you slip in through the entrance".to_string(),
+                kind: LogKind::Routine,
+                count: 1,
+            }],
             hover: None,
             ui: UiLayout::default(),
+            confirmed: None,
+            inspected_slot: None,
             explored,
             frame: 0,
         };
@@ -271,6 +334,60 @@ impl Mission {
         ids.into_iter().map(|(_, id)| id).collect()
     }
 
+    /// What the last-asked-about inventory slot holds, if any.
+    ///
+    /// Items are passive: carrying one is what enables its verb, so the
+    /// useful thing to report is which key it unlocks rather than a flavour
+    /// line. The key names come from the keymap table, so this description
+    /// follows any rebinding automatically.
+    pub fn inspected_slot_text(&self, data: &GameData) -> Option<String> {
+        let slot = self.inspected_slot?;
+        let world = self.world();
+        let Some(item) = world.carried_items(world.player).nth(slot) else {
+            return Some(format!("slot {}: empty", slot + 1));
+        };
+        let Some(spec) = data.item(&item.spec) else {
+            return Some(format!("slot {}: {}", slot + 1, item.spec));
+        };
+        let mut notes: Vec<String> = Vec::new();
+        let mut enables = |key: char| {
+            if let Some(action) = crate::keymap::action(key) {
+                notes.push(format!("enables {} ({})", action.label, action.key));
+            }
+        };
+        if spec.firearm {
+            enables('f');
+        } else if spec.weapon {
+            enables('g');
+        }
+        if spec.lockpick {
+            enables('l');
+        }
+        if spec.noisemaker {
+            enables('t');
+        }
+        if spec.invitation {
+            notes.push("you are an invited guest".to_string());
+        }
+        if spec.staff_pass {
+            notes.push("counts as staff wherever you are".to_string());
+        }
+        if spec.master_key {
+            notes.push("opens every lock here".to_string());
+        } else if spec.unlocks.is_some() {
+            notes.push("opens one kind of locked door".to_string());
+        }
+        if item.charges > 0 {
+            notes.push(format!("{} left", item.charges));
+        }
+        let detail = if notes.is_empty() {
+            "no use of its own".to_string()
+        } else {
+            notes.join(", ")
+        };
+        Some(format!("slot {}: {} - {detail}", slot + 1, spec.name))
+    }
+
     /// The tile currently being inspected: the look cursor when look mode
     /// is active, otherwise the hovered tile.
     pub fn inspected_tile(&self) -> Option<Pos> {
@@ -284,10 +401,16 @@ impl Mission {
     pub fn handle_input(&mut self, data: &GameData, input: ShellInput) {
         match input {
             ShellInput::MouseMove { column, row } => {
-                self.hover = self
+                let hover = self
                     .ui
                     .tile_at(column, row)
                     .filter(|pos| self.world().map.in_bounds(*pos));
+                // Pointing at the map answers a different question than
+                // the slot did, so the slot line steps aside.
+                if hover.is_some() {
+                    self.inspected_slot = None;
+                }
+                self.hover = hover;
                 return;
             }
             ShellInput::MouseClick { column, row } => {
@@ -314,7 +437,44 @@ impl Mission {
                 let (candidates, index) = (candidates.clone(), *index);
                 self.handle_target_select(candidates, index, input);
             }
+            InputMode::Help => self.handle_help(input),
+            InputMode::Confirm { on_yes, .. } => {
+                let on_yes = *on_yes;
+                self.handle_confirm(on_yes, input);
+            }
         }
+    }
+
+    /// Help is a reading mode: any key at all closes it, and closing it
+    /// resumes whatever was planned.
+    fn handle_help(&mut self, _input: ShellInput) {
+        self.mode = InputMode::Normal;
+        self.queue.resume();
+    }
+
+    /// Answering the prompt either way leaves the mode and resumes, so a
+    /// confirmation can never become a state the player is stuck in.
+    /// `confirmed` is read by the shell, which owns the consequences.
+    fn handle_confirm(&mut self, on_yes: ConfirmAction, input: ShellInput) {
+        let yes = matches!(input, ShellInput::Char('y') | ShellInput::Enter);
+        self.mode = InputMode::Normal;
+        self.queue.resume();
+        if yes {
+            self.confirmed = Some(on_yes);
+        }
+    }
+
+    /// Takes the answer to a confirmed prompt, if one is waiting. The
+    /// shell polls this because abandoning a run is its decision to carry
+    /// out, not the mission's.
+    pub fn take_confirmed(&mut self) -> Option<ConfirmAction> {
+        self.confirmed.take()
+    }
+
+    /// Opens a yes/no prompt, pausing execution while it is up.
+    fn ask(&mut self, prompt: &'static str, on_yes: ConfirmAction) {
+        self.queue.pause();
+        self.mode = InputMode::Confirm { prompt, on_yes };
     }
 
     /// Clicking an action in the palette is exactly pressing its key;
@@ -340,7 +500,8 @@ impl Mission {
                     self.mode = InputMode::Normal;
                     match self.command_for_target(action, pos) {
                         Some(command) => self.enqueue(command),
-                        None => self.push_log("nothing suitable there".to_string()),
+                        None => self
+                            .push_log_kind("nothing suitable there".to_string(), LogKind::Notice),
                     }
                 }
             }
@@ -356,6 +517,15 @@ impl Mission {
             }
             InputMode::Look(_) => {
                 self.mode = InputMode::Look(pos);
+            }
+            // The overlay covers the map, so a click on it is a click on
+            // the overlay: dismiss, exactly as any key would.
+            InputMode::Help => self.handle_help(ShellInput::Esc),
+            // A click is plainly not a "yes", so it answers no. Both
+            // answers leave the mode, so the prompt is never a trap.
+            InputMode::Confirm { on_yes, .. } => {
+                let on_yes = *on_yes;
+                self.handle_confirm(on_yes, ShellInput::Esc);
             }
             InputMode::ThrowTarget(_) => {
                 self.mode = InputMode::Normal;
@@ -374,7 +544,9 @@ impl Mission {
                 }
                 match first_step_towards(world, data, world.player, pos) {
                     Some(dir) => self.enqueue(Command::Move(dir)),
-                    None => self.push_log("no way through to there".to_string()),
+                    None => {
+                        self.push_log_kind("no way through to there".to_string(), LogKind::Notice)
+                    }
                 }
             }
         }
@@ -523,7 +695,7 @@ impl Mission {
         if let ShellInput::Char(key) = input
             && let Some(reason) = self.action_block(data, key)
         {
-            self.push_log(format!("can't: {reason}"));
+            self.push_log_kind(format!("can't: {reason}"), LogKind::Notice);
             return;
         }
         match input {
@@ -555,7 +727,7 @@ impl Mission {
             ShellInput::Char('f') => {
                 let candidates = self.visible_actors(data);
                 if candidates.is_empty() {
-                    self.push_log("no target in sight".to_string());
+                    self.push_log_kind("no target in sight".to_string(), LogKind::Notice);
                 } else {
                     self.mode = InputMode::TargetSelect {
                         candidates,
@@ -567,7 +739,25 @@ impl Mission {
                 // Look mode pauses execution internally; leaving it
                 // resumes, so the pause is never a stuck state.
                 self.queue.pause();
+                self.inspected_slot = None;
                 self.mode = InputMode::Look(self.world().player_actor().pos);
+            }
+            ShellInput::Char('?') => {
+                // Same contract as look: pause to read, resume on exit.
+                self.queue.pause();
+                self.mode = InputMode::Help;
+            }
+            ShellInput::Char('Q') => {
+                self.ask(
+                    "abandon the run and walk away? y / n",
+                    ConfirmAction::AbandonRun,
+                );
+            }
+            // Reading a slot costs no time and produces no action: it is
+            // inspection, like look. Carrying an item is what enables its
+            // verb, so there is nothing to "use" here.
+            ShellInput::Char(slot @ '1'..='6') => {
+                self.inspected_slot = Some(usize::from(slot as u8 - b'1'));
             }
             ShellInput::Char('[') => {
                 self.speed = self.speed.slower();
@@ -583,7 +773,7 @@ impl Mission {
             ShellInput::Esc => {
                 let cancelled = self.queue.clear();
                 if cancelled > 0 {
-                    self.push_log("you stop what you were doing".to_string());
+                    self.push_log_kind("you stop what you were doing".to_string(), LogKind::Notice);
                 }
             }
             _ => {}
@@ -627,7 +817,7 @@ impl Mission {
         };
         match self.command_for_target(action, target_pos) {
             Some(command) => self.enqueue(command),
-            None => self.push_log("nothing suitable there".to_string()),
+            None => self.push_log_kind("nothing suitable there".to_string(), LogKind::Notice),
         }
     }
 
@@ -746,7 +936,10 @@ impl Mission {
         match self.queue.push(command) {
             EnqueueOutcome::Accepted => {}
             EnqueueOutcome::RejectedFull => {
-                self.push_log("you can't plan any further ahead".to_string());
+                self.push_log_kind(
+                    "you can't plan any further ahead".to_string(),
+                    LogKind::Notice,
+                );
             }
         }
     }
@@ -792,18 +985,30 @@ impl Mission {
                 // offender and quietly drop whatever was planned after it.
                 self.queue.pop_head();
                 self.queue.clear();
-                self.push_log(format!("rejected: {}", reason.message()));
+                self.push_log_kind(format!("rejected: {}", reason.message()), LogKind::Notice);
                 false
             }
         }
     }
 
     fn absorb(&mut self, report: TurnReport) {
+        // A breach is the one event message that changes the run's payout,
+        // so it reads as an alarm. The state check is the real guard; the
+        // prefix only picks the breach line out of that turn's messages,
+        // and matches how `breach_constraint` formats it.
+        let breached = self.driver.world().constraint_breach.is_some();
         for message in &report.events.messages {
-            self.push_log(message.clone());
+            let kind = if breached && message.starts_with("CONTRACT BREACHED") {
+                LogKind::Alarm
+            } else {
+                LogKind::Routine
+            };
+            self.push_log_kind(message.clone(), kind);
         }
+        // Perception messages are alarms, screams, and their propagation:
+        // by definition the lines that say your situation just changed.
         for message in &report.perception {
-            self.push_log(message.clone());
+            self.push_log_kind(message.clone(), LogKind::Alarm);
         }
         if let Some(ActionResult::Failed(_)) = &report.events.player_result {
             // In-turn failure: the turn passed; the rest of the plan is
@@ -813,7 +1018,26 @@ impl Mission {
     }
 
     fn push_log(&mut self, message: String) {
-        self.log.push(message);
+        self.push_log_kind(message, LogKind::Routine);
+    }
+
+    /// Appends a log line, or bumps the repeat count when it is identical
+    /// to the line already at the tail. A patrol passing five times reads
+    /// as one line with a count instead of five lines that push everything
+    /// else off an eight-row panel.
+    fn push_log_kind(&mut self, message: String, kind: LogKind) {
+        if let Some(last) = self.log.last_mut()
+            && last.text == message
+            && last.kind == kind
+        {
+            last.count = last.count.saturating_add(1);
+            return;
+        }
+        self.log.push(LogEntry {
+            text: message,
+            kind,
+            count: 1,
+        });
         if self.log.len() > 200 {
             let excess = self.log.len() - 200;
             self.log.drain(0..excess);

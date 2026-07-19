@@ -18,9 +18,10 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-use crate::mission::{InputMode, Mission, UiLayout};
+use crate::keymap;
+use crate::mission::{InputMode, LogKind, Mission, UiLayout};
 
 /// Renders the mission and returns the layout used, for mouse hit-testing.
 pub fn draw_mission(frame: &mut Frame, data: &GameData, mission: &Mission) -> UiLayout {
@@ -37,7 +38,68 @@ pub fn draw_mission(frame: &mut Frame, data: &GameData, mission: &Mission) -> Ui
     draw_map(frame, data, mission, left[0], &mut ui);
     draw_log(frame, data, mission, left[1]);
     draw_sidebar(frame, data, mission, outer[1], &mut ui);
+    // Overlays draw last, over the map they explain. Help is reachable at
+    // any point in a run: the key list should never be something you have
+    // to abandon a mission to read.
+    if mission.mode == InputMode::Help {
+        // Over the whole frame, not just the map: the list has to fit
+        // without scrolling on the shortest terminal we support, and
+        // nothing behind it is worth reading while it is up.
+        draw_help(frame, frame.area());
+    }
     ui
+}
+
+/// The full key list, generated from the keymap table so it cannot drift
+/// from what the keys actually do.
+fn draw_help(frame: &mut Frame, area: Rect) {
+    // No blank separators and no repeated heading: the underlined
+    // category titles carry the grouping, and every row saved is a row
+    // that does not get cut off on a short terminal.
+    let mut lines: Vec<Line> = Vec::new();
+    let key_style = Style::default()
+        .fg(Color::LightCyan)
+        .add_modifier(Modifier::BOLD);
+    for category in keymap::Category::ALL {
+        let mut entries = keymap::in_category(category).peekable();
+        if entries.peek().is_none() {
+            continue;
+        }
+        lines.push(Line::styled(
+            category.title(),
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        ));
+        for entry in entries {
+            lines.push(Line::from(vec![
+                Span::styled(format!("  {:<10}", entry.key), key_style),
+                Span::raw(entry.help),
+            ]));
+        }
+    }
+    lines.push(Line::styled(
+        "getting around",
+        Style::default().add_modifier(Modifier::UNDERLINED),
+    ));
+    for (key, _, help) in keymap::CONTROLS {
+        lines.push(Line::from(vec![
+            Span::styled(format!("  {key:<10}"), key_style),
+            Span::raw(*help),
+        ]));
+    }
+
+    // Clear first: the map underneath would otherwise show through the
+    // gaps between lines. The way out lives in the title, where it cannot
+    // be the thing that scrolls off.
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::LightMagenta))
+                .title(" help - any key returns to the mission "),
+        ),
+        area,
+    );
 }
 
 fn mood_color(mood: Mood) -> Color {
@@ -50,6 +112,30 @@ fn mood_color(mood: Mood) -> Color {
         Mood::Combat => Color::LightRed,
         Mood::Fleeing => Color::Magenta,
     }
+}
+
+/// How an NPC's state reads in words. The map says the same thing in
+/// colour; this is what the threat list and the inspection line use, and
+/// it is what makes the state legible without relying on hue.
+fn mood_label(mood: Mood) -> &'static str {
+    match mood {
+        Mood::Relaxed => "unaware",
+        Mood::Suspicious => "suspicious",
+        Mood::Investigating => "investigating",
+        Mood::Alerted => "alerted",
+        Mood::Escorting => "escorting",
+        Mood::Combat => "attacking",
+        Mood::Fleeing => "fleeing",
+    }
+}
+
+/// True for the states that mean someone is actively a problem. Bold on
+/// the map, and listed by name in the sidebar.
+fn mood_is_hostile(mood: Mood) -> bool {
+    matches!(
+        mood,
+        Mood::Investigating | Mood::Alerted | Mood::Escorting | Mood::Combat
+    )
 }
 
 /// Visible floor tint by access zone; explored-but-unseen uses the dim
@@ -91,7 +177,10 @@ fn actor_cell(data: &GameData, actor: &Actor) -> (char, Style) {
     } else {
         mood_color(mood)
     });
-    if actor.is_target {
+    // Anyone who has become a problem is bold as well as red, so the
+    // warning survives a palette that renders those hues badly. Colour
+    // alone should not be the only carrier of "this one has noticed you".
+    if actor.is_target || mood_is_hostile(mood) {
         style = style.add_modifier(Modifier::BOLD);
     }
     (glyph, style)
@@ -272,6 +361,19 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
+/// Severity styling for the event log. Alarms are bold as well as red so
+/// the distinction survives a colourblind palette or a terminal that
+/// renders red poorly.
+fn log_style(kind: LogKind) -> Style {
+    match kind {
+        LogKind::Routine => Style::default().fg(Color::Gray),
+        LogKind::Notice => Style::default().fg(Color::LightYellow),
+        LogKind::Alarm => Style::default()
+            .fg(Color::LightRed)
+            .add_modifier(Modifier::BOLD),
+    }
+}
+
 fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
     match &mission.mode {
@@ -299,8 +401,18 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
                 Style::default().fg(Color::LightCyan),
             ));
         }
+        InputMode::Confirm { prompt, .. } => {
+            lines.push(Line::styled(
+                (*prompt).to_string(),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ));
+        }
         _ => {
-            if let Some(pos) = mission.inspected_tile() {
+            // A slot the player just asked about wins the line; otherwise
+            // it reports whatever they are pointing at.
+            if let Some(slot) = mission.inspected_slot_text(data) {
+                lines.push(Line::styled(slot, Style::default().fg(Color::LightCyan)));
+            } else if let Some(pos) = mission.inspected_tile() {
                 let visible = mission.visible_tiles(data).contains(&pos);
                 lines.push(Line::styled(
                     format!("here: {}", mission.describe(data, pos, visible)),
@@ -311,31 +423,12 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
     }
     let budget = usize::from(area.height).saturating_sub(2 + lines.len());
     let start = mission.log.len().saturating_sub(budget);
-    for message in &mission.log[start..] {
-        lines.push(Line::raw(message.clone()));
+    for entry in &mission.log[start..] {
+        lines.push(Line::styled(entry.display(), log_style(entry.kind)));
     }
     let block = Block::default().borders(Borders::ALL).title(" events ");
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
-
-/// The clickable action palette: label and key for each verb.
-const ACTIONS: &[(char, &str)] = &[
-    ('.', "wait"),
-    ('c', "crouch"),
-    ('r', "draw/holster"),
-    ('g', "garrote"),
-    ('f', "shoot"),
-    ('p', "pickpocket"),
-    ('d', "disguise"),
-    ('b', "carry/drop"),
-    ('h', "hide body"),
-    ('o', "open door"),
-    ('k', "close door"),
-    ('l', "pick lock"),
-    ('t', "noisemaker"),
-    ('u', "use machine"),
-    (';', "look"),
-];
 
 fn draw_sidebar(
     frame: &mut Frame,
@@ -464,7 +557,46 @@ fn draw_sidebar(
     }
     lines.push(Line::raw(""));
 
-    // Threat summary.
+    // Who you can see, and what each of them is doing. A bare count told
+    // you that you were in trouble but not with whom, which is the part
+    // you can actually act on. Reuses the shooting target list, so this
+    // panel and the map agree about who is visible.
+    lines.push(Line::styled(
+        "in sight",
+        Style::default().add_modifier(Modifier::UNDERLINED),
+    ));
+    let seen = mission.visible_actors(data);
+    if seen.is_empty() {
+        lines.push(Line::styled(
+            " nobody",
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+    // Nearest first, and only as many as the panel can show without
+    // pushing the action palette off the bottom.
+    for id in seen.iter().take(4) {
+        let actor = world.actor(*id);
+        let mood = actor.ai.as_ref().map(|ai| ai.mood).unwrap_or(Mood::Relaxed);
+        let distance = world.player_actor().pos.chebyshev(actor.pos);
+        let range = distance.map(|d| format!(" {d}")).unwrap_or_default();
+        let mut style = Style::default().fg(mood_color(mood));
+        if mood_is_hostile(mood) {
+            style = style.add_modifier(Modifier::BOLD);
+        }
+        lines.push(Line::styled(
+            format!(" {}{range} - {}", actor.name, mood_label(mood)),
+            style,
+        ));
+    }
+    if seen.len() > 4 {
+        lines.push(Line::styled(
+            format!(" and {} more", seen.len() - 4),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
+    // Anyone hunting you may well be out of sight, so this stays a count
+    // over the whole venue rather than only what you can see.
     let hunting = world
         .actors
         .iter()
@@ -501,18 +633,19 @@ fn draw_sidebar(
     let key_style = Style::default()
         .fg(Color::LightCyan)
         .add_modifier(Modifier::BOLD);
-    for (pair_index, pair) in ACTIONS.chunks(2).enumerate() {
+    for (pair_index, pair) in keymap::ACTIONS.chunks(2).enumerate() {
         let row = palette_start_row + pair_index as u16;
         let mut spans: Vec<Span> = Vec::new();
         let mut column = area.x + 1;
-        for (key, label) in pair {
+        for entry in pair {
+            let (key, label) = (entry.key, entry.label);
             let text = format!("{key} {label}");
             let width = text.chars().count() as u16;
             let padded = format!("{text:<16}");
-            ui.actions.push((row, column, column + width - 1, *key));
+            ui.actions.push((row, column, column + width - 1, key));
             // Actions with no valid target right now are dimmed; they
             // still click through and report why they can't be used.
-            let available = mission.action_available(data, *key);
+            let available = mission.action_available(data, key);
             let (kstyle, lstyle) = if available {
                 (key_style, Style::default())
             } else {
