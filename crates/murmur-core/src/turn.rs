@@ -192,11 +192,11 @@ fn apply_heat_tiers(world: &mut World, data: &GameData, messages: &mut Vec<Strin
                         }
                     }
                 }
-                messages.push("word spreads among security: something is wrong".to_string());
+                messages.push(crate::tr!("log.heat.word_spreads").to_string());
             }
             _ => {
                 spawn_reinforcements(world, data);
-                messages.push("backup security pushes in through the entrance".to_string());
+                messages.push(crate::tr!("log.heat.backup_arrives").to_string());
             }
         }
     }
@@ -235,7 +235,7 @@ fn spawn_reinforcements(world: &mut World, data: &GameData) {
         let id = crate::world::ActorId(world.actors.len() as u32);
         world.actors.push(crate::world::Actor {
             id,
-            name: format!("backup guard {}", n + 1),
+            name: crate::trf!("actor.backup_guard", n = n + 1),
             role: Some(crate::data::Role::Guard),
             pos: spot,
             facing: Some(crate::geom::Dir4::North),

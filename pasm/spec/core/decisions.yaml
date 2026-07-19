@@ -611,8 +611,8 @@ entities:
       references: [liberal-player-wall-visibility, single-cell-tiles-and-inspection, mouse-inspection-and-clickable-actions]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/render.rs]
-      symbols: [mood_label, mood_is_hostile]
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-shell/src/render.rs]
+      symbols: [label, mood_is_hostile]
       tests: [crates/murmur-shell/src/lib.rs]
 
   - decision: inventory-slots-are-inspectable-not-usable
@@ -641,3 +641,50 @@ entities:
         - The simulation never tries to infer tactical significance or automatically protect the player from detection; an interrupt policy in the controller would be that protection by another name.
         - The reported problems were comprehension, not tedium, so the effort went to surfacing information instead.
       references: [queue-desurfacing, mouse-parity-across-every-screen, threat-state-is-named-not-counted]
+
+  - decision: text-lives-in-a-csv-catalogue
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Text Lives in a CSV Catalogue, Not in Code or RON
+      summary: Every player-facing string moved out of Rust literals and out of the RON data files into data/loc/strings.csv, keyed by a stable dot-separated id with a context column describing where the string appears and what fills each {slot}. Code holds ids; the RON files hold structure and numbers and no words at all. Display fields on the specs (item, room, venue, disguise, opportunity names, zone labels, risk and presentation lines) are filled at load by GameData::resolve_text from ids derived from the structural id the spec already carries, so adding a room template means adding one CSV row and nothing else. Ordered pools - person names, districts, briefing reasons - are read from zero-padded id ranges and their RON files were deleted outright. Interpolation is named-slot substitution at runtime, because format! needs a compile-time literal.
+      rationale:
+        - Localisation needs a single enumerable source; the words were previously spread across four crates and eleven data files with no way to list them.
+        - Deriving spec text from the structural id avoids a second id space and keeps every existing spec.name call site working untouched.
+        - Zero-padded pool ids matter for determinism - the catalogue is ordered by id, so unpadded numbering would reorder the first nine entries when a tenth appeared and change every existing seed's output.
+      references: [embedded-ron-game-data, string-catalogue]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/loc.rs, crates/murmur-core/src/data.rs, data/loc/strings.csv]
+      symbols: [Catalogue, with_prefix]
+      tests: [crates/murmur-core/src/loc.rs]
+
+  - decision: agent-text-is-bracketed-placeholder
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Agent-Written Text Is Bracketed In the Data, Not At Runtime
+      summary: Every string an agent wrote - which today is all of them - is wrapped in [square brackets] in the CSV itself rather than decorated at lookup time. What a translator reads in the file is exactly what the game prints, and promoting a line to final prose is the same edit that removes its brackets. No test enforces the marking - the convention is for agents to follow, and the whole point is that a writer removes brackets as they land real copy, so a check would fail on exactly the change it should welcome. The visible consequence is that composed strings nest their brackets, because a template like [{presentation} in {room}] substitutes values that are themselves bracketed.
+      rationale:
+        - A status column with runtime wrapping was considered; baking the brackets in keeps the file self-describing and means no tooling has to know about a marking convention to render the text correctly.
+        - The nesting is loud, which is the point - it disappears exactly as fast as real copy lands.
+      references: [text-lives-in-a-csv-catalogue]
+    implementation:
+      status: declared
+      paths: [data/loc/strings.csv]
+
+  - decision: presentation-never-branches-on-text
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Presentation Branches on Types, Never on Text
+      summary: Moving the words to the catalogue exposed three places where behaviour was keyed off English prose - the mission log picked its alarm styling by testing whether a message started with CONTRACT BREACHED, the debrief chose its panel colour by comparing the headline against three literals, and NPC state reached the inspection line through {:?} on the Mood enum. Each became a typed value - TurnEvents grew a breach field carrying the line separately, the shell gained DebriefHeadline with a tone accessor, and Mood grew a label method backed by the catalogue. RejectReason::PathBlocked likewise stopped carrying a &'static str message and now carries a Blockage variant.
+      rationale:
+        - Every one of these would have kept compiling and silently misbehaved under translation, which is the failure mode a localisation pass most needs to rule out.
+        - Deriving player-facing words from Rust variant names put the identifier namespace on screen where no translator could reach it.
+      references: [text-lives-in-a-csv-catalogue, ascii-presentation]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs]
+      symbols: [Blockage, DebriefHeadline, Tone]
+      tests: [crates/murmur-shell/src/lib.rs]

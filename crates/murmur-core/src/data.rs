@@ -11,10 +11,25 @@
 //! Parsing is strict: unknown fields are rejected, and [`GameData::validate`]
 //! cross-checks references between files so a typo fails fast in tests
 //! rather than misbehaving mid-mission.
+//!
+//! # Where the words live
+//!
+//! Display text is *not* in these files. Every name, label, and authored
+//! phrase comes from `data/loc/strings.csv` via [`crate::loc`], keyed by the
+//! id the RON file already carries: an item with `id: "garrote"` takes its
+//! name from `item.garrote.name`. The RON files hold structure and numbers,
+//! the CSV holds words, and neither repeats the other.
+//!
+//! [`GameData::resolve_text`] fills those fields in after parsing, so every
+//! `spec.name` call site keeps working unchanged. Because the RON files no
+//! longer carry the text at all, strict parsing means a leftover `name:`
+//! field is a load error rather than a value that silently loses to the
+//! catalogue.
 
 use serde::{Deserialize, Serialize};
 
 use crate::geom::FloorId;
+use crate::loc;
 
 /// Access tiers. The four-tier security gradient is fixed (public,
 /// staff, secure, personal); which disguise may enter which tier is
@@ -33,10 +48,10 @@ impl Zone {
     /// The neutral tier name; venue data supplies flavoured labels.
     pub fn name(self) -> &'static str {
         match self {
-            Zone::Public => "public",
-            Zone::Secure => "secure",
-            Zone::Staff => "staff",
-            Zone::Personal => "personal",
+            Zone::Public => crate::tr!("zone.public"),
+            Zone::Secure => crate::tr!("zone.secure"),
+            Zone::Staff => crate::tr!("zone.staff"),
+            Zone::Personal => crate::tr!("zone.personal"),
         }
     }
 
@@ -66,12 +81,12 @@ impl Role {
 
     pub fn name(self) -> &'static str {
         match self {
-            Role::Civilian => "civilian",
-            Role::Bartender => "bartender",
-            Role::Cleaner => "cleaner",
-            Role::Technician => "technician",
-            Role::Manager => "manager",
-            Role::Guard => "guard",
+            Role::Civilian => crate::tr!("role.civilian"),
+            Role::Bartender => crate::tr!("role.bartender"),
+            Role::Cleaner => crate::tr!("role.cleaner"),
+            Role::Technician => crate::tr!("role.technician"),
+            Role::Manager => crate::tr!("role.manager"),
+            Role::Guard => crate::tr!("role.guard"),
         }
     }
 }
@@ -100,8 +115,9 @@ pub type RoomTemplateId = String;
 pub type ItemSpecId = String;
 pub type VenueId = String;
 
-/// Display labels a venue gives the four access tiers.
-#[derive(Clone, Debug, Deserialize)]
+/// Display labels a venue gives the four access tiers. Filled from
+/// `venue.<id>.zone.*` in the string catalogue, not from RON.
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ZoneLabels {
     pub public: String,
@@ -118,10 +134,15 @@ pub struct ZoneLabels {
 #[serde(deny_unknown_fields)]
 pub struct VenueSpec {
     pub id: VenueId,
+    /// From `venue.<id>.name`.
+    #[serde(default)]
     pub name: String,
+    /// From `venue.<id>.zone.*`.
+    #[serde(default)]
     pub zone_labels: ZoneLabels,
     /// Flavoured name of the secure-tier invitation ("VIP invitation",
-    /// "visitor pass").
+    /// "visitor pass"). From `venue.<id>.invitation`.
+    #[serde(default)]
     pub invitation_label: String,
     /// Interior tile size of each storey and the storey count.
     pub floor_width: u16,
@@ -160,6 +181,8 @@ impl VenueSpec {
 #[serde(deny_unknown_fields)]
 pub struct DisguiseSpec {
     pub id: DisguiseId,
+    /// From `disguise.<id>.name`.
+    #[serde(default)]
     pub name: String,
     /// Zones this disguise may enter unconditionally.
     pub zones: Vec<Zone>,
@@ -180,6 +203,8 @@ pub struct DisguiseSpec {
 #[serde(deny_unknown_fields)]
 pub struct ItemSpec {
     pub id: ItemSpecId,
+    /// From `item.<id>.name`.
+    #[serde(default)]
     pub name: String,
     pub glyph: char,
     /// Room template whose locked doors this item opens, if it is a key.
@@ -231,9 +256,9 @@ pub enum Approach {
 impl Approach {
     pub fn name(self) -> &'static str {
         match self {
-            Approach::Physical => "physical stealth",
-            Approach::Social => "social stealth",
-            Approach::Violence => "violence",
+            Approach::Physical => crate::tr!("approach.physical"),
+            Approach::Social => crate::tr!("approach.social"),
+            Approach::Violence => crate::tr!("approach.violence"),
         }
     }
 
@@ -280,6 +305,8 @@ pub enum OpportunityEffect {
 #[serde(deny_unknown_fields)]
 pub struct OpportunitySpec {
     pub id: String,
+    /// From `opportunity.<id>.name`.
+    #[serde(default)]
     pub name: String,
     pub glyph: char,
     pub approach: OpportunityApproach,
@@ -288,9 +315,13 @@ pub struct OpportunitySpec {
     pub zones: Vec<Zone>,
     /// Turns the interaction takes.
     pub interact_turns: u16,
-    /// Authored risk statement (briefing and inspection).
+    /// Authored risk statement (briefing and inspection). From
+    /// `opportunity.<id>.risk`.
+    #[serde(default)]
     pub risk: String,
     /// Discoverable presentation: what looking at it tells the player.
+    /// From `opportunity.<id>.presentation`.
+    #[serde(default)]
     pub presentation: String,
 }
 
@@ -307,6 +338,8 @@ pub struct WaypointSlot {
 #[serde(deny_unknown_fields)]
 pub struct RoomTemplate {
     pub id: RoomTemplateId,
+    /// From `room.<id>.name`.
+    #[serde(default)]
     pub name: String,
     pub zone: Zone,
     /// Storeys this room may be placed on (0 = ground).
@@ -386,15 +419,17 @@ pub struct PopulationData {
     pub target: TargetSpec,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// Given and family name pools for generated actors. Both come wholly from
+/// the string catalogue (`names.first.*`, `names.last.*`); there is no RON
+/// file behind them.
+#[derive(Clone, Debug, Default)]
 pub struct NamePools {
     pub first: Vec<String>,
     pub last: Vec<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
+/// Briefing phrasing, wholly from the catalogue (`briefing.reason.*`).
+#[derive(Clone, Debug, Default)]
 pub struct BriefingData {
     /// Generated target-elimination reasons; the seed picks one.
     pub reasons: Vec<String>,
@@ -487,6 +522,8 @@ pub struct Tuning {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CampaignData {
+    /// From `campaign.district.*`; the RON file carries no district names.
+    #[serde(default)]
     pub districts: Vec<String>,
     pub starting_cash: i64,
     /// Equipment a fresh campaign owns from the start.
@@ -541,8 +578,6 @@ const EQUIPMENT_RON: &str = include_str!("../../../data/equipment.ron");
 const OPPORTUNITIES_RON: &str = include_str!("../../../data/opportunities.ron");
 const ROOMS_RON: &str = include_str!("../../../data/rooms.ron");
 const POPULATION_RON: &str = include_str!("../../../data/population.ron");
-const NAMES_RON: &str = include_str!("../../../data/names.ron");
-const BRIEFING_RON: &str = include_str!("../../../data/briefing.ron");
 const CAMPAIGN_RON: &str = include_str!("../../../data/campaign.ron");
 
 fn parse<T: serde::de::DeserializeOwned>(file: &'static str, text: &str) -> Result<T, DataError> {
@@ -564,8 +599,6 @@ impl GameData {
             OPPORTUNITIES_RON,
             ROOMS_RON,
             POPULATION_RON,
-            NAMES_RON,
-            BRIEFING_RON,
             CAMPAIGN_RON,
         )
     }
@@ -581,11 +614,9 @@ impl GameData {
         opportunities: &str,
         rooms: &str,
         population: &str,
-        names: &str,
-        briefing: &str,
         campaign: &str,
     ) -> Result<GameData, DataError> {
-        let data = GameData {
+        let mut data = GameData {
             tuning: parse("tuning.ron", tuning)?,
             venues: parse("venues.ron", venues)?,
             disguises: parse("disguises.ron", disguises)?,
@@ -594,12 +625,63 @@ impl GameData {
             opportunities: parse("opportunities.ron", opportunities)?,
             rooms: parse("rooms.ron", rooms)?,
             population: parse("population.ron", population)?,
-            names: parse("names.ron", names)?,
-            briefing: parse("briefing.ron", briefing)?,
+            names: NamePools::default(),
+            briefing: BriefingData::default(),
             campaign: parse("campaign.ron", campaign)?,
         };
+        // Words before cross-checks: `validate` reports on empty pools, and
+        // the pools do not exist until the catalogue has been read.
+        data.resolve_text();
         data.validate()?;
         Ok(data)
+    }
+
+    /// Fills every display field from `data/loc/strings.csv`.
+    ///
+    /// Ids are derived from the structural id a spec already has, so adding
+    /// a room template means adding one `room.<id>.name` row and nothing
+    /// else. A spec whose row is missing keeps the catalogue's loud
+    /// placeholder rather than an empty string, so the gap shows up on
+    /// screen instead of rendering as a blank name; `validate` then turns
+    /// it into a load error.
+    fn resolve_text(&mut self) {
+        for venue in &mut self.venues {
+            venue.name = loc::text(&format!("venue.{}.name", venue.id)).to_string();
+            venue.invitation_label =
+                loc::text(&format!("venue.{}.invitation", venue.id)).to_string();
+            venue.zone_labels = ZoneLabels {
+                public: loc::text(&format!("venue.{}.zone.public", venue.id)).to_string(),
+                staff: loc::text(&format!("venue.{}.zone.staff", venue.id)).to_string(),
+                secure: loc::text(&format!("venue.{}.zone.secure", venue.id)).to_string(),
+                personal: loc::text(&format!("venue.{}.zone.personal", venue.id)).to_string(),
+            };
+        }
+        for disguise in &mut self.disguises {
+            disguise.name = loc::text(&format!("disguise.{}.name", disguise.id)).to_string();
+        }
+        for item in &mut self.items {
+            item.name = loc::text(&format!("item.{}.name", item.id)).to_string();
+        }
+        for spec in &mut self.opportunities {
+            spec.name = loc::text(&format!("opportunity.{}.name", spec.id)).to_string();
+            spec.risk = loc::text(&format!("opportunity.{}.risk", spec.id)).to_string();
+            spec.presentation =
+                loc::text(&format!("opportunity.{}.presentation", spec.id)).to_string();
+        }
+        for room in &mut self.rooms {
+            room.name = loc::text(&format!("room.{}.name", room.id)).to_string();
+        }
+        let pool = |prefix: &str| -> Vec<String> {
+            loc::catalogue()
+                .with_prefix(prefix)
+                .into_iter()
+                .map(str::to_string)
+                .collect()
+        };
+        self.names.first = pool("names.first.");
+        self.names.last = pool("names.last.");
+        self.briefing.reasons = pool("briefing.reason.");
+        self.campaign.districts = pool("campaign.district.");
     }
 
     pub fn venue(&self, id: &str) -> Option<&VenueSpec> {
@@ -717,6 +799,38 @@ impl GameData {
         }
         if self.briefing.reasons.is_empty() {
             errors.push("briefing must offer at least one elimination reason".into());
+        }
+
+        // Every spec that took its words from the catalogue must actually
+        // have found them. Without this a new room template silently ships
+        // as "!!MISSING STRING!!" on the briefing.
+        let mut missing = |what: &str, id: &str, text: &str| {
+            if text == loc::MISSING {
+                errors.push(format!(
+                    "no localised {what} for '{id}' in data/loc/strings.csv"
+                ));
+            }
+        };
+        for venue in &self.venues {
+            missing("venue name", &venue.id, &venue.name);
+            missing("invitation label", &venue.id, &venue.invitation_label);
+            for zone in Zone::ALL {
+                missing("zone label", &venue.id, venue.zone_label(zone));
+            }
+        }
+        for disguise in &self.disguises {
+            missing("disguise name", &disguise.id, &disguise.name);
+        }
+        for item in &self.items {
+            missing("item name", &item.id, &item.name);
+        }
+        for spec in &self.opportunities {
+            missing("opportunity name", &spec.id, &spec.name);
+            missing("opportunity risk", &spec.id, &spec.risk);
+            missing("opportunity presentation", &spec.id, &spec.presentation);
+        }
+        for room in &self.rooms {
+            missing("room name", &room.id, &room.name);
         }
         if self.tuning.queue_capacity == 0 {
             errors.push("queue_capacity must be positive".into());
@@ -932,8 +1046,62 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_rejected() {
-        let result: Result<NamePools, _> =
-            ron::from_str("(first: [\"A\"], last: [\"B\"], surprise: 1)");
+        let result: Result<EquipmentSpec, _> =
+            ron::from_str("(item: \"garrote\", approach: Violence, price: 1, surprise: 1)");
         assert!(result.is_err());
+    }
+
+    /// Words come from the catalogue now, and the RON files must not carry
+    /// them any more.
+    ///
+    /// Serde cannot enforce this: the fields still exist on the structs, so
+    /// a `name:` in RON parses happily and is then overwritten by
+    /// [`GameData::resolve_text`] — authored data that reads as live but
+    /// silently loses. So the files themselves are the thing checked.
+    #[test]
+    fn ron_files_carry_no_display_text() {
+        let files = [
+            ("venues.ron", VENUES_RON),
+            ("disguises.ron", DISGUISES_RON),
+            ("items.ron", ITEMS_RON),
+            ("opportunities.ron", OPPORTUNITIES_RON),
+            ("rooms.ron", ROOMS_RON),
+            ("campaign.ron", CAMPAIGN_RON),
+        ];
+        let text_keys = [
+            "name:",
+            "risk:",
+            "presentation:",
+            "invitation_label:",
+            "zone_labels:",
+            "districts:",
+        ];
+        for (file, source) in files {
+            for (number, line) in source.lines().enumerate() {
+                let code = line.split("//").next().unwrap_or("").trim();
+                for key in text_keys {
+                    assert!(
+                        !code.starts_with(key),
+                        "{file}:{}: '{key}' belongs in data/loc/strings.csv",
+                        number + 1
+                    );
+                }
+            }
+        }
+    }
+
+    /// Display text reaches the specs, and reaches them from the catalogue.
+    #[test]
+    fn specs_take_their_names_from_the_catalogue() {
+        let data = GameData::embedded().unwrap();
+        assert_eq!(
+            data.item("garrote").unwrap().name,
+            crate::loc::text("item.garrote.name")
+        );
+        assert_eq!(
+            data.venue("nightclub").unwrap().zone_label(Zone::Secure),
+            crate::loc::text("venue.nightclub.zone.secure")
+        );
+        assert!(!data.names.first.is_empty() && !data.campaign.districts.is_empty());
     }
 }

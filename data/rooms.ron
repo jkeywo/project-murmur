@@ -1,3 +1,6 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under room.<id>.name; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // Room templates for the two-storey nightclub. The generator builds the
 // room graph from these before placing tiles and corridors. [spec] the MVP
 // building includes an entrance, dance floor, bar, VIP lounge, kitchen,
@@ -6,7 +9,6 @@
 [
     (
         id: "entrance",
-        name: "entrance hall",
         zone: Public,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -22,7 +24,6 @@
     ),
     (
         id: "dance-floor",
-        name: "dance floor",
         zone: Public,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -38,7 +39,6 @@
     ),
     (
         id: "bar",
-        name: "bar",
         zone: Public,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -54,7 +54,6 @@
     ),
     (
         id: "bathroom",
-        name: "bathroom",
         zone: Public,
         floors: [0, 1],
         count_min: 1, count_max: 2,
@@ -70,7 +69,6 @@
     ),
     (
         id: "vip-lounge",
-        name: "VIP lounge",
         zone: Secure,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -86,7 +84,6 @@
     ),
     (
         id: "kitchen",
-        name: "kitchen",
         zone: Staff,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -103,7 +100,6 @@
     ),
     (
         id: "storage",
-        name: "storage room",
         zone: Staff,
         floors: [0, 1],
         count_min: 1, count_max: 2,
@@ -120,7 +116,6 @@
     ),
     (
         id: "maintenance",
-        name: "maintenance room",
         zone: Staff,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -137,7 +132,6 @@
     ),
     (
         id: "manager-office",
-        name: "manager's office",
         zone: Personal,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -153,7 +147,6 @@
     ),
     (
         id: "security-office",
-        name: "security office",
         zone: Personal,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -169,7 +162,6 @@
     ),
     (
         id: "loading-bay",
-        name: "loading bay",
         zone: Staff,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -185,7 +177,6 @@
     ),
     (
         id: "service-corridor",
-        name: "service corridor",
         zone: Staff,
         floors: [0, 1],
         count_min: 1, count_max: 1,
@@ -202,7 +193,6 @@
     ),
     (
         id: "reception",
-        name: "reception",
         zone: Public,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -218,7 +208,6 @@
     ),
     (
         id: "dispatch-office",
-        name: "dispatch office",
         zone: Public,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -234,7 +223,6 @@
     ),
     (
         id: "storage-floor",
-        name: "storage floor",
         zone: Staff,
         floors: [0],
         count_min: 1, count_max: 1,
@@ -251,7 +239,6 @@
     ),
     (
         id: "break-room",
-        name: "break room",
         zone: Staff,
         floors: [0, 1],
         count_min: 1, count_max: 1,
@@ -268,7 +255,6 @@
     ),
     (
         id: "the-cage",
-        name: "the cage",
         zone: Secure,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -284,7 +270,6 @@
     ),
     (
         id: "foreman-office",
-        name: "foreman's office",
         zone: Personal,
         floors: [1],
         count_min: 1, count_max: 1,
@@ -300,7 +285,6 @@
     ),
     (
         id: "dock",
-        name: "loading dock",
         zone: Staff,
         floors: [0],
         count_min: 1, count_max: 1,

@@ -1,3 +1,6 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under disguise.<id>.name; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // The disguise permission matrix.
 // [spec] civilian: public, VIP only with invitation; staff: public + staff
 // plus authored partial private access; guard and manager: every MVP zone.
@@ -6,7 +9,6 @@
 [
     (
         id: "civilian",
-        name: "civilian clothes",
         zones: [Public],
         extra_rooms: [],
         secure_with_invitation: true,
@@ -15,7 +17,6 @@
     ),
     (
         id: "staff",
-        name: "staff uniform",
         zones: [Public, Staff],
         // Authored partial private access: staff may enter the manager's
         // office (cleaning rounds) but not the security office.
@@ -26,7 +27,6 @@
     ),
     (
         id: "guard",
-        name: "guard uniform",
         zones: [Public, Secure, Staff, Personal],
         extra_rooms: [],
         secure_with_invitation: false,
@@ -35,7 +35,6 @@
     ),
     (
         id: "manager",
-        name: "manager's suit",
         zones: [Public, Secure, Staff, Personal],
         extra_rooms: [],
         secure_with_invitation: false,

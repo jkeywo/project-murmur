@@ -78,7 +78,10 @@ pub fn place_opportunities(
                             used: false,
                             drop_tile: None,
                         });
-                        placed.push(format!("{} in {}", spec.presentation, room.name));
+                        placed.push(crate::loc::fmt(
+                            "opportunity.hint",
+                            &[("presentation", &spec.presentation), ("room", &room.name)],
+                        ));
                         break;
                     }
                 }
@@ -123,7 +126,10 @@ pub fn place_opportunities(
                         used: false,
                         drop_tile: Some(drop_tile),
                     });
-                    placed.push(format!("{} in {}", spec.presentation, room.name));
+                    placed.push(crate::loc::fmt(
+                        "opportunity.hint",
+                        &[("presentation", &spec.presentation), ("room", &room.name)],
+                    ));
                     break;
                 }
             }
@@ -170,7 +176,10 @@ pub fn place_opportunities(
                             used: false,
                             drop_tile: None,
                         });
-                        placed.push(format!("{} in {}", spec.presentation, room.name));
+                        placed.push(crate::loc::fmt(
+                            "opportunity.hint",
+                            &[("presentation", &spec.presentation), ("room", &room.name)],
+                        ));
                         break;
                     }
                 }

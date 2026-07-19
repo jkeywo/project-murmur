@@ -236,7 +236,7 @@ fn room_name_at(layout: &Layout, pos: Pos) -> String {
         .iter()
         .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
         .map(|r| r.name.clone())
-        .unwrap_or_else(|| "the corridor".to_string())
+        .unwrap_or_else(|| crate::tr!("room.corridor.name").to_string())
 }
 
 /// Fixpoint closure over (reachable tiles, disguises, keys, invitation).

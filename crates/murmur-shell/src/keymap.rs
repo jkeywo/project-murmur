@@ -6,12 +6,17 @@
 //! places that could drift apart silently; a drift test in `mission` now
 //! keeps the table and the dispatch match honest about each other.
 //!
+//! The words are not here either: entries hold `data/loc/strings.csv` ids
+//! and resolve through accessors, so the table stays a `const`.
+//!
 //! Availability is deliberately *not* in the table. Whether an action can
 //! be used right now depends on live world state, so it stays in
 //! `Mission::action_block`, keyed by the same char.
 
 /// How an action reads on the help screen: verbs that do the same kind of
 /// work are grouped so the list can be skimmed rather than read.
+use murmur_core::tr;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Category {
     /// Moving, waiting, and changing stance.
@@ -27,10 +32,10 @@ pub enum Category {
 impl Category {
     pub fn title(self) -> &'static str {
         match self {
-            Category::Stance => "stance",
-            Category::Stealth => "quiet work",
-            Category::Force => "force",
-            Category::World => "the room",
+            Category::Stance => tr!("keymap.category.stance"),
+            Category::Stealth => tr!("keymap.category.stealth"),
+            Category::Force => tr!("keymap.category.force"),
+            Category::World => tr!("keymap.category.world"),
         }
     }
 
@@ -43,17 +48,34 @@ impl Category {
     ];
 }
 
-/// One keyed action: the palette shows `label`, the help overlay shows
-/// `help`.
+/// One keyed action: the palette shows [`ActionKey::label`], the help
+/// overlay shows [`ActionKey::help`].
+///
+/// The table stores string *ids*, not words. It has to: `ACTIONS` is a
+/// `const`, and a catalogue lookup is a function call. Resolving through
+/// accessors keeps the table const-evaluable and means a retranslation
+/// needs no code change at all.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActionKey {
     pub key: char,
-    /// Short palette label; kept under fourteen columns to fit the
-    /// sidebar's two-per-row layout.
-    pub label: &'static str,
-    /// One line explaining what the action does and what it needs.
-    pub help: &'static str,
+    /// Catalogue id of the short palette label; the text is kept under
+    /// fourteen columns to fit the sidebar's two-per-row layout.
+    pub label_id: &'static str,
+    /// Catalogue id of the line explaining what the action does and needs.
+    pub help_id: &'static str,
     pub category: Category,
+}
+
+impl ActionKey {
+    /// Short palette label.
+    pub fn label(&self) -> &'static str {
+        murmur_core::loc::text(self.label_id)
+    }
+
+    /// One line explaining what the action does and what it needs.
+    pub fn help(&self) -> &'static str {
+        murmur_core::loc::text(self.help_id)
+    }
 }
 
 /// The clickable action palette, in palette order. Every entry here must
@@ -62,92 +84,92 @@ pub struct ActionKey {
 pub const ACTIONS: &[ActionKey] = &[
     ActionKey {
         key: '.',
-        label: "wait",
-        help: "let a turn pass; Space does the same",
+        label_id: "keymap.action.wait.label",
+        help_id: "keymap.action.wait.help",
         category: Category::Stance,
     },
     ActionKey {
         key: 'c',
-        label: "crouch",
-        help: "crouch: quieter and harder to see, but slower to read the room",
+        label_id: "keymap.action.crouch.label",
+        help_id: "keymap.action.crouch.help",
         category: Category::Stance,
     },
     ActionKey {
         key: 'r',
-        label: "draw/holster",
-        help: "draw or put away a firearm; drawn weapons alarm anyone who sees them",
+        label_id: "keymap.action.draw.label",
+        help_id: "keymap.action.draw.help",
         category: Category::Force,
     },
     ActionKey {
         key: 'g',
-        label: "garrote",
-        help: "garrote someone from behind: silent, and lethal",
+        label_id: "keymap.action.garrote.label",
+        help_id: "keymap.action.garrote.help",
         category: Category::Force,
     },
     ActionKey {
         key: 'f',
-        label: "shoot",
-        help: "shoot a visible target; f cycles targets, Enter fires",
+        label_id: "keymap.action.shoot.label",
+        help_id: "keymap.action.shoot.help",
         category: Category::Force,
     },
     ActionKey {
         key: 'p',
-        label: "pickpocket",
-        help: "steal from the living, loot the dead",
+        label_id: "keymap.action.pickpocket.label",
+        help_id: "keymap.action.pickpocket.help",
         category: Category::Stealth,
     },
     ActionKey {
         key: 'd',
-        label: "disguise",
-        help: "take clothes from a body or a wardrobe; needs free hands",
+        label_id: "keymap.action.disguise.label",
+        help_id: "keymap.action.disguise.help",
         category: Category::Stealth,
     },
     ActionKey {
         key: 'b',
-        label: "carry/drop",
-        help: "pick up or put down a body; b again drops it on your own tile",
+        label_id: "keymap.action.carry.label",
+        help_id: "keymap.action.carry.help",
         category: Category::Force,
     },
     ActionKey {
         key: 'h',
-        label: "hide body",
-        help: "stow a carried body in a container so nobody finds it",
+        label_id: "keymap.action.hide.label",
+        help_id: "keymap.action.hide.help",
         category: Category::Force,
     },
     ActionKey {
         key: 'o',
-        label: "open door",
-        help: "open an adjacent door",
+        label_id: "keymap.action.open.label",
+        help_id: "keymap.action.open.help",
         category: Category::World,
     },
     ActionKey {
         key: 'k',
-        label: "close door",
-        help: "close an adjacent door behind you",
+        label_id: "keymap.action.close.label",
+        help_id: "keymap.action.close.help",
         category: Category::World,
     },
     ActionKey {
         key: 'l',
-        label: "pick lock",
-        help: "pick a locked door: slow, and suspicious if seen",
+        label_id: "keymap.action.lock.label",
+        help_id: "keymap.action.lock.help",
         category: Category::Stealth,
     },
     ActionKey {
         key: 't',
-        label: "noisemaker",
-        help: "throw a noisemaker at a tile to pull people towards it",
+        label_id: "keymap.action.noise.label",
+        help_id: "keymap.action.noise.help",
         category: Category::Stealth,
     },
     ActionKey {
         key: 'u',
-        label: "use machine",
-        help: "use an adjacent opportunity machine",
+        label_id: "keymap.action.machine.label",
+        help_id: "keymap.action.machine.help",
         category: Category::World,
     },
     ActionKey {
         key: ';',
-        label: "look",
-        help: "free look cursor; costs no time and pauses nothing you planned",
+        label_id: "keymap.action.look.label",
+        help_id: "keymap.action.look.help",
         category: Category::Stance,
     },
 ];
@@ -156,34 +178,57 @@ pub const ACTIONS: &[ActionKey] = &[
 /// controls the palette has no room for. Listed on the help overlay and
 /// the start screen so nothing is discoverable only by accident.
 ///
-/// Each is `(key, short label, description)`. The short label is what the
-/// start screen's compact list shows; the description is for the help
-/// overlay, which has room for a full sentence.
+/// Each is `(key, short label id, description id)`. The short label is
+/// what the start screen's compact list shows; the description is for the
+/// help overlay, which has room for a full sentence. As with [`ActionKey`],
+/// the table holds catalogue ids so it can stay a `const`; read them
+/// through [`control_short`] and [`control_help`].
+///
+/// The key names themselves are not translated: they are what is printed on
+/// the keyboard, and a player looking for `Esc` needs to find `Esc`.
 pub const CONTROLS: &[(&str, &str, &str)] = &[
     (
         "arrows",
-        "move",
-        "move, or aim whatever you are currently pointing",
+        "keymap.control.move.short",
+        "keymap.control.move.help",
     ),
-    ("1-6", "read a slot", "read what an inventory slot holds"),
+    (
+        "1-6",
+        "keymap.control.slot.short",
+        "keymap.control.slot.help",
+    ),
     (
         "[ ]",
-        "speed",
-        "slow down or speed up the display; the run is unaffected",
+        "keymap.control.speed.short",
+        "keymap.control.speed.help",
     ),
     (
         "Esc",
-        "cancel",
-        "cancel what you are aiming, or stop what you planned",
+        "keymap.control.cancel.short",
+        "keymap.control.cancel.help",
     ),
     (
         "Backspace",
-        "take back",
-        "take back the last thing you planned",
+        "keymap.control.undo.short",
+        "keymap.control.undo.help",
     ),
-    ("?", "help", "this help"),
-    ("Q", "abandon run", "abandon the run (asks first)"),
+    ("?", "keymap.control.help.short", "keymap.control.help.help"),
+    (
+        "Q",
+        "keymap.control.abandon.short",
+        "keymap.control.abandon.help",
+    ),
 ];
+
+/// The compact start-screen label for a [`CONTROLS`] entry.
+pub fn control_short(entry: &(&str, &str, &str)) -> &'static str {
+    murmur_core::loc::text(entry.1)
+}
+
+/// The full help-overlay description for a [`CONTROLS`] entry.
+pub fn control_help(entry: &(&str, &str, &str)) -> &'static str {
+    murmur_core::loc::text(entry.2)
+}
 
 /// The action for a key, if the key is a palette action.
 pub fn action(key: char) -> Option<&'static ActionKey> {
@@ -226,9 +271,9 @@ mod tests {
         // The sidebar pads each entry to sixteen columns as "<key> <label>".
         for entry in ACTIONS {
             assert!(
-                entry.label.chars().count() <= 14,
+                entry.label().chars().count() <= 14,
                 "label {:?} overflows the palette column",
-                entry.label
+                entry.label()
             );
         }
     }

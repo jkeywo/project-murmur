@@ -20,6 +20,8 @@ use murmur_core::path::first_step_towards;
 use murmur_core::turn::{TurnDriver, TurnReport};
 use murmur_core::world::{ActorId, FurnitureKind, Hands, World};
 
+use murmur_core::{tr, trf};
+
 use crate::ShellInput;
 use crate::queue::{CommandQueue, EnqueueOutcome};
 
@@ -42,16 +44,16 @@ pub enum PendingAction {
 impl PendingAction {
     pub fn prompt(self) -> &'static str {
         match self {
-            PendingAction::Garrote => "garrote - which direction?",
-            PendingAction::Pickpocket => "pickpocket - which direction?",
-            PendingAction::Disguise => "take disguise - which direction?",
-            PendingAction::CarryBody => "carry body - which direction? (b again: here)",
-            PendingAction::HideBody => "hide body - which direction?",
-            PendingAction::DropBody => "drop body - which direction? (b again: here)",
-            PendingAction::OpenDoor => "open - which direction?",
-            PendingAction::CloseDoor => "close - which direction?",
-            PendingAction::PickLock => "pick lock - which direction?",
-            PendingAction::UseMachine => "use - which direction?",
+            PendingAction::Garrote => tr!("mission.prompt.garrote"),
+            PendingAction::Pickpocket => tr!("mission.prompt.pickpocket"),
+            PendingAction::Disguise => tr!("mission.prompt.disguise"),
+            PendingAction::CarryBody => tr!("mission.prompt.carry_body"),
+            PendingAction::HideBody => tr!("mission.prompt.hide_body"),
+            PendingAction::DropBody => tr!("mission.prompt.drop_body"),
+            PendingAction::OpenDoor => tr!("mission.prompt.open_door"),
+            PendingAction::CloseDoor => tr!("mission.prompt.close_door"),
+            PendingAction::PickLock => tr!("mission.prompt.pick_lock"),
+            PendingAction::UseMachine => tr!("mission.prompt.use_machine"),
         }
     }
 }
@@ -115,7 +117,10 @@ impl LogEntry {
     /// The line as rendered, including the repeat marker.
     pub fn display(&self) -> String {
         if self.count > 1 {
-            format!("{} (x{})", self.text, self.count)
+            murmur_core::loc::fmt(
+                "ui.mission.log.repeat",
+                &[("text", &self.text), ("count", &self.count.to_string())],
+            )
         } else {
             self.text.clone()
         }
@@ -135,10 +140,10 @@ pub enum Speed {
 impl Speed {
     pub fn label(self) -> &'static str {
         match self {
-            Speed::Slow => "slow",
-            Speed::Normal => "normal",
-            Speed::Fast => "fast",
-            Speed::Instant => "instant",
+            Speed::Slow => tr!("speed.slow"),
+            Speed::Normal => tr!("speed.normal"),
+            Speed::Fast => tr!("speed.fast"),
+            Speed::Instant => tr!("speed.instant"),
         }
     }
 
@@ -242,7 +247,7 @@ impl Mission {
             mode: InputMode::Normal,
             speed: Speed::Fast,
             log: vec![LogEntry {
-                text: "you slip in through the entrance".to_string(),
+                text: tr!("mission.notice.entered").to_string(),
                 kind: LogKind::Routine,
                 count: 1,
             }],
@@ -344,15 +349,21 @@ impl Mission {
         let slot = self.inspected_slot?;
         let world = self.world();
         let Some(item) = world.carried_items(world.player).nth(slot) else {
-            return Some(format!("slot {}: empty", slot + 1));
+            return Some(trf!("ui.mission.slot_line.empty", n = slot + 1));
         };
         let Some(spec) = data.item(&item.spec) else {
-            return Some(format!("slot {}: {}", slot + 1, item.spec));
+            return Some(murmur_core::loc::fmt(
+                "ui.mission.slot_line.unknown",
+                &[("n", &(slot + 1).to_string()), ("id", &item.spec)],
+            ));
         };
         let mut notes: Vec<String> = Vec::new();
         let mut enables = |key: char| {
             if let Some(action) = crate::keymap::action(key) {
-                notes.push(format!("enables {} ({})", action.label, action.key));
+                notes.push(murmur_core::loc::fmt(
+                    "ui.mission.item.enables",
+                    &[("action", action.label()), ("key", &action.key.to_string())],
+                ));
             }
         };
         if spec.firearm {
@@ -367,25 +378,32 @@ impl Mission {
             enables('t');
         }
         if spec.invitation {
-            notes.push("you are an invited guest".to_string());
+            notes.push(tr!("ui.mission.item.invitation").to_string());
         }
         if spec.staff_pass {
-            notes.push("counts as staff wherever you are".to_string());
+            notes.push(tr!("ui.mission.item.staff_pass").to_string());
         }
         if spec.master_key {
-            notes.push("opens every lock here".to_string());
+            notes.push(tr!("ui.mission.item.master_key").to_string());
         } else if spec.unlocks.is_some() {
-            notes.push("opens one kind of locked door".to_string());
+            notes.push(tr!("ui.mission.item.one_lock").to_string());
         }
         if item.charges > 0 {
-            notes.push(format!("{} left", item.charges));
+            notes.push(trf!("ui.mission.item.charges", count = item.charges));
         }
         let detail = if notes.is_empty() {
-            "no use of its own".to_string()
+            tr!("ui.mission.item.no_use").to_string()
         } else {
             notes.join(", ")
         };
-        Some(format!("slot {}: {} - {detail}", slot + 1, spec.name))
+        Some(murmur_core::loc::fmt(
+            "ui.mission.slot_line",
+            &[
+                ("n", &(slot + 1).to_string()),
+                ("name", &spec.name),
+                ("detail", &detail),
+            ],
+        ))
     }
 
     /// The tile currently being inspected: the look cursor when look mode
@@ -500,8 +518,10 @@ impl Mission {
                     self.mode = InputMode::Normal;
                     match self.command_for_target(action, pos) {
                         Some(command) => self.enqueue(command),
-                        None => self
-                            .push_log_kind("nothing suitable there".to_string(), LogKind::Notice),
+                        None => self.push_log_kind(
+                            tr!("mission.notice.nothing_there").to_string(),
+                            LogKind::Notice,
+                        ),
                     }
                 }
             }
@@ -544,9 +564,8 @@ impl Mission {
                 }
                 match first_step_towards(world, data, world.player, pos) {
                     Some(dir) => self.enqueue(Command::Move(dir)),
-                    None => {
-                        self.push_log_kind("no way through to there".to_string(), LogKind::Notice)
-                    }
+                    None => self
+                        .push_log_kind(tr!("mission.notice.no_path").to_string(), LogKind::Notice),
                 }
             }
         }
@@ -583,21 +602,21 @@ impl Mission {
         };
 
         match key {
-            'r' => (!carries(&|s| s.firearm)).then_some("you have no firearm"),
+            'r' => (!carries(&|s| s.firearm)).then_some(tr!("mission.block.no_firearm_owned")),
             'g' => {
                 if !carries(&|s| s.weapon && !s.firearm) {
-                    Some("you carry no garrote")
+                    Some(tr!("mission.block.no_garrote"))
                 } else if !near(&living_npc) {
-                    Some("no one to garrote")
+                    Some(tr!("mission.block.no_garrote_target"))
                 } else {
                     None
                 }
             }
             'f' => {
                 if !carries(&|s| s.firearm) {
-                    Some("you carry no firearm")
+                    Some(tr!("mission.block.no_firearm"))
                 } else if self.visible_actors(data).is_empty() {
-                    Some("no target in sight")
+                    Some(tr!("mission.block.no_target"))
                 } else {
                     None
                 }
@@ -606,26 +625,26 @@ impl Mission {
                 if world.carried_items(world.player).count()
                     >= murmur_core::actions::INVENTORY_SLOTS
                 {
-                    Some("your pockets are full")
+                    Some(tr!("mission.block.pockets_full"))
                 } else if !near(&|p| {
                     world.standing_actor_at(p).is_some_and(|a| !a.is_player())
                         || world.body_at(p).is_some()
                 }) {
-                    Some("no one to pickpocket")
+                    Some(tr!("mission.block.no_mark"))
                 } else {
                     None
                 }
             }
             'd' => {
                 if player.hands != Hands::Free {
-                    Some("your hands are not free")
+                    Some(tr!("mission.block.hands_busy"))
                 } else if !near(&|p| {
                     world.body_at(p).is_some()
                         || world.furniture_at(p).is_some_and(|f| {
                             f.kind == FurnitureKind::Wardrobe && f.disguise.is_some()
                         })
                 }) {
-                    Some("no clothes to take here")
+                    Some(tr!("mission.block.no_clothes"))
                 } else {
                     None
                 }
@@ -634,22 +653,22 @@ impl Mission {
                 if matches!(player.hands, Hands::CarryingBody(_)) {
                     None // drop is available
                 } else if player.hands != Hands::Free {
-                    Some("your hands are not free")
+                    Some(tr!("mission.block.hands_busy"))
                 } else if !near(&|p| world.body_at(p).is_some()) {
-                    Some("no body to carry")
+                    Some(tr!("mission.block.no_body"))
                 } else {
                     None
                 }
             }
             'h' => {
                 if !matches!(player.hands, Hands::CarryingBody(_)) {
-                    Some("you aren't carrying a body")
+                    Some(tr!("mission.block.not_carrying"))
                 } else if !near(&|p| {
                     world
                         .furniture_at(p)
                         .is_some_and(|f| f.kind == FurnitureKind::Container && f.body.is_none())
                 }) {
-                    Some("no container to hide it in")
+                    Some(tr!("mission.block.no_container"))
                 } else {
                     None
                 }
@@ -657,18 +676,18 @@ impl Mission {
             'o' => (!near(
                 &|p| matches!(world.map.tile(p), TileKind::Door(id) if !world.door(id).open),
             ))
-            .then_some("no door to open"),
+            .then_some(tr!("mission.block.no_door_to_open")),
             'k' => {
                 (!near(&|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).open)))
-                    .then_some("no door to close")
+                    .then_some(tr!("mission.block.no_door_to_close"))
             }
             'l' => {
                 if !carries(&|s| s.lockpick) {
-                    Some("you carry no lockpicks")
+                    Some(tr!("mission.block.no_lockpicks"))
                 } else if !near(
                     &|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).locked_by.is_some()),
                 ) {
-                    Some("no lock to pick")
+                    Some(tr!("mission.block.no_lock"))
                 } else {
                     None
                 }
@@ -677,14 +696,14 @@ impl Mission {
                 let ready = world
                     .carried_items(world.player)
                     .any(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker) && i.charges > 0);
-                (!ready).then_some("no noisemaker charges")
+                (!ready).then_some(tr!("mission.block.no_charges"))
             }
             'u' => (!near(&|p| {
                 world
                     .furniture_at(p)
                     .is_some_and(|f| f.kind == FurnitureKind::Machine && !f.used)
             }))
-            .then_some("nothing to use here"),
+            .then_some(tr!("mission.block.nothing_to_use")),
             _ => None,
         }
     }
@@ -695,7 +714,10 @@ impl Mission {
         if let ShellInput::Char(key) = input
             && let Some(reason) = self.action_block(data, key)
         {
-            self.push_log_kind(format!("can't: {reason}"), LogKind::Notice);
+            self.push_log_kind(
+                trf!("mission.notice.blocked", reason = reason),
+                LogKind::Notice,
+            );
             return;
         }
         match input {
@@ -727,7 +749,7 @@ impl Mission {
             ShellInput::Char('f') => {
                 let candidates = self.visible_actors(data);
                 if candidates.is_empty() {
-                    self.push_log_kind("no target in sight".to_string(), LogKind::Notice);
+                    self.push_log_kind(tr!("mission.block.no_target").to_string(), LogKind::Notice);
                 } else {
                     self.mode = InputMode::TargetSelect {
                         candidates,
@@ -748,10 +770,7 @@ impl Mission {
                 self.mode = InputMode::Help;
             }
             ShellInput::Char('Q') => {
-                self.ask(
-                    "abandon the run and walk away? y / n",
-                    ConfirmAction::AbandonRun,
-                );
+                self.ask(tr!("mission.confirm.abandon"), ConfirmAction::AbandonRun);
             }
             // Reading a slot costs no time and produces no action: it is
             // inspection, like look. Carrying an item is what enables its
@@ -761,11 +780,11 @@ impl Mission {
             }
             ShellInput::Char('[') => {
                 self.speed = self.speed.slower();
-                self.push_log(format!("speed: {}", self.speed.label()));
+                self.push_log(trf!("mission.notice.speed", speed = self.speed.label()));
             }
             ShellInput::Char(']') => {
                 self.speed = self.speed.faster();
-                self.push_log(format!("speed: {}", self.speed.label()));
+                self.push_log(trf!("mission.notice.speed", speed = self.speed.label()));
             }
             ShellInput::Backspace => {
                 self.queue.remove_newest();
@@ -773,7 +792,7 @@ impl Mission {
             ShellInput::Esc => {
                 let cancelled = self.queue.clear();
                 if cancelled > 0 {
-                    self.push_log_kind("you stop what you were doing".to_string(), LogKind::Notice);
+                    self.push_log_kind(tr!("mission.notice.stopped").to_string(), LogKind::Notice);
                 }
             }
             _ => {}
@@ -817,7 +836,10 @@ impl Mission {
         };
         match self.command_for_target(action, target_pos) {
             Some(command) => self.enqueue(command),
-            None => self.push_log_kind("nothing suitable there".to_string(), LogKind::Notice),
+            None => self.push_log_kind(
+                tr!("mission.notice.nothing_there").to_string(),
+                LogKind::Notice,
+            ),
         }
     }
 
@@ -937,7 +959,7 @@ impl Mission {
             EnqueueOutcome::Accepted => {}
             EnqueueOutcome::RejectedFull => {
                 self.push_log_kind(
-                    "you can't plan any further ahead".to_string(),
+                    tr!("mission.notice.queue_full").to_string(),
                     LogKind::Notice,
                 );
             }
@@ -985,7 +1007,10 @@ impl Mission {
                 // offender and quietly drop whatever was planned after it.
                 self.queue.pop_head();
                 self.queue.clear();
-                self.push_log_kind(format!("rejected: {}", reason.message()), LogKind::Notice);
+                self.push_log_kind(
+                    trf!("mission.notice.rejected", reason = reason.message()),
+                    LogKind::Notice,
+                );
                 false
             }
         }
@@ -996,14 +1021,15 @@ impl Mission {
         // so it reads as an alarm. The state check is the real guard; the
         // prefix only picks the breach line out of that turn's messages,
         // and matches how `breach_constraint` formats it.
-        let breached = self.driver.world().constraint_breach.is_some();
         for message in &report.events.messages {
-            let kind = if breached && message.starts_with("CONTRACT BREACHED") {
-                LogKind::Alarm
-            } else {
-                LogKind::Routine
-            };
-            self.push_log_kind(message.clone(), kind);
+            self.push_log_kind(message.clone(), LogKind::Routine);
+        }
+        // A breach is the one event that changes the run's payout, so it
+        // reads as an alarm. It arrives in its own field rather than being
+        // picked out of the message list by prefix, which stopped working
+        // the moment the words became translatable.
+        if let Some(breach) = &report.events.breach {
+            self.push_log_kind(breach.clone(), LogKind::Alarm);
         }
         // Perception messages are alarms, screams, and their propagation:
         // by definition the lines that say your situation just changed.
@@ -1057,7 +1083,7 @@ impl Mission {
     pub fn describe(&self, data: &GameData, pos: Pos, visible: bool) -> String {
         let world = self.world();
         if !visible && !self.is_explored(pos) {
-            return "unseen".to_string();
+            return tr!("ui.mission.tile.unseen").to_string();
         }
         let mut parts: Vec<String> = Vec::new();
         if let Some(room) = world.room_at(pos) {
@@ -1065,22 +1091,25 @@ impl Mission {
                 .venue(&world.venue)
                 .map(|v| v.zone_label(room.zone))
                 .unwrap_or_else(|| room.zone.name());
-            parts.push(format!("{} [{}]", room.name, zone_label));
+            parts.push(murmur_core::loc::fmt(
+                "ui.mission.tile.room",
+                &[("room", &room.name), ("zone", zone_label)],
+            ));
         } else if matches!(world.map.tile(pos), TileKind::Floor | TileKind::Stairs) {
-            parts.push("corridor".to_string());
+            parts.push(tr!("ui.mission.tile.corridor").to_string());
         }
         match world.map.tile(pos) {
-            TileKind::Wall => parts.push("wall".to_string()),
-            TileKind::Stairs => parts.push("stairs".to_string()),
+            TileKind::Wall => parts.push(tr!("ui.mission.tile.wall").to_string()),
+            TileKind::Stairs => parts.push(tr!("ui.mission.tile.stairs").to_string()),
             TileKind::Door(id) => {
                 let door = world.door(id);
                 let state = if door.open {
-                    "open door"
+                    tr!("ui.mission.tile.door.open")
                 } else {
-                    "closed door"
+                    tr!("ui.mission.tile.door.closed")
                 };
                 if door.locked_by.is_some() {
-                    parts.push(format!("{state} (locked)"));
+                    parts.push(trf!("ui.mission.tile.door.locked", state = state));
                 } else {
                     parts.push(state.to_string());
                 }
@@ -1088,29 +1117,35 @@ impl Mission {
             _ => {}
         }
         if world.extraction_tiles.contains(&pos) {
-            parts.push("extraction exit".to_string());
+            parts.push(tr!("ui.mission.tile.exit").to_string());
         }
         if visible {
             if let Some(actor) = world.standing_actor_at(pos) {
                 let role = actor
                     .role
                     .map(|r| r.name().to_string())
-                    .unwrap_or_else(|| "you".to_string());
+                    .unwrap_or_else(|| tr!("ui.mission.tile.you").to_string());
                 let mood = actor
                     .ai
                     .as_ref()
-                    .map(|ai| format!("{:?}", ai.mood).to_lowercase())
+                    .map(|ai| ai.mood.label())
                     .unwrap_or_default();
                 if actor.is_target {
-                    parts.push(format!("{} - THE TARGET ({role}, {mood})", actor.name));
+                    parts.push(murmur_core::loc::fmt(
+                        "ui.mission.tile.target",
+                        &[("name", &actor.name), ("role", &role), ("mood", mood)],
+                    ));
                 } else if actor.is_player() {
-                    parts.push("you".to_string());
+                    parts.push(tr!("ui.mission.tile.you").to_string());
                 } else {
-                    parts.push(format!("{} ({role}, {mood})", actor.name));
+                    parts.push(murmur_core::loc::fmt(
+                        "ui.mission.tile.actor",
+                        &[("name", &actor.name), ("role", &role), ("mood", mood)],
+                    ));
                 }
             }
             if let Some(body) = world.body_at(pos) {
-                parts.push(format!("the body of {}", body.name));
+                parts.push(trf!("ui.mission.tile.body", name = body.name));
             }
             for item in world.items_at(pos) {
                 if let Some(spec) = data.item(&item.spec) {
@@ -1119,20 +1154,20 @@ impl Mission {
             }
             if let Some(furniture) = world.furniture_at(pos) {
                 let described = match furniture.kind {
-                    FurnitureKind::LowCover => "low cover".to_string(),
+                    FurnitureKind::LowCover => tr!("ui.mission.tile.low_cover").to_string(),
                     FurnitureKind::Container => {
                         if furniture.body.is_some() {
-                            "container (occupied)".to_string()
+                            tr!("ui.mission.tile.container_full").to_string()
                         } else {
-                            "container".to_string()
+                            tr!("ui.mission.tile.container").to_string()
                         }
                     }
                     FurnitureKind::Wardrobe => match &furniture.disguise {
-                        Some(d) => format!(
-                            "wardrobe ({})",
-                            data.disguise(d).map(|s| s.name.as_str()).unwrap_or(d)
+                        Some(d) => trf!(
+                            "ui.mission.tile.wardrobe",
+                            disguise = data.disguise(d).map(|s| s.name.as_str()).unwrap_or(d)
                         ),
-                        None => "wardrobe (empty)".to_string(),
+                        None => tr!("ui.mission.tile.wardrobe_empty").to_string(),
                     },
                     FurnitureKind::Machine => {
                         let spec = furniture
@@ -1140,11 +1175,18 @@ impl Mission {
                             .as_deref()
                             .and_then(|id| data.opportunity(id));
                         match spec {
-                            Some(spec) if furniture.used => format!("{} (spent)", spec.name),
-                            Some(spec) => {
-                                format!("{} - {} ({})", spec.name, spec.presentation, spec.risk)
+                            Some(spec) if furniture.used => {
+                                trf!("ui.mission.tile.machine_spent", name = spec.name)
                             }
-                            None => "machinery".to_string(),
+                            Some(spec) => murmur_core::loc::fmt(
+                                "ui.mission.tile.machine",
+                                &[
+                                    ("name", &spec.name),
+                                    ("presentation", &spec.presentation),
+                                    ("risk", &spec.risk),
+                                ],
+                            ),
+                            None => tr!("ui.mission.tile.machinery").to_string(),
                         }
                     }
                 };
@@ -1152,7 +1194,7 @@ impl Mission {
             }
         }
         if parts.is_empty() {
-            "nothing of note".to_string()
+            tr!("ui.mission.tile.nothing").to_string()
         } else {
             parts.join(", ")
         }

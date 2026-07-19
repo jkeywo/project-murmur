@@ -37,30 +37,19 @@ impl Constraint {
     /// player is never guessing which rooms the rule means.
     pub fn describe(&self, data: &GameData, venue: &str) -> String {
         match self {
-            Constraint::NoFirearms => {
-                "no gunfire - the silenced pistol stays holstered (the garrote and \"accidents\" \
-                 are still fair game)"
-                    .to_string()
-            }
+            Constraint::NoFirearms => crate::tr!("contract.no_firearms.long").to_string(),
             Constraint::NoCivilianCasualties => {
-                "no collateral - only the target and their guards may die by your hand".to_string()
+                crate::tr!("contract.no_collateral.long").to_string()
             }
-            Constraint::NoBodiesFound => {
-                "leave no trace - no body of your making may be discovered before you extract \
-                 (stash them in containers)"
-                    .to_string()
-            }
+            Constraint::NoBodiesFound => crate::tr!("contract.no_bodies.long").to_string(),
             Constraint::PrivateKill => {
                 let rooms = personal_room_names(data, venue);
-                let where_ = join_or(&rooms, "a private office");
-                format!(
-                    "kill in private - the target must die inside {where_}, not out among the \
-                     guests or in a corridor"
-                )
+                let where_ = join_or(&rooms, crate::tr!("contract.private_kill.fallback_room"));
+                crate::trf!("contract.private_kill.long", rooms = where_)
             }
             Constraint::SpecificExit { room_template } => {
                 let name = room_display_name(data, room_template);
-                format!("leave the way the client dictates: extract via the {name}")
+                crate::trf!("contract.exit_via.long", room = name)
             }
         }
     }
@@ -68,19 +57,26 @@ impl Constraint {
     /// The HUD chip: short and space-limited.
     pub fn short(&self, data: &GameData, venue: &str) -> String {
         match self {
-            Constraint::NoFirearms => "no gunfire".to_string(),
-            Constraint::NoCivilianCasualties => "no collateral".to_string(),
-            Constraint::NoBodiesFound => "no bodies found".to_string(),
+            Constraint::NoFirearms => crate::tr!("contract.no_firearms.short").to_string(),
+            Constraint::NoCivilianCasualties => {
+                crate::tr!("contract.no_collateral.short").to_string()
+            }
+            Constraint::NoBodiesFound => crate::tr!("contract.no_bodies.short").to_string(),
             Constraint::PrivateKill => {
                 let rooms = personal_room_names(data, venue);
                 match rooms.first() {
-                    Some(first) if rooms.len() == 1 => format!("kill in the {first}"),
-                    Some(_) => "kill in an office".to_string(),
-                    None => "kill in private".to_string(),
+                    Some(first) if rooms.len() == 1 => {
+                        crate::trf!("contract.private_kill.short_named", room = first)
+                    }
+                    Some(_) => crate::tr!("contract.private_kill.short_office").to_string(),
+                    None => crate::tr!("contract.private_kill.short_private").to_string(),
                 }
             }
             Constraint::SpecificExit { room_template } => {
-                format!("exit via {}", room_display_name(data, room_template))
+                crate::trf!(
+                    "contract.exit_via.short",
+                    room = room_display_name(data, room_template)
+                )
             }
         }
     }

@@ -184,7 +184,7 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                 && !disguise_spec.is_some_and(|d| d.drawn_weapon_legal)
             {
                 if role == Role::Guard {
-                    alarm = Some("a drawn weapon");
+                    alarm = Some(crate::tr!("perception.alarm.weapon"));
                 } else {
                     flee = true;
                 }
@@ -192,7 +192,7 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             // A carried body is unmissable evidence.
             if matches!(world.actor(player_id).hands, Hands::CarryingBody(_)) {
                 if role == Role::Guard {
-                    alarm = Some("someone hauling a body");
+                    alarm = Some(crate::tr!("perception.alarm.body_carry"));
                 } else {
                     flee = true;
                 }
@@ -256,8 +256,11 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                 .iter()
                 .any(|a| a.pos == pos && a.is_visible_body() && a.killed_by_player)
         {
-            world.constraint_breach = Some("a body of your making was discovered".to_string());
-            messages.push("CONTRACT BREACHED: a body of your making was discovered".to_string());
+            world.constraint_breach = Some(crate::tr!("perception.body_found").to_string());
+            messages.push(crate::trf!(
+                "log.breached",
+                reason = crate::tr!("perception.body_found")
+            ));
         }
 
         let ai_focus_default = if sees_player { Some(player_pos) } else { None };
@@ -276,11 +279,17 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                 ai.knows_player_hostile = true;
                 ai.suspicion = tuning.suspicion_max;
                 ai.focus = Some(pos);
-                note(&mut messages, format!("{name} raises the alarm!"));
+                note(
+                    &mut messages,
+                    crate::trf!("perception.alarm_raised", name = name),
+                );
             } else {
                 ai.mood = Mood::Fleeing;
                 ai.focus = Some(pos);
-                note(&mut messages, format!("{name} screams and runs"));
+                note(
+                    &mut messages,
+                    crate::trf!("perception.screams", name = name),
+                );
             }
         } else if let Some(cause) = alarm {
             if ai.mood != Mood::Combat {
@@ -289,11 +298,17 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             ai.knows_player_hostile = true;
             ai.suspicion = tuning.suspicion_max;
             ai.focus = Some(player_pos);
-            note(&mut messages, format!("{name} spots {cause}!"));
+            note(
+                &mut messages,
+                crate::loc::fmt("perception.spots", &[("name", &name), ("cause", cause)]),
+            );
         } else if flee {
             ai.mood = Mood::Fleeing;
             ai.focus = Some(player_pos);
-            note(&mut messages, format!("{name} backs away in fear"));
+            note(
+                &mut messages,
+                crate::trf!("perception.backs_away", name = name),
+            );
         } else if let Some(pos) = gunshot_pos {
             if is_guard {
                 if matches!(ai.mood, Mood::Relaxed | Mood::Suspicious) {
@@ -301,11 +316,14 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                     ai.suspicion = ai.suspicion.max(tuning.suspicion_investigate_at);
                 }
                 ai.focus = Some(pos);
-                note(&mut messages, format!("{name} heard something"));
+                note(&mut messages, crate::trf!("perception.heard", name = name));
             } else if !matches!(ai.mood, Mood::Fleeing) {
                 ai.mood = Mood::Fleeing;
                 ai.focus = Some(pos);
-                note(&mut messages, format!("{name} flinches at the noise"));
+                note(
+                    &mut messages,
+                    crate::trf!("perception.flinches", name = name),
+                );
             }
         } else if let Some(pos) = noise_pos {
             // Guards and staff go to look; civilians just startle.
@@ -313,7 +331,10 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
             {
                 ai.mood = Mood::Investigating;
                 ai.focus = Some(pos);
-                note(&mut messages, format!("{name} goes to check a noise"));
+                note(
+                    &mut messages,
+                    crate::trf!("perception.investigates", name = name),
+                );
             }
         } else if gain > 0 {
             ai.suspicion = (ai.suspicion + gain).min(tuning.suspicion_max);
@@ -324,19 +345,31 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                         ai.mood = Mood::Alerted;
                     }
                     ai.knows_player_hostile = true;
-                    note(&mut messages, format!("{name} sees through you!"));
+                    note(
+                        &mut messages,
+                        crate::trf!("perception.sees_through", name = name),
+                    );
                 } else {
                     ai.mood = Mood::Fleeing;
-                    note(&mut messages, format!("{name} wants no part of this"));
+                    note(
+                        &mut messages,
+                        crate::trf!("perception.wants_no_part", name = name),
+                    );
                 }
             } else if ai.suspicion >= tuning.suspicion_investigate_at {
                 if matches!(ai.mood, Mood::Relaxed | Mood::Suspicious) {
                     ai.mood = Mood::Investigating;
-                    note(&mut messages, format!("{name} comes to take a look"));
+                    note(
+                        &mut messages,
+                        crate::trf!("perception.comes_to_look", name = name),
+                    );
                 }
             } else if ai.suspicion >= tuning.suspicion_suspicious_at && ai.mood == Mood::Relaxed {
                 ai.mood = Mood::Suspicious;
-                note(&mut messages, format!("{name} is watching you"));
+                note(
+                    &mut messages,
+                    crate::trf!("perception.watching", name = name),
+                );
             }
         } else {
             // Nothing wrong in sight: suspicion cools.
@@ -399,7 +432,10 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                         ai.knows_player_hostile = true;
                         ai.suspicion = tuning.suspicion_max;
                         ai.focus = Some(shared);
-                        note(&mut messages, format!("{name} joins the hunt"));
+                        note(
+                            &mut messages,
+                            crate::trf!("perception.joins_hunt", name = name),
+                        );
                     }
                 } else if !matches!(recipient_mood, Mood::Fleeing) {
                     let ai = world.actor_mut(recipient_id).ai.as_mut().unwrap();

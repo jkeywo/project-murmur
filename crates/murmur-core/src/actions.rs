@@ -91,7 +91,7 @@ pub enum ActionIntent {
 /// consumed, and prepared AI actions stay fixed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RejectReason {
-    PathBlocked(&'static str),
+    PathBlocked(Blockage),
     OccupiedByActor,
     DoorIsLocked,
     DoorAlreadyOpen,
@@ -126,36 +126,61 @@ pub enum RejectReason {
 impl RejectReason {
     pub fn message(&self) -> &'static str {
         match self {
-            RejectReason::PathBlocked(why) => why,
-            RejectReason::OccupiedByActor => "someone is standing there",
-            RejectReason::DoorIsLocked => "the door is locked",
-            RejectReason::DoorAlreadyOpen => "the door is already open",
-            RejectReason::DoorAlreadyClosed => "the door is already closed",
-            RejectReason::DoorNotAdjacent => "no such door within reach",
-            RejectReason::DoorBlocked => "the doorway is blocked",
-            RejectReason::NotAdjacent => "not close enough",
-            RejectReason::TargetGone => "they are no longer there",
-            RejectReason::NotBehindTarget => "you must be directly behind them",
-            RejectReason::HandsNotFree => "your hands are not free",
-            RejectReason::NotCarryingBody => "you are not carrying a body",
-            RejectReason::NotAContainer => "that cannot hold a body",
-            RejectReason::ContainerOccupied => "it is already occupied",
-            RejectReason::NoDisguiseThere => "no usable clothing there",
-            RejectReason::TargetNotIncapacitated => "they are in no state to undress",
-            RejectReason::InventoryFull => "your pockets are full",
-            RejectReason::NothingToSteal => "nothing worth taking",
-            RejectReason::NoWeaponCarried => "you carry no weapon",
-            RejectReason::NoAmmo => "the pistol is empty",
-            RejectReason::WeaponNotDrawn => "your weapon is holstered",
-            RejectReason::TargetNotVisible => "no line of sight",
-            RejectReason::OutOfRange => "out of range",
-            RejectReason::NoGarrote => "you carry no garrote",
-            RejectReason::NoLockpicks => "you carry no lockpicks",
-            RejectReason::DoorNotLocked => "that door is not locked",
-            RejectReason::NoNoisemaker => "no noisemaker charges left",
-            RejectReason::NothingToUse => "nothing to use there",
-            RejectReason::MachineSpent => "it has already been used",
-            RejectReason::MissionOver => "the mission is over",
+            RejectReason::PathBlocked(what) => what.message(),
+            RejectReason::OccupiedByActor => crate::tr!("reject.occupied"),
+            RejectReason::DoorIsLocked => crate::tr!("reject.door_locked"),
+            RejectReason::DoorAlreadyOpen => crate::tr!("reject.door_open"),
+            RejectReason::DoorAlreadyClosed => crate::tr!("reject.door_closed"),
+            RejectReason::DoorNotAdjacent => crate::tr!("reject.door_far"),
+            RejectReason::DoorBlocked => crate::tr!("reject.door_blocked"),
+            RejectReason::NotAdjacent => crate::tr!("reject.not_adjacent"),
+            RejectReason::TargetGone => crate::tr!("reject.target_gone"),
+            RejectReason::NotBehindTarget => crate::tr!("reject.not_behind"),
+            RejectReason::HandsNotFree => crate::tr!("reject.hands_busy"),
+            RejectReason::NotCarryingBody => crate::tr!("reject.not_carrying_body"),
+            RejectReason::NotAContainer => crate::tr!("reject.not_container"),
+            RejectReason::ContainerOccupied => crate::tr!("reject.container_full"),
+            RejectReason::NoDisguiseThere => crate::tr!("reject.no_disguise"),
+            RejectReason::TargetNotIncapacitated => crate::tr!("reject.target_conscious"),
+            RejectReason::InventoryFull => crate::tr!("reject.inventory_full"),
+            RejectReason::NothingToSteal => crate::tr!("reject.nothing_to_steal"),
+            RejectReason::NoWeaponCarried => crate::tr!("reject.no_weapon"),
+            RejectReason::NoAmmo => crate::tr!("reject.no_ammo"),
+            RejectReason::WeaponNotDrawn => crate::tr!("reject.weapon_holstered"),
+            RejectReason::TargetNotVisible => crate::tr!("reject.not_visible"),
+            RejectReason::OutOfRange => crate::tr!("reject.out_of_range"),
+            RejectReason::NoGarrote => crate::tr!("reject.no_garrote"),
+            RejectReason::NoLockpicks => crate::tr!("reject.no_lockpicks"),
+            RejectReason::DoorNotLocked => crate::tr!("reject.door_not_locked"),
+            RejectReason::NoNoisemaker => crate::tr!("reject.no_noisemaker"),
+            RejectReason::NothingToUse => crate::tr!("reject.nothing_to_use"),
+            RejectReason::MachineSpent => crate::tr!("reject.machine_spent"),
+            RejectReason::MissionOver => crate::tr!("reject.mission_over"),
+        }
+    }
+}
+
+/// What stopped a move or a throw. A typed reason rather than a message:
+/// the words live in the catalogue, and callers that want to branch on the
+/// cause can, which a `&'static str` never allowed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blockage {
+    Wall,
+    Terrain,
+    Furniture,
+    Body,
+    /// A noisemaker throw with no landing tile.
+    NoThrowTarget,
+}
+
+impl Blockage {
+    pub fn message(self) -> &'static str {
+        match self {
+            Blockage::Wall => crate::tr!("reject.blocked_wall"),
+            Blockage::Terrain => crate::tr!("reject.blocked_terrain"),
+            Blockage::Furniture => crate::tr!("reject.blocked_furniture"),
+            Blockage::Body => crate::tr!("reject.blocked_body"),
+            Blockage::NoThrowTarget => crate::tr!("reject.no_throw_target"),
         }
     }
 }
@@ -227,9 +252,7 @@ pub fn translate(
         Command::Move(dir) => {
             let dest = player.pos.step(dir);
             match world.map.tile(dest) {
-                TileKind::Wall | TileKind::Void => {
-                    Err(RejectReason::PathBlocked("the way is blocked by a wall"))
-                }
+                TileKind::Wall | TileKind::Void => Err(RejectReason::PathBlocked(Blockage::Wall)),
                 TileKind::Door(id) => {
                     // Bump-open: stepping into a closed door opens it when
                     // unlocked or when the player holds the key (recorded
@@ -466,7 +489,7 @@ pub fn translate(
                 world.map.tile(pos),
                 TileKind::Floor | TileKind::Stairs | TileKind::Door(_)
             ) {
-                return Err(RejectReason::PathBlocked("nowhere to land a throw"));
+                return Err(RejectReason::PathBlocked(Blockage::NoThrowTarget));
             }
             if !line_of_sight(player.pos, pos, world.sight_blocker(player.crouched)) {
                 return Err(RejectReason::TargetNotVisible);
@@ -502,10 +525,10 @@ fn validate_drop_destination(
     player_id: ActorId,
 ) -> Result<(), RejectReason> {
     if !world.map.walkable(dest, |id| world.door(id).open) {
-        return Err(RejectReason::PathBlocked("the way is blocked by terrain"));
+        return Err(RejectReason::PathBlocked(Blockage::Terrain));
     }
     if world.furniture_at(dest).is_some() {
-        return Err(RejectReason::PathBlocked("the way is blocked by furniture"));
+        return Err(RejectReason::PathBlocked(Blockage::Furniture));
     }
     if world
         .standing_actor_at(dest)
@@ -514,7 +537,7 @@ fn validate_drop_destination(
         return Err(RejectReason::OccupiedByActor);
     }
     if world.body_at(dest).is_some() {
-        return Err(RejectReason::PathBlocked("the way is blocked by a body"));
+        return Err(RejectReason::PathBlocked(Blockage::Body));
     }
     Ok(())
 }
@@ -522,7 +545,7 @@ fn validate_drop_destination(
 fn validate_step_destination(world: &World, dest: Pos) -> Result<(), RejectReason> {
     let landing = world.map.resolve_step_destination(dest);
     if world.furniture_at(dest).is_some() {
-        return Err(RejectReason::PathBlocked("the way is blocked by furniture"));
+        return Err(RejectReason::PathBlocked(Blockage::Furniture));
     }
     if let Some(occupant) = world.standing_actor_at(landing) {
         // Civilians and staff step aside (the mover swaps places with
@@ -563,6 +586,14 @@ pub enum ActionResult {
 #[derive(Clone, Debug, Default)]
 pub struct TurnEvents {
     pub messages: Vec<String>,
+    /// The line announcing a contract breach, if one happened this turn.
+    ///
+    /// Separate from `messages` because presentation styles it differently
+    /// (it is the one event that changes the run's payout) and used to pick
+    /// it out by matching on the text. Once the words moved to the string
+    /// catalogue that match became a translation the game silently depended
+    /// on, so the distinction is carried structurally instead.
+    pub breach: Option<String>,
     /// The player's action outcome this turn, if the player acted.
     pub player_result: Option<ActionResult>,
 }
@@ -624,21 +655,21 @@ pub fn resolve_turn(
                         actor.hands = Hands::Drawn(id);
                         record(world, &mut events, action.actor, ActionResult::Completed);
                         if action.actor == world.player {
-                            events.messages.push("you draw the pistol".to_string());
+                            events.messages.push(crate::tr!("log.draw").to_string());
                         }
                     }
                     (Hands::Drawn(_), _) => {
                         actor.hands = Hands::Free;
                         record(world, &mut events, action.actor, ActionResult::Completed);
                         if action.actor == world.player {
-                            events.messages.push("you holster the pistol".to_string());
+                            events.messages.push(crate::tr!("log.holster").to_string());
                         }
                     }
                     _ => record(
                         world,
                         &mut events,
                         action.actor,
-                        ActionResult::Failed("your hands are not free"),
+                        ActionResult::Failed(crate::tr!("fail.hands_busy")),
                     ),
                 }
             }
@@ -662,14 +693,14 @@ pub fn resolve_turn(
                         if action.actor == world.player {
                             events
                                 .messages
-                                .push("a sharp crack echoes off the walls".to_string());
+                                .push(crate::tr!("log.noisemaker").to_string());
                         }
                     }
                     None => record(
                         world,
                         &mut events,
                         action.actor,
-                        ActionResult::Failed("no noisemaker charges left"),
+                        ActionResult::Failed(crate::tr!("fail.no_charges")),
                     ),
                 }
             }
@@ -691,7 +722,7 @@ pub fn resolve_turn(
                         world,
                         &mut events,
                         action.actor,
-                        ActionResult::Failed("the door is locked"),
+                        ActionResult::Failed(crate::tr!("fail.door_locked")),
                     );
                 }
             }
@@ -706,7 +737,7 @@ pub fn resolve_turn(
                         world,
                         &mut events,
                         action.actor,
-                        ActionResult::Failed("the doorway is blocked"),
+                        ActionResult::Failed(crate::tr!("fail.doorway_blocked")),
                     );
                 }
             }
@@ -722,14 +753,14 @@ pub fn resolve_turn(
                     if action.actor == world.player {
                         events
                             .messages
-                            .push("the lock gives way under your picks".to_string());
+                            .push(crate::tr!("log.lock_picked").to_string());
                     }
                 } else {
                     record(
                         world,
                         &mut events,
                         action.actor,
-                        ActionResult::Failed("that door is not locked"),
+                        ActionResult::Failed(crate::tr!("fail.door_not_locked")),
                     );
                 }
             }
@@ -798,7 +829,7 @@ pub fn resolve_turn(
         let name = world.actor(id).name.clone();
         events
             .messages
-            .push(format!("{name} bolts out into the night"));
+            .push(crate::trf!("log.target_bolts", name = name));
     }
 
     // Post-phase bookkeeping: outcome checks and the turn counter.
@@ -834,14 +865,14 @@ fn resolve_garrote(
             .is_some_and(|f| target_ref.pos.step(f.opposite()) == attacker_pos)
         && world.actor(actor).hands == Hands::Free;
     if !valid {
-        fail(world, events, actor, "the garrote finds no purchase");
+        fail(world, events, actor, crate::tr!("fail.garrote_missed"));
         return;
     }
     kill(world, events, actor, target);
     let name = world.actor(target).name.clone();
     events
         .messages
-        .push(format!("{name} is garrotted silently"));
+        .push(crate::trf!("log.garrotted", name = name));
     complete(world, events, actor);
 }
 
@@ -868,15 +899,15 @@ fn resolve_shoot(
             .is_some_and(|d| d <= data.tuning.pistol_range)
         && line_of_sight(shooter_pos, target_pos, world.sight_blocker(crouched));
     let Some((weapon_id, charges)) = weapon else {
-        fail(world, events, actor, "no weapon to fire");
+        fail(world, events, actor, crate::tr!("fail.no_weapon"));
         return;
     };
     if charges == 0 || world.actor(actor).hands != Hands::Drawn(weapon_id) {
-        fail(world, events, actor, "the pistol cannot fire");
+        fail(world, events, actor, crate::tr!("fail.cannot_fire"));
         return;
     }
     if !visible {
-        fail(world, events, actor, "the shot has no clear line");
+        fail(world, events, actor, crate::tr!("fail.no_line"));
         return;
     }
     if let Some(item) = world.items.iter_mut().find(|i| i.id == weapon_id) {
@@ -888,7 +919,7 @@ fn resolve_shoot(
             Some(crate::contract::Constraint::NoFirearms)
         )
     {
-        breach_constraint(world, events, "the pistol was fired");
+        breach_constraint(world, events, crate::tr!("contract.no_firearms.breach"));
     }
     kill(world, events, actor, target);
     // Silenced, but still a local sound incident.
@@ -899,9 +930,7 @@ fn resolve_shoot(
         turn: world.turn,
     });
     let name = world.actor(target).name.clone();
-    events
-        .messages
-        .push(format!("the pistol coughs; {name} drops"));
+    events.messages.push(crate::trf!("log.shot", name = name));
     complete(world, events, actor);
 }
 
@@ -915,7 +944,7 @@ fn resolve_melee(
     let attacker_pos = world.actor(actor).pos;
     let target_ref = world.actor(target);
     if !target_ref.alive() || !attacker_pos.is_adjacent(target_ref.pos) {
-        fail(world, events, actor, "the blow misses");
+        fail(world, events, actor, crate::tr!("fail.blow_missed"));
         return;
     }
     let damage = data.tuning.guard_attack_damage;
@@ -924,10 +953,12 @@ fn resolve_melee(
     if target_mut.hp == 0 {
         kill(world, events, actor, target);
         let name = world.actor(target).name.clone();
-        events.messages.push(format!("{name} is struck down"));
+        events
+            .messages
+            .push(crate::trf!("log.struck_down", name = name));
     } else {
         let name = world.actor(target).name.clone();
-        events.messages.push(format!("{name} is struck"));
+        events.messages.push(crate::trf!("log.struck", name = name));
     }
     complete(world, events, actor);
 }
@@ -937,12 +968,10 @@ fn resolve_arrest(world: &mut World, events: &mut TurnEvents, actor: ActorId, ta
     let target_ref = world.actor(target);
     if target == world.player && target_ref.alive() && arrester_pos.is_adjacent(target_ref.pos) {
         world.outcome = Some(MissionOutcome::Arrested);
-        events
-            .messages
-            .push("a hand clamps your shoulder: you are under arrest".to_string());
+        events.messages.push(crate::tr!("log.arrest").to_string());
         complete(world, events, actor);
     } else {
-        fail(world, events, actor, "the arrest fails");
+        fail(world, events, actor, crate::tr!("fail.arrest_failed"));
     }
 }
 
@@ -957,11 +986,11 @@ fn resolve_pickpocket(
     let target_ref = world.actor(target);
     let adjacent = actor_pos.is_adjacent(target_ref.pos) || actor_pos == target_ref.pos;
     if target_ref.hidden_in.is_some() || world.is_carried(target) || !adjacent {
-        fail(world, events, actor, "the mark slipped away");
+        fail(world, events, actor, crate::tr!("fail.mark_slipped"));
         return;
     }
     if world.carried_items(actor).count() >= INVENTORY_SLOTS {
-        fail(world, events, actor, "your pockets are full");
+        fail(world, events, actor, crate::tr!("fail.pockets_full"));
         return;
     }
     let target_alive = world.actor(target).alive();
@@ -981,10 +1010,12 @@ fn resolve_pickpocket(
     match stolen {
         Some(spec) => {
             let name = data.item(&spec).map(|s| s.name.clone()).unwrap_or(spec);
-            events.messages.push(format!("you palm the {name}"));
+            events
+                .messages
+                .push(crate::trf!("log.pickpocket", item = name));
             complete(world, events, actor);
         }
-        None => fail(world, events, actor, "nothing worth taking"),
+        None => fail(world, events, actor, crate::tr!("fail.nothing_to_steal")),
     }
 }
 
@@ -997,7 +1028,7 @@ fn resolve_take_disguise(
     let actor_pos = world.actor(actor).pos;
     let hands_free = world.actor(actor).hands == Hands::Free;
     if !hands_free {
-        fail(world, events, actor, "your hands are not free");
+        fail(world, events, actor, crate::tr!("fail.hands_busy"));
         return;
     }
     match source {
@@ -1005,33 +1036,37 @@ fn resolve_take_disguise(
             let target_ref = world.actor(target);
             let adjacent = actor_pos.is_adjacent(target_ref.pos) || actor_pos == target_ref.pos;
             if target_ref.alive() || target_ref.hidden_in.is_some() || !adjacent {
-                fail(world, events, actor, "the clothes are out of reach");
+                fail(world, events, actor, crate::tr!("fail.clothes_far"));
                 return;
             }
             let taken = world.actor(target).worn_disguise.clone();
             let own = world.actor(actor).worn_disguise.clone();
             world.actor_mut(target).worn_disguise = own;
             world.actor_mut(actor).worn_disguise = taken.clone();
-            events.messages.push(format!("you change into the {taken}"));
+            events
+                .messages
+                .push(crate::trf!("log.disguise_taken", disguise = taken));
             complete(world, events, actor);
         }
         DisguiseSource::Wardrobe(id) => {
             let Some(furniture) = world.furniture.get(id.0 as usize) else {
-                fail(world, events, actor, "the wardrobe is gone");
+                fail(world, events, actor, crate::tr!("fail.wardrobe_gone"));
                 return;
             };
             if furniture.kind != FurnitureKind::Wardrobe || !actor_pos.is_adjacent(furniture.pos) {
-                fail(world, events, actor, "the wardrobe is out of reach");
+                fail(world, events, actor, crate::tr!("fail.wardrobe_far"));
                 return;
             }
             let Some(taken) = furniture.disguise.clone() else {
-                fail(world, events, actor, "the wardrobe is empty");
+                fail(world, events, actor, crate::tr!("fail.wardrobe_empty"));
                 return;
             };
             let own = world.actor(actor).worn_disguise.clone();
             world.furniture_mut(id).disguise = Some(own);
             world.actor_mut(actor).worn_disguise = taken.clone();
-            events.messages.push(format!("you change into the {taken}"));
+            events
+                .messages
+                .push(crate::trf!("log.disguise_taken", disguise = taken));
             complete(world, events, actor);
         }
     }
@@ -1046,18 +1081,20 @@ fn resolve_carry(world: &mut World, events: &mut TurnEvents, actor: ActorId, tar
         || !adjacent
         || world.actor(actor).hands != Hands::Free
     {
-        fail(world, events, actor, "you cannot lift the body");
+        fail(world, events, actor, crate::tr!("fail.cannot_lift"));
         return;
     }
     world.actor_mut(actor).hands = Hands::CarryingBody(target);
     world.actor_mut(target).pos = actor_pos;
-    events.messages.push("you heave the body up".to_string());
+    events
+        .messages
+        .push(crate::tr!("log.body_lifted").to_string());
     complete(world, events, actor);
 }
 
 fn resolve_drop(world: &mut World, events: &mut TurnEvents, actor: ActorId, dir: Option<Dir4>) {
     let Hands::CarryingBody(body) = world.actor(actor).hands else {
-        fail(world, events, actor, "nothing to drop");
+        fail(world, events, actor, crate::tr!("fail.nothing_to_drop"));
         return;
     };
     let pos = world.actor(actor).pos;
@@ -1069,30 +1106,32 @@ fn resolve_drop(world: &mut World, events: &mut TurnEvents, actor: ActorId, dir:
         || world.furniture_at(dest).is_some()
         || world.body_at(dest).is_some()
     {
-        fail(world, events, actor, "no room to drop the body");
+        fail(world, events, actor, crate::tr!("fail.no_room_to_drop"));
         return;
     }
     world.actor_mut(actor).hands = Hands::Free;
     world.actor_mut(body).pos = dest;
-    events.messages.push("you set the body down".to_string());
+    events
+        .messages
+        .push(crate::tr!("log.body_dropped").to_string());
     complete(world, events, actor);
 }
 
 fn resolve_hide(world: &mut World, events: &mut TurnEvents, actor: ActorId, id: FurnitureId) {
     let Hands::CarryingBody(body) = world.actor(actor).hands else {
-        fail(world, events, actor, "nothing to hide");
+        fail(world, events, actor, crate::tr!("fail.nothing_to_hide"));
         return;
     };
     let actor_pos = world.actor(actor).pos;
     let Some(furniture) = world.furniture.get(id.0 as usize) else {
-        fail(world, events, actor, "the container is gone");
+        fail(world, events, actor, crate::tr!("fail.container_gone"));
         return;
     };
     if furniture.kind != FurnitureKind::Container
         || furniture.body.is_some()
         || !actor_pos.is_adjacent(furniture.pos)
     {
-        fail(world, events, actor, "the container will not take it");
+        fail(world, events, actor, crate::tr!("fail.container_refused"));
         return;
     }
     let furniture_pos = furniture.pos;
@@ -1103,7 +1142,7 @@ fn resolve_hide(world: &mut World, events: &mut TurnEvents, actor: ActorId, id: 
     world.furniture_mut(id).body = Some(body);
     events
         .messages
-        .push("the body disappears from sight".to_string());
+        .push(crate::tr!("log.body_hidden").to_string());
     complete(world, events, actor);
 }
 
@@ -1139,7 +1178,7 @@ fn resolve_movement(
                     world.actor_mut(action.actor).facing = Some(dir);
                     complete(world, events, action.actor);
                 } else {
-                    fail(world, events, action.actor, "the door is locked");
+                    fail(world, events, action.actor, crate::tr!("fail.door_locked"));
                 }
                 continue;
             }
@@ -1152,7 +1191,7 @@ fn resolve_movement(
                     world,
                     events,
                     action.actor,
-                    "the way is blocked by furniture or a wall",
+                    crate::tr!("fail.blocked_furniture"),
                 );
                 continue;
             }
@@ -1172,7 +1211,12 @@ fn resolve_movement(
     for index in order {
         let dest = moves[index].dest;
         if claimed.contains(&dest) {
-            fail(world, events, moves[index].actor, "someone got there first");
+            fail(
+                world,
+                events,
+                moves[index].actor,
+                crate::tr!("fail.someone_first"),
+            );
         } else {
             claimed.push(dest);
             winners.push(index);
@@ -1264,7 +1308,7 @@ fn resolve_movement(
                     world,
                     events,
                     moves[index].actor,
-                    "the way is blocked by another person",
+                    crate::tr!("fail.blocked_person"),
                 );
             }
             break;
@@ -1280,7 +1324,9 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
     let player = world.player_actor();
     if player.condition == BodyCondition::Dead {
         world.outcome = Some(MissionOutcome::PlayerKilled);
-        events.messages.push("everything goes dark".to_string());
+        events
+            .messages
+            .push(crate::tr!("log.player_killed").to_string());
         return;
     }
     // The target escaping alive ends the mission: there is no completing
@@ -1290,7 +1336,7 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
         world.outcome = Some(MissionOutcome::TargetEscaped);
         events
             .messages
-            .push("the target slips away into the night; the job is blown".to_string());
+            .push(crate::tr!("log.target_escaped").to_string());
         return;
     }
     let target_dead = world.actor(world.target).condition == BodyCondition::Dead;
@@ -1309,15 +1355,14 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
                     .find(|r| r.template == room_template)
                     .map(|r| r.name.clone())
                     .unwrap_or_else(|| room_template.clone());
-                let reason =
-                    format!("you left by the wrong exit - the contract named the {exit_name}");
+                let reason = crate::trf!("contract.exit_via.breach", room = exit_name);
                 breach_constraint(world, events, &reason);
             }
         }
         world.outcome = Some(MissionOutcome::Extracted);
         events
             .messages
-            .push("you slip out into the night; the job is done".to_string());
+            .push(crate::tr!("log.extracted").to_string());
     }
 }
 
@@ -1330,7 +1375,7 @@ fn resolve_interact(
     id: FurnitureId,
 ) {
     let Some(furniture) = world.furniture.iter().find(|f| f.id == id) else {
-        fail(world, events, actor, "nothing to use there");
+        fail(world, events, actor, crate::tr!("fail.nothing_to_use"));
         return;
     };
     let (spec_id, machine_pos, drop_tile, used) = (
@@ -1344,11 +1389,11 @@ fn resolve_interact(
         .and_then(|s| data.opportunity(s))
         .cloned()
     else {
-        fail(world, events, actor, "nothing to use there");
+        fail(world, events, actor, crate::tr!("fail.nothing_to_use"));
         return;
     };
     if used {
-        fail(world, events, actor, "it has already been used");
+        fail(world, events, actor, crate::tr!("fail.machine_spent"));
         return;
     }
 
@@ -1361,7 +1406,7 @@ fn resolve_interact(
             }
             events
                 .messages
-                .push("the fuses blow; darkness rolls across the floor".to_string());
+                .push(crate::tr!("log.lights_cut").to_string());
         }
         crate::data::OpportunityEffect::AccidentDrop => {
             let victim = drop_tile.and_then(|tile| world.standing_actor_at(tile).map(|a| a.id));
@@ -1386,12 +1431,12 @@ fn resolve_interact(
                     });
                     events
                         .messages
-                        .push(format!("the hoist gives way; a crate crushes {name}"));
+                        .push(crate::trf!("log.hoist_hit", name = name));
                 }
                 None => {
                     events
                         .messages
-                        .push("the hoist lets go; the crate shatters on empty floor".to_string());
+                        .push(crate::tr!("log.hoist_miss").to_string());
                 }
             }
         }
@@ -1420,11 +1465,15 @@ fn resolve_interact(
             }
             events
                 .messages
-                .push("the fire alarm shrieks; the whole club surges for the exits".to_string());
+                .push(crate::tr!("log.fire_alarm").to_string());
         }
         crate::data::OpportunityEffect::PlaceKey { item } => {
             if world.carried_items(actor).count() >= INVENTORY_SLOTS {
-                fail(world, events, actor, "your pockets are full");
+                // Same words as the pickpocket refusal today, but a
+                // separate id: one is about a mark's pockets and the other
+                // about a machine, and a translator may not phrase them
+                // alike.
+                fail(world, events, actor, crate::tr!("fail.pockets_full_item"));
                 return;
             }
             let spec_item = data.item(item).expect("validated at load");
@@ -1437,10 +1486,10 @@ fn resolve_interact(
             });
             events
                 .messages
-                .push(format!("you lift the {}", spec_item.name));
+                .push(crate::trf!("log.key_taken", item = spec_item.name));
         }
         crate::data::OpportunityEffect::StockWardrobe { .. } => {
-            fail(world, events, actor, "nothing to use there");
+            fail(world, events, actor, crate::tr!("fail.nothing_to_use"));
             return;
         }
     }
@@ -1459,7 +1508,7 @@ pub(crate) fn breach_constraint(world: &mut World, events: &mut TurnEvents, reas
         return;
     }
     world.constraint_breach = Some(reason.to_string());
-    events.messages.push(format!("CONTRACT BREACHED: {reason}"));
+    events.breach = Some(crate::trf!("log.breached", reason = reason));
 }
 
 fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: ActorId) {
@@ -1483,7 +1532,7 @@ fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: Act
             Some(crate::contract::Constraint::NoCivilianCasualties)
                 if !is_target && victim_role != Some(crate::data::Role::Guard) =>
             {
-                breach_constraint(world, events, "a bystander died by your hand");
+                breach_constraint(world, events, crate::tr!("contract.no_collateral.breach"));
             }
             Some(crate::contract::Constraint::PrivateKill) if is_target => {
                 let private = world
@@ -1493,7 +1542,9 @@ fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: Act
                     let where_ = world
                         .room_at(pos)
                         .map(|r| r.name.clone())
-                        .unwrap_or_else(|| "the open floor".to_string());
+                        .unwrap_or_else(|| {
+                            crate::tr!("contract.private_kill.open_floor").to_string()
+                        });
                     let offices: Vec<String> = world
                         .rooms
                         .iter()
@@ -1501,12 +1552,14 @@ fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: Act
                         .map(|r| r.name.clone())
                         .collect();
                     let needed = if offices.is_empty() {
-                        "a private office".to_string()
+                        crate::tr!("contract.private_kill.fallback_room").to_string()
                     } else {
                         offices.join(" or ")
                     };
-                    let reason =
-                        format!("the target died in {where_} - the kill had to happen in {needed}");
+                    let reason = crate::loc::fmt(
+                        "contract.private_kill.breach",
+                        &[("where", &where_), ("needed", &needed)],
+                    );
                     breach_constraint(world, events, &reason);
                 }
             }
@@ -1532,6 +1585,8 @@ fn complete(world: &World, events: &mut TurnEvents, actor: ActorId) {
 fn fail(world: &World, events: &mut TurnEvents, actor: ActorId, why: &'static str) {
     if actor == world.player {
         events.player_result = Some(ActionResult::Failed(why));
-        events.messages.push(format!("failed: {why}"));
+        events
+            .messages
+            .push(crate::trf!("log.failed", reason = why));
     }
 }

@@ -20,6 +20,8 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
+use murmur_core::{tr, trf};
+
 use crate::keymap;
 use crate::mission::{InputMode, LogKind, Mission, UiLayout};
 
@@ -72,18 +74,18 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         for entry in entries {
             lines.push(Line::from(vec![
                 Span::styled(format!("  {:<10}", entry.key), key_style),
-                Span::raw(entry.help),
+                Span::raw(entry.help()),
             ]));
         }
     }
     lines.push(Line::styled(
-        "getting around",
+        tr!("keymap.category.controls"),
         Style::default().add_modifier(Modifier::UNDERLINED),
     ));
-    for (key, _, help) in keymap::CONTROLS {
+    for entry in keymap::CONTROLS {
         lines.push(Line::from(vec![
-            Span::styled(format!("  {key:<10}"), key_style),
-            Span::raw(*help),
+            Span::styled(format!("  {:<10}", entry.0), key_style),
+            Span::raw(keymap::control_help(entry)),
         ]));
     }
 
@@ -96,7 +98,7 @@ fn draw_help(frame: &mut Frame, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::LightMagenta))
-                .title(" help - any key returns to the mission "),
+                .title(tr!("ui.mission.help.title")),
         ),
         area,
     );
@@ -111,21 +113,6 @@ fn mood_color(mood: Mood) -> Color {
         Mood::Escorting => Color::Red,
         Mood::Combat => Color::LightRed,
         Mood::Fleeing => Color::Magenta,
-    }
-}
-
-/// How an NPC's state reads in words. The map says the same thing in
-/// colour; this is what the threat list and the inspection line use, and
-/// it is what makes the state legible without relying on hue.
-fn mood_label(mood: Mood) -> &'static str {
-    match mood {
-        Mood::Relaxed => "unaware",
-        Mood::Suspicious => "suspicious",
-        Mood::Investigating => "investigating",
-        Mood::Alerted => "alerted",
-        Mood::Escorting => "escorting",
-        Mood::Combat => "attacking",
-        Mood::Fleeing => "fleeing",
     }
 }
 
@@ -351,9 +338,9 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
         lines.push(Line::from(spans));
     }
     let floor_name = if focus.floor == 0 {
-        "ground floor"
+        tr!("ui.mission.panel.map.ground")
     } else {
-        "upper floor"
+        tr!("ui.mission.panel.map.upper")
     };
     let block = Block::default()
         .borders(Borders::ALL)
@@ -385,18 +372,20 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
         }
         InputMode::ThrowTarget(_) => {
             lines.push(Line::styled(
-                "aim the throw - Enter or click throws, Esc cancels".to_string(),
+                tr!("mission.prompt.throw").to_string(),
                 Style::default().fg(Color::LightCyan),
             ));
         }
         InputMode::TargetSelect { candidates, index } => {
             let target = mission.world().actor(candidates[*index]);
             lines.push(Line::styled(
-                format!(
-                    "aim: {} ({}/{}) - Enter or click fires, Esc cancels",
-                    target.name,
-                    index + 1,
-                    candidates.len()
+                murmur_core::loc::fmt(
+                    "mission.prompt.shoot",
+                    &[
+                        ("name", &target.name),
+                        ("n", &(index + 1).to_string()),
+                        ("total", &candidates.len().to_string()),
+                    ],
                 ),
                 Style::default().fg(Color::LightCyan),
             ));
@@ -415,7 +404,10 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
             } else if let Some(pos) = mission.inspected_tile() {
                 let visible = mission.visible_tiles(data).contains(&pos);
                 lines.push(Line::styled(
-                    format!("here: {}", mission.describe(data, pos, visible)),
+                    trf!(
+                        "ui.mission.here",
+                        what = mission.describe(data, pos, visible)
+                    ),
                     Style::default().fg(Color::LightCyan),
                 ));
             }
@@ -426,7 +418,9 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
     for entry in &mission.log[start..] {
         lines.push(Line::styled(entry.display(), log_style(entry.kind)));
     }
-    let block = Block::default().borders(Borders::ALL).title(" events ");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(tr!("ui.mission.panel.events"));
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
@@ -442,7 +436,13 @@ fn draw_sidebar(
     let mut lines: Vec<Line> = Vec::new();
 
     lines.push(Line::styled(
-        format!("turn {:>5}   seed {}", world.turn, world.seed),
+        murmur_core::loc::fmt(
+            "ui.mission.status",
+            &[
+                ("turn", &world.turn.to_string()),
+                ("seed", &world.seed.to_string()),
+            ],
+        ),
         Style::default().fg(Color::DarkGray),
     ));
     lines.push(Line::raw(""));
@@ -453,9 +453,13 @@ fn draw_sidebar(
             data.tuning.player_max_hp.saturating_sub(player.hp),
         ));
     lines.push(Line::from(vec![
-        Span::raw("health "),
+        Span::raw(tr!("ui.mission.health")),
         Span::styled(hearts, Style::default().fg(Color::LightRed)),
-        Span::raw(if player.crouched { "   crouched" } else { "" }),
+        Span::raw(if player.crouched {
+            tr!("ui.mission.crouched")
+        } else {
+            ""
+        }),
     ]));
 
     // What you are wearing, prominently: it decides where you belong.
@@ -464,7 +468,7 @@ fn draw_sidebar(
         .map(|d| d.name.clone())
         .unwrap_or_else(|| player.worn_disguise.clone());
     lines.push(Line::from(vec![
-        Span::raw("wearing "),
+        Span::raw(tr!("ui.mission.wearing")),
         Span::styled(
             disguise_name,
             Style::default()
@@ -474,8 +478,8 @@ fn draw_sidebar(
     ]));
 
     let hands = match player.hands {
-        Hands::Free => "hands free".to_string(),
-        Hands::CarryingBody(body) => format!("carrying {}", world.actor(body).name),
+        Hands::Free => tr!("ui.mission.hands.free").to_string(),
+        Hands::CarryingBody(body) => trf!("ui.mission.hands.body", name = world.actor(body).name),
         Hands::Drawn(id) => {
             // Read the drawn weapon by its exact id: the garrote is also
             // a weapon, so a name-based lookup could grab the wrong one.
@@ -483,9 +487,12 @@ fn draw_sidebar(
             let name = weapon
                 .and_then(|i| data.item(&i.spec))
                 .map(|s| s.name.clone())
-                .unwrap_or_else(|| "weapon".to_string());
+                .unwrap_or_else(|| tr!("ui.mission.hands.unknown_weapon").to_string());
             let ammo = weapon.map(|i| i.charges).unwrap_or(0);
-            format!("{name} drawn ({ammo} rounds)")
+            murmur_core::loc::fmt(
+                "ui.mission.hands.drawn",
+                &[("weapon", &name), ("ammo", &ammo.to_string())],
+            )
         }
     };
     lines.push(Line::from(hands));
@@ -493,21 +500,29 @@ fn draw_sidebar(
     // Legitimacy of the current position.
     let verdict = murmur_core::access::verdict_at(world, data, world.player);
     let (legit, color) = match verdict {
-        murmur_core::access::AccessVerdict::Allowed => ("area: legitimate", Color::Green),
-        murmur_core::access::AccessVerdict::AllowedByInvitation => ("area: invited", Color::Green),
-        murmur_core::access::AccessVerdict::AllowedByRoomGrant => {
-            ("area: staff access", Color::Green)
+        murmur_core::access::AccessVerdict::Allowed => {
+            (tr!("ui.mission.area.legitimate"), Color::Green)
         }
-        murmur_core::access::AccessVerdict::AllowedByPass => ("area: pass shown", Color::Green),
-        murmur_core::access::AccessVerdict::Illegal(_) => ("area: TRESPASSING", Color::Red),
+        murmur_core::access::AccessVerdict::AllowedByInvitation => {
+            (tr!("ui.mission.area.invited"), Color::Green)
+        }
+        murmur_core::access::AccessVerdict::AllowedByRoomGrant => {
+            (tr!("ui.mission.area.staff_access"), Color::Green)
+        }
+        murmur_core::access::AccessVerdict::AllowedByPass => {
+            (tr!("ui.mission.area.pass"), Color::Green)
+        }
+        murmur_core::access::AccessVerdict::Illegal(_) => {
+            (tr!("ui.mission.area.trespassing"), Color::Red)
+        }
     };
     lines.push(Line::styled(legit, Style::default().fg(color)));
 
     // The venue's security posture, driven by mission heat.
     let (alert_label, alert_color) = match world.heat_tier {
-        0 => ("venue: quiet", Color::DarkGray),
-        1 => ("venue: security wary", Color::Yellow),
-        _ => ("venue: backup on site", Color::Red),
+        0 => (tr!("ui.mission.venue.quiet"), Color::DarkGray),
+        1 => (tr!("ui.mission.venue.wary"), Color::Yellow),
+        _ => (tr!("ui.mission.venue.backup"), Color::Red),
     };
     lines.push(Line::styled(alert_label, Style::default().fg(alert_color)));
 
@@ -515,12 +530,15 @@ fn draw_sidebar(
     if let Some(constraint) = &world.constraint {
         if world.constraint_breach.is_some() {
             lines.push(Line::styled(
-                "contract: BREACHED".to_string(),
+                tr!("ui.mission.contract.breached").to_string(),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             ));
         } else {
             lines.push(Line::styled(
-                format!("contract: {}", constraint.short(data, &world.venue)),
+                trf!(
+                    "ui.mission.contract.intact",
+                    condition = constraint.short(data, &world.venue)
+                ),
                 Style::default().fg(Color::LightCyan),
             ));
         }
@@ -529,7 +547,7 @@ fn draw_sidebar(
 
     // Inventory: six visible slots.
     lines.push(Line::styled(
-        "inventory",
+        tr!("ui.mission.inventory.title"),
         Style::default().add_modifier(Modifier::UNDERLINED),
     ));
     let carried: Vec<String> = world
@@ -540,7 +558,14 @@ fn draw_sidebar(
                 .map(|s| s.name.clone())
                 .unwrap_or_else(|| i.spec.clone());
             if i.charges > 0 {
-                format!("{name} ({})", i.charges)
+                murmur_core::loc::fmt(
+                    "ui.mission.inventory.slot_charges",
+                    &[
+                        ("n", ""),
+                        ("name", &name),
+                        ("charges", &i.charges.to_string()),
+                    ],
+                )
             } else {
                 name
             }
@@ -548,9 +573,12 @@ fn draw_sidebar(
         .collect();
     for slot in 0..murmur_core::actions::INVENTORY_SLOTS {
         match carried.get(slot) {
-            Some(name) => lines.push(Line::from(format!(" {}. {name}", slot + 1))),
+            Some(name) => lines.push(Line::from(murmur_core::loc::fmt(
+                "ui.mission.inventory.slot",
+                &[("n", &(slot + 1).to_string()), ("name", name)],
+            ))),
             None => lines.push(Line::styled(
-                format!(" {}. -", slot + 1),
+                trf!("ui.mission.inventory.empty", n = slot + 1),
                 Style::default().fg(Color::DarkGray),
             )),
         }
@@ -562,13 +590,13 @@ fn draw_sidebar(
     // you can actually act on. Reuses the shooting target list, so this
     // panel and the map agree about who is visible.
     lines.push(Line::styled(
-        "in sight",
+        tr!("ui.mission.insight.title"),
         Style::default().add_modifier(Modifier::UNDERLINED),
     ));
     let seen = mission.visible_actors(data);
     if seen.is_empty() {
         lines.push(Line::styled(
-            " nobody",
+            tr!("ui.mission.insight.nobody"),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -584,13 +612,20 @@ fn draw_sidebar(
             style = style.add_modifier(Modifier::BOLD);
         }
         lines.push(Line::styled(
-            format!(" {}{range} - {}", actor.name, mood_label(mood)),
+            murmur_core::loc::fmt(
+                "ui.mission.insight.actor",
+                &[
+                    ("name", &actor.name),
+                    ("range", &range),
+                    ("mood", mood.label()),
+                ],
+            ),
             style,
         ));
     }
     if seen.len() > 4 {
         lines.push(Line::styled(
-            format!(" and {} more", seen.len() - 4),
+            trf!("ui.mission.insight.more", count = seen.len() - 4),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -610,23 +645,23 @@ fn draw_sidebar(
         .count();
     if hunting > 0 {
         lines.push(Line::styled(
-            format!("!! {hunting} hunting you"),
+            trf!("ui.mission.hunting", count = hunting),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
     }
     let target = world.actor(world.target);
     if !target.alive() {
         lines.push(Line::styled(
-            "target eliminated",
+            tr!("ui.mission.target_dead"),
             Style::default().fg(Color::LightGreen),
         ));
-        lines.push(Line::from("reach an X exit"));
+        lines.push(Line::from(tr!("ui.mission.reach_exit")));
     }
     lines.push(Line::raw(""));
 
     // Clickable action palette, two per row.
     lines.push(Line::styled(
-        "actions (click or key)",
+        tr!("ui.mission.actions.title"),
         Style::default().add_modifier(Modifier::UNDERLINED),
     ));
     let palette_start_row = area.y + 1 + lines.len() as u16;
@@ -638,7 +673,7 @@ fn draw_sidebar(
         let mut spans: Vec<Span> = Vec::new();
         let mut column = area.x + 1;
         for entry in pair {
-            let (key, label) = (entry.key, entry.label);
+            let (key, label) = (entry.key, entry.label());
             let text = format!("{key} {label}");
             let width = text.chars().count() as u16;
             let padded = format!("{text:<16}");
@@ -660,14 +695,16 @@ fn draw_sidebar(
     }
     lines.push(Line::raw(""));
     lines.push(Line::styled(
-        "arrows move - hover inspects",
+        tr!("ui.mission.footer.move"),
         Style::default().fg(Color::DarkGray),
     ));
     lines.push(Line::styled(
-        format!("Esc cancel - [ ] speed: {}", mission.speed.label()),
+        trf!("ui.mission.footer.speed", speed = mission.speed.label()),
         Style::default().fg(Color::DarkGray),
     ));
 
-    let block = Block::default().borders(Borders::ALL).title(" agent ");
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(tr!("ui.mission.panel.agent"));
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }

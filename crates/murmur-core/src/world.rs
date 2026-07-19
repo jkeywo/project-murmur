@@ -159,6 +159,27 @@ pub enum Mood {
 }
 
 impl Mood {
+    /// How the state reads in words, for the threat list and the
+    /// inspection line. The map says the same thing in colour; this is what
+    /// makes the state legible without relying on hue.
+    ///
+    /// Presentation used to derive this from `{:?}`, which quietly made the
+    /// Rust variant names into player-facing text no translator could
+    /// reach.
+    pub fn label(self) -> &'static str {
+        match self {
+            Mood::Relaxed => crate::tr!("mood.relaxed"),
+            Mood::Suspicious => crate::tr!("mood.suspicious"),
+            Mood::Investigating => crate::tr!("mood.investigating"),
+            Mood::Alerted => crate::tr!("mood.alerted"),
+            Mood::Escorting => crate::tr!("mood.escorting"),
+            Mood::Fleeing => crate::tr!("mood.fleeing"),
+            Mood::Combat => crate::tr!("mood.combat"),
+        }
+    }
+}
+
+impl Mood {
     /// Whether this mood prepares an action every turn rather than on the
     /// relaxed cadence.
     pub fn acts_every_turn(self) -> bool {

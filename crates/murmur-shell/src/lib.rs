@@ -31,6 +31,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 
 use mission::Mission;
+use murmur_core::tr;
 
 /// Backend-neutral input events. Platform binaries map their own key and
 /// mouse event types (crossterm, browser) onto this vocabulary. Mouse
@@ -85,6 +86,53 @@ pub struct PendingAccept {
     pub chosen: Vec<String>,
 }
 
+/// The debrief's headline, and with it the tone the panel is drawn in.
+///
+/// A typed outcome rather than the headline string: `draw_debrief` used to
+/// choose its colour by comparing the text against literals, so translating
+/// the headline would have silently turned every debrief red.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DebriefHeadline {
+    Completed,
+    Breached,
+    TargetEscaped,
+    Arrested,
+    Killed,
+    Abandoned,
+}
+
+impl DebriefHeadline {
+    pub fn text(self) -> &'static str {
+        match self {
+            DebriefHeadline::Completed => tr!("ui.debrief.headline.completed"),
+            DebriefHeadline::Breached => tr!("ui.debrief.headline.breached"),
+            DebriefHeadline::TargetEscaped => tr!("ui.debrief.headline.target_escaped"),
+            DebriefHeadline::Arrested => tr!("ui.debrief.headline.arrested"),
+            DebriefHeadline::Killed => tr!("ui.debrief.headline.killed"),
+            DebriefHeadline::Abandoned => tr!("ui.debrief.headline.abandoned"),
+        }
+    }
+
+    /// Whether the run ended well, tolerably, or badly.
+    pub fn tone(self) -> Tone {
+        match self {
+            DebriefHeadline::Completed => Tone::Good,
+            DebriefHeadline::Breached | DebriefHeadline::Abandoned => Tone::Mixed,
+            DebriefHeadline::TargetEscaped
+            | DebriefHeadline::Arrested
+            | DebriefHeadline::Killed => Tone::Bad,
+        }
+    }
+}
+
+/// How a debrief outcome should read at a glance.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tone {
+    Good,
+    Mixed,
+    Bad,
+}
+
 /// Which interface mode the shell is in. Everything except `Playing` is
 /// an interface mode only: it never advances simulation time.
 pub enum Screen {
@@ -109,7 +157,7 @@ pub enum Screen {
         loadout: Vec<String>,
     },
     Debrief {
-        headline: &'static str,
+        headline: DebriefHeadline,
         summary: ResolutionSummary,
         turns: u32,
         seed: u64,
@@ -176,7 +224,7 @@ impl Shell {
         self.autosave();
         self.screen = Screen::Hub {
             accepting: None,
-            message: Some("a fresh start".to_string()),
+            message: Some(tr!("ui.hub.msg.fresh_start").to_string()),
         };
     }
 
@@ -245,7 +293,7 @@ impl Shell {
                     // without penalty or record.
                     self.screen = Screen::Hub {
                         accepting: None,
-                        message: Some("you let the contract pass".to_string()),
+                        message: Some(tr!("ui.hub.msg.contract_passed").to_string()),
                     };
                 }
                 _ => {}
@@ -345,7 +393,7 @@ impl Shell {
                     let note = match outcome {
                         Ok(()) => {
                             self.autosave();
-                            format!("bought: {}", entry.item)
+                            murmur_core::trf!("ui.hub.msg.bought", item = entry.item)
                         }
                         Err(why) => why,
                     };
@@ -361,7 +409,7 @@ impl Shell {
                 let Screen::Hub { message, .. } = &mut self.screen else {
                     unreachable!()
                 };
-                *message = Some("the board turns over".to_string());
+                *message = Some(tr!("ui.hub.msg.board_refreshed").to_string());
             }
             ShellInput::Char('q') => self.quit_requested = true,
             ShellInput::Esc => self.screen = Screen::Start,
@@ -397,7 +445,7 @@ impl Shell {
                 // internally): the contract falls through.
                 self.screen = Screen::Hub {
                     accepting: None,
-                    message: Some("the contract fell through; the board moves on".to_string()),
+                    message: Some(tr!("ui.hub.msg.generation_failed").to_string()),
                 };
             }
         }
@@ -426,13 +474,15 @@ impl Shell {
             Some(murmur_core::world::MissionOutcome::Extracted)
                 if resolution.breach_reason.is_none() =>
             {
-                "CONTRACT COMPLETED"
+                DebriefHeadline::Completed
             }
-            Some(murmur_core::world::MissionOutcome::Extracted) => "CONTRACT BREACHED",
-            Some(murmur_core::world::MissionOutcome::TargetEscaped) => "TARGET ESCAPED",
-            Some(murmur_core::world::MissionOutcome::Arrested) => "ARRESTED",
-            Some(murmur_core::world::MissionOutcome::PlayerKilled) => "KILLED IN ACTION",
-            None => "CONTRACT ABANDONED",
+            Some(murmur_core::world::MissionOutcome::Extracted) => DebriefHeadline::Breached,
+            Some(murmur_core::world::MissionOutcome::TargetEscaped) => {
+                DebriefHeadline::TargetEscaped
+            }
+            Some(murmur_core::world::MissionOutcome::Arrested) => DebriefHeadline::Arrested,
+            Some(murmur_core::world::MissionOutcome::PlayerKilled) => DebriefHeadline::Killed,
+            None => DebriefHeadline::Abandoned,
         };
         let summary = self.campaign.resolve(&self.data, &offer, &resolution);
         self.autosave();
@@ -497,7 +547,7 @@ impl Shell {
                 seed,
             } => {
                 self.screen_layout =
-                    screens::draw_debrief(frame, headline, summary, &self.campaign, *turns, *seed);
+                    screens::draw_debrief(frame, *headline, summary, &self.campaign, *turns, *seed);
             }
             Screen::CampaignOver => {
                 self.screen_layout = screens::draw_campaign_over(frame, &self.campaign);
@@ -786,7 +836,8 @@ mod tests {
             assert!(
                 acted,
                 "key {:?} ({}) is in the keymap but handle_normal ignores it",
-                entry.key, entry.label
+                entry.key,
+                entry.label()
             );
         }
     }
@@ -808,7 +859,9 @@ mod tests {
         let last = log.last().unwrap();
         assert_eq!(last.count, 3, "three identical refusals are one entry");
         assert_eq!(last.kind, mission::LogKind::Notice);
-        assert!(last.display().ends_with("(x3)"));
+        // `contains` rather than `ends_with`: the repeat marker is itself a
+        // catalogue string, so what trails the count is up to the text.
+        assert!(last.display().contains("(x3)"));
         // A different message still starts a new entry.
         let entries = log.len();
         shell.handle_input(ShellInput::Char('g'));
@@ -826,7 +879,7 @@ mod tests {
         assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
         assert!(mission(&shell).queue.is_empty());
         let text = mission(&shell).inspected_slot_text(&data);
-        assert!(text.is_some_and(|t| t.starts_with("slot 1:")));
+        assert!(text.is_some_and(|t| t.contains("slot 1:")));
         for _ in 0..10 {
             shell.tick();
         }

@@ -1,10 +1,12 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under item.<id>.name; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // Carriable items. Keys and invitations are ordinary inventory items;
 // purchasable items are campaign equipment and only enter a mission
 // through the player's loadout.
 [
     (
         id: "silenced-pistol",
-        name: "silenced pistol",
         glyph: '/',
         unlocks: None,
         invitation: false,
@@ -18,7 +20,6 @@
     ),
     (
         id: "garrote",
-        name: "garrote",
         glyph: '~',
         unlocks: None,
         invitation: false,
@@ -30,7 +31,6 @@
     ),
     (
         id: "lockpicks",
-        name: "lockpicks",
         glyph: '(',
         unlocks: None,
         invitation: false,
@@ -43,7 +43,6 @@
     ),
     (
         id: "noisemaker",
-        name: "noisemaker charges",
         glyph: '^',
         unlocks: None,
         invitation: false,
@@ -57,7 +56,6 @@
     ),
     (
         id: "forged-pass",
-        name: "forged staff pass",
         glyph: '"',
         unlocks: None,
         invitation: false,
@@ -70,7 +68,6 @@
     ),
     (
         id: "counterfeit-invitation",
-        name: "counterfeit invitation",
         glyph: '!',
         unlocks: None,
         invitation: true,
@@ -82,7 +79,6 @@
     ),
     (
         id: "vip-invitation",
-        name: "VIP invitation",
         glyph: '!',
         unlocks: None,
         invitation: true,
@@ -93,7 +89,6 @@
     ),
     (
         id: "office-key",
-        name: "manager's office key",
         glyph: '-',
         unlocks: Some("manager-office"),
         invitation: false,
@@ -104,7 +99,6 @@
     ),
     (
         id: "security-key",
-        name: "security office key",
         glyph: '-',
         unlocks: Some("security-office"),
         invitation: false,
@@ -115,7 +109,6 @@
     ),
     (
         id: "service-master-key",
-        name: "service master key",
         glyph: '-',
         unlocks: None,
         invitation: false,
@@ -127,7 +120,6 @@
     ),
     (
         id: "foreman-key",
-        name: "foreman's key",
         glyph: '-',
         unlocks: Some("foreman-office"),
         invitation: false,

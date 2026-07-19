@@ -14,6 +14,7 @@ pub mod contract;
 pub mod data;
 pub mod generator;
 pub mod geom;
+pub mod loc;
 pub mod map;
 pub mod path;
 pub mod perception;

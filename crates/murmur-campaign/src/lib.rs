@@ -77,12 +77,12 @@ pub enum ContractResult {
 impl ContractResult {
     pub fn describe(self) -> &'static str {
         match self {
-            ContractResult::Completed => "completed cleanly",
-            ContractResult::CompletedUnclean => "completed, contract breached",
-            ContractResult::Abandoned => "abandoned",
-            ContractResult::TargetEscaped => "the target escaped",
-            ContractResult::Arrested => "ended in arrest",
-            ContractResult::Killed => "ended in death",
+            ContractResult::Completed => murmur_core::tr!("result.completed"),
+            ContractResult::CompletedUnclean => murmur_core::tr!("result.completed_unclean"),
+            ContractResult::Abandoned => murmur_core::tr!("result.abandoned"),
+            ContractResult::TargetEscaped => murmur_core::tr!("result.target_escaped"),
+            ContractResult::Arrested => murmur_core::tr!("result.arrested"),
+            ContractResult::Killed => murmur_core::tr!("result.killed"),
         }
     }
 }
@@ -200,14 +200,14 @@ impl CampaignState {
         loadout: Vec<ItemSpecId>,
     ) -> Result<MissionConfig, String> {
         if self.over {
-            return Err("the campaign is over".to_string());
+            return Err(murmur_core::tr!("campaign.err.over").to_string());
         }
         if loadout.len() > murmur_core::contract::LOADOUT_SLOTS {
-            return Err("a loadout carries at most three items".to_string());
+            return Err(murmur_core::tr!("campaign.err.loadout_full").to_string());
         }
         for item in &loadout {
             if !self.owned_equipment.contains(item) {
-                return Err(format!("you do not own '{item}'"));
+                return Err(murmur_core::trf!("campaign.err.not_owned", item = item));
             }
         }
         self.offer_index += 1;
@@ -225,10 +225,10 @@ impl CampaignState {
             .find(|e| e.item == item)
             .ok_or_else(|| format!("'{item}' is not in the catalogue"))?;
         if self.owned_equipment.iter().any(|i| i == item) {
-            return Err("already owned".to_string());
+            return Err(murmur_core::tr!("campaign.err.already_owned").to_string());
         }
         if self.cash < entry.price {
-            return Err("not enough cash".to_string());
+            return Err(murmur_core::tr!("campaign.err.no_cash").to_string());
         }
         self.cash -= entry.price;
         self.owned_equipment.push(item.to_string());

@@ -1,6 +1,8 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under campaign.district.*; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // Campaign-layer tunables: districts, economy, and heat persistence.
 (
-    districts: ["Docklands", "Midtown", "The Neon Mile"],
     starting_cash: 300,
     starting_equipment: ["garrote"],   // the syndicate's basic issue
     arrest_fine: 250,

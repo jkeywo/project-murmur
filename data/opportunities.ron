@@ -1,3 +1,6 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under opportunity.<id>.name, .risk and .presentation; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // The five opportunity machines: planner-visible, script-compatible
 // route changers. One primarily physical, one social, one violence, two
 // universal. Each declares its required room zones, interaction cost,
@@ -6,57 +9,42 @@
 [
     (
         id: "fuse-box",
-        name: "fuse box",
         glyph: 'F',
         approach: Physical,
         effect: CutLights,
         zones: [Staff],
         interact_turns: 3,
-        risk: "sparks fly; tampering in view of anyone is alarming",
-        presentation: "a humming fuse box, its panel hanging open",
     ),
     (
         id: "uniform-store",
-        name: "uniform store",
         glyph: 'W',
         approach: Social,
         effect: StockWardrobe(disguise: "staff"),
         zones: [Staff],
         interact_turns: 2,
-        risk: "changing clothes takes time you may not have",
-        presentation: "a rack of pressed staff uniforms",
     ),
     (
         id: "rigged-hoist",
-        name: "loading hoist",
         glyph: 'H',
         approach: Violence,
         effect: AccidentDrop,
         zones: [Public, Staff],
         interact_turns: 2,
-        risk: "the crate falls only on whoever stands beneath",
-        presentation: "a strained cargo hoist, its brake lever within reach",
     ),
     (
         id: "key-cache",
-        name: "key cache",
         glyph: 'K',
         approach: Universal,
         effect: PlaceKey(item: "service-master-key"),
         zones: [Staff],
         interact_turns: 1,
-        risk: "someone may notice the master key is missing",
-        presentation: "a wall box of labelled duplicate keys",
     ),
     (
         id: "fire-alarm",
-        name: "fire alarm",
         glyph: 'A',
         approach: Universal,
         effect: Evacuate,
         zones: [Public, Staff],
         interact_turns: 1,
-        risk: "pulling it in view of anyone is alarming; the club will empty",
-        presentation: "a red fire alarm pull station",
     ),
 ]

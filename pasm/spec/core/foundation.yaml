@@ -237,6 +237,22 @@ entities:
       paths: [crates/murmur-core/src/access.rs, data/items.ron]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
+  - component: string-catalogue
+    core:
+      status: implemented
+      confidence: confirmed
+      title: String Catalogue
+      summary: Every player-facing string lives in data/loc/strings.csv as an id, a translator-facing context note, and the English text, embedded at compile time beside the RON data. Code holds ids, never words. Runtime interpolation uses named slot substitution because Rust's format macro needs a compile-time literal. The RON files carry no display text at all - names, labels, and authored phrases are filled in from the catalogue at load by derived id such as item.garrote.name, and the ordered pools the generator draws on - person names, districts, briefing reasons - come from zero-padded id ranges so a seed's output does not shift when a pool grows.
+      rationale:
+        - The words were spread across four crates and eleven data files with no way to enumerate them, let alone translate them.
+        - Embedding matches the RON precedent - native and web must ship byte-identical text because a mission's log is part of its deterministic replay.
+      references: [embedded-ron-game-data, mission-briefing, ascii-presentation]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/loc.rs, data/loc/strings.csv]
+      symbols: [Catalogue, text, fmt, interpolate, with_prefix]
+      tests: [crates/murmur-core/src/loc.rs, crates/murmur-core/src/data.rs]
+
   - component: pickpocket-rules
     core:
       status: implemented

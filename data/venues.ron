@@ -1,16 +1,11 @@
+// Structure and numbers only. Display text lives in
+// data/loc/strings.csv under venue.<id>.name, .invitation and .zone.*; a `name:` here would parse
+// and then lose to the catalogue, so a test rejects one.
 // Venue definitions. Every venue runs on the same contract, planner,
 // grammar, opportunity, heat, and campaign systems; only data differs.
 [
     (
         id: "nightclub",
-        name: "nightclub",
-        zone_labels: (
-            public: "public",
-            staff: "staff",
-            secure: "VIP",
-            personal: "private",
-        ),
-        invitation_label: "VIP invitation",
         floor_width: 46,
         floor_height: 26,
         floor_count: 2,              // [spec] two-storey nightclub
@@ -31,14 +26,6 @@
     ),
     (
         id: "warehouse",
-        name: "bonded warehouse",
-        zone_labels: (
-            public: "front-of-house",
-            staff: "the floor",
-            secure: "the cage",
-            personal: "management",
-        ),
-        invitation_label: "visitor pass",
         floor_width: 46,
         floor_height: 26,
         floor_count: 2,

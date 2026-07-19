@@ -10,10 +10,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
-use crate::keymap;
-use crate::{ScreenLayout, ShellInput};
+use murmur_core::{tr, trf};
 
-const TITLE: &str = "P R O J E C T   M U R M U R";
+use crate::keymap;
+use crate::{DebriefHeadline, ScreenLayout, ShellInput, Tone};
 
 fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let w = width.min(area.width);
@@ -113,23 +113,23 @@ pub fn draw_confirm_new_campaign(frame: &mut Frame) -> ScreenLayout {
     let area = centered(frame.area(), 54, 11);
     let lines = vec![
         Line::styled(
-            "Start over?",
+            tr!("ui.confirm_new.title"),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw("This discards your saved campaign — the money,"),
-        Line::raw("the kit, and everyone you have already dealt with."),
-        Line::raw("There is only one save, and no way back."),
+        Line::raw(tr!("ui.confirm_new.body.1")),
+        Line::raw(tr!("ui.confirm_new.body.2")),
+        Line::raw(tr!("ui.confirm_new.body.3")),
     ];
     let prompts = vec![
         (
             ShellInput::Char('y'),
-            "y: yes, start over".to_string(),
+            tr!("ui.confirm_new.prompt.yes").to_string(),
             Style::default().fg(Color::Red),
         ),
         (
             ShellInput::Esc,
-            "any other key: keep my campaign".to_string(),
+            tr!("ui.confirm_new.prompt.no").to_string(),
             Style::default().fg(Color::LightGreen),
         ),
     ];
@@ -151,12 +151,12 @@ pub fn draw_confirm_new_campaign(frame: &mut Frame) -> ScreenLayout {
 fn keymap_summary(width: usize) -> Vec<String> {
     let mut cells: Vec<String> = keymap::ACTIONS
         .iter()
-        .map(|a| format!("{} {}", a.key, a.label))
+        .map(|a| format!("{} {}", a.key, a.label()))
         .collect();
     cells.extend(
         keymap::CONTROLS
             .iter()
-            .map(|(key, short, _)| format!("{key} {short}")),
+            .map(|entry| format!("{} {}", entry.0, keymap::control_short(entry))),
     );
     // Packed to natural width rather than fixed columns: this panel is
     // centred, and padded cells centre raggedly.
@@ -187,21 +187,24 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
     let area = centered(frame.area(), 66, 30);
     let mut lines = vec![
         Line::styled(
-            TITLE,
+            tr!("ui.start.title"),
             Style::default()
                 .fg(Color::LightMagenta)
                 .add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw("A social-stealth contract campaign. Take a job, slip in,"),
-        Line::raw("eliminate the target, and walk out unremarked."),
+        Line::raw(tr!("ui.start.pitch.1")),
+        Line::raw(tr!("ui.start.pitch.2")),
         Line::raw(""),
-        Line::raw("Blend in: your clothes decide where you belong."),
-        Line::raw("Guards notice trespass, weapons, bodies, and worse."),
-        Line::raw("Contracts carry one hard condition; break it, no pay."),
-        Line::raw("Arrest costs your kit and a fine. Death ends everything."),
+        Line::raw(tr!("ui.start.rules.1")),
+        Line::raw(tr!("ui.start.rules.2")),
+        Line::raw(tr!("ui.start.rules.3")),
+        Line::raw(tr!("ui.start.rules.4")),
         Line::raw(""),
-        Line::styled("keys", Style::default().add_modifier(Modifier::UNDERLINED)),
+        Line::styled(
+            tr!("ui.start.keys_heading"),
+            Style::default().add_modifier(Modifier::UNDERLINED),
+        ),
     ];
     // Built from the keymap table rather than written out again, so this
     // list cannot drift from what the keys actually do. Press ? in a
@@ -209,28 +212,32 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
     lines.extend(keymap_summary(60).into_iter().map(Line::raw));
     lines.extend([
         Line::raw(""),
-        Line::raw("Press ? during a mission for the full list."),
+        Line::raw(tr!("ui.start.help_hint")),
         Line::raw(""),
-        Line::raw("The mouse works too: hover anything to inspect it,"),
-        Line::raw("click a seen tile to walk there, and click any prompt"),
-        Line::raw("or action instead of pressing its key."),
+        Line::raw(tr!("ui.start.mouse.1")),
+        Line::raw(tr!("ui.start.mouse.2")),
+        Line::raw(tr!("ui.start.mouse.3")),
     ]);
     let green = Style::default().fg(Color::LightGreen);
     let mut prompts = vec![(
         ShellInput::Enter,
         if has_save {
-            "Enter: continue your campaign".to_string()
+            tr!("ui.start.prompt.continue").to_string()
         } else {
-            "Enter: begin your campaign".to_string()
+            tr!("ui.start.prompt.begin").to_string()
         },
         green,
     )];
     if has_save {
-        prompts.push((ShellInput::Char('n'), "n: start over".to_string(), green));
+        prompts.push((
+            ShellInput::Char('n'),
+            tr!("ui.start.prompt.new").to_string(),
+            green,
+        ));
     }
     prompts.push((
         ShellInput::Char('q'),
-        "q: quit".to_string(),
+        tr!("ui.start.prompt.quit").to_string(),
         Style::default().fg(Color::DarkGray),
     ));
 
@@ -279,21 +286,28 @@ pub fn draw_hub(
     };
 
     lines.push(Line::styled(
-        "THE SYNDICATE DESK",
+        tr!("ui.hub.title"),
         Style::default()
             .fg(Color::LightYellow)
             .add_modifier(Modifier::BOLD),
     ));
-    lines.push(Line::from(format!(
-        "cash {}   contracts done {}",
-        campaign.cash,
-        campaign.history.len()
+    lines.push(Line::from(murmur_core::loc::fmt(
+        "ui.hub.wallet",
+        &[
+            ("cash", &campaign.cash.to_string()),
+            ("contracts", &campaign.history.len().to_string()),
+        ],
     )));
     lines.push(Line::from(
         campaign
             .district_heat
             .iter()
-            .map(|(d, h)| format!("{d}: heat {h}"))
+            .map(|(d, h)| {
+                murmur_core::loc::fmt(
+                    "ui.hub.district_heat",
+                    &[("district", d), ("heat", &h.to_string())],
+                )
+            })
             .collect::<Vec<_>>()
             .join("   "),
     ));
@@ -302,9 +316,12 @@ pub fn draw_hub(
     if let Some(pending) = accepting {
         // Loadout selection.
         lines.push(Line::styled(
-            format!(
-                "LOADOUT for the {} job in {} (pick up to three)",
-                pending.offer.venue, pending.offer.district
+            murmur_core::loc::fmt(
+                "ui.hub.loadout.title",
+                &[
+                    ("venue", &pending.offer.venue),
+                    ("district", &pending.offer.district),
+                ],
             ),
             Style::default().add_modifier(Modifier::UNDERLINED),
         ));
@@ -332,8 +349,8 @@ pub fn draw_hub(
         lines.push(Line::raw(""));
         let green = Style::default().fg(Color::LightGreen);
         for (input, text) in [
-            (ShellInput::Enter, "Enter: take the job"),
-            (ShellInput::Esc, "Esc: back to the board"),
+            (ShellInput::Enter, tr!("ui.hub.loadout.prompt.take")),
+            (ShellInput::Esc, tr!("ui.hub.loadout.prompt.back")),
         ] {
             let row = area.y + 1 + lines.len() as u16;
             layout.push(row, inner_x, area.x + area.width - 2, input);
@@ -342,7 +359,7 @@ pub fn draw_hub(
     } else {
         // The contract board.
         lines.push(Line::styled(
-            "CONTRACTS ON OFFER",
+            tr!("ui.hub.offers.title"),
             Style::default().add_modifier(Modifier::UNDERLINED),
         ));
         for (index, offer) in campaign.offers(data).iter().enumerate() {
@@ -351,22 +368,27 @@ pub fn draw_hub(
                 &mut lines,
                 &mut layout,
                 key,
-                format!(
-                    "{} in {} - pays {}  (heat {})",
-                    offer.venue, offer.district, offer.payout, offer.heat
+                murmur_core::loc::fmt(
+                    "ui.hub.offer.line",
+                    &[
+                        ("venue", &offer.venue),
+                        ("district", &offer.district),
+                        ("payout", &offer.payout.to_string()),
+                        ("heat", &offer.heat.to_string()),
+                    ],
                 ),
                 Style::default().add_modifier(Modifier::BOLD),
             );
             lines.push(Line::styled(
-                format!("    the target {}", offer.hook),
+                trf!("ui.hub.offer.hook", hook = offer.hook),
                 Style::default().fg(Color::Gray),
             ));
             // The board stays compact with the chip; the full condition
             // is spelled out on the briefing before you commit.
             lines.push(Line::styled(
-                format!(
-                    "    condition: {}",
-                    offer.constraint.short(data, &offer.venue)
+                trf!(
+                    "ui.hub.offer.condition",
+                    condition = offer.constraint.short(data, &offer.venue)
                 ),
                 Style::default().fg(Color::LightCyan),
             ));
@@ -375,14 +397,14 @@ pub fn draw_hub(
             &mut lines,
             &mut layout,
             'r',
-            "let this board pass".to_string(),
+            tr!("ui.hub.offer.pass").to_string(),
             Style::default().fg(Color::DarkGray),
         );
         lines.push(Line::raw(""));
 
         // The stash and the shop.
         lines.push(Line::styled(
-            "YOUR STASH",
+            tr!("ui.hub.stash.title"),
             Style::default().add_modifier(Modifier::UNDERLINED),
         ));
         let stash: Vec<String> = campaign
@@ -395,13 +417,13 @@ pub fn draw_hub(
             })
             .collect();
         lines.push(Line::from(if stash.is_empty() {
-            "nothing but your hands".to_string()
+            tr!("ui.hub.stash.empty").to_string()
         } else {
             stash.join(", ")
         }));
         lines.push(Line::raw(""));
         lines.push(Line::styled(
-            "THE FENCE (click or key to buy)",
+            tr!("ui.hub.fence.title"),
             Style::default().add_modifier(Modifier::UNDERLINED),
         ));
         for (index, entry) in data.equipment.iter().enumerate() {
@@ -413,12 +435,19 @@ pub fn draw_hub(
             let owned = campaign.owned_equipment.iter().any(|i| i == &entry.item);
             let (text, style) = if owned {
                 (
-                    format!("{name} - owned"),
+                    trf!("ui.hub.fence.owned", name = name),
                     Style::default().fg(Color::DarkGray),
                 )
             } else {
                 (
-                    format!("{name} - {} ({})", entry.price, entry.approach.name()),
+                    murmur_core::loc::fmt(
+                        "ui.hub.fence.forsale",
+                        &[
+                            ("name", &name),
+                            ("price", &entry.price.to_string()),
+                            ("approach", entry.approach.name()),
+                        ],
+                    ),
                     Style::default(),
                 )
             };
@@ -426,7 +455,7 @@ pub fn draw_hub(
         }
         lines.push(Line::raw(""));
         lines.push(Line::styled(
-            "1/2: study a contract        Esc: back        q: quit",
+            tr!("ui.hub.footer"),
             Style::default().fg(Color::LightGreen),
         ));
     }
@@ -473,101 +502,118 @@ pub fn draw_briefing(
 
     let mut lines: Vec<Line<'static>> = vec![
         Line::styled(
-            "MISSION BRIEFING",
+            tr!("ui.briefing.title"),
             Style::default()
                 .fg(Color::LightYellow)
                 .add_modifier(Modifier::BOLD),
         ),
         Line::styled(
-            format!("contract {seed} - {} in {}", offer.venue, offer.district),
+            murmur_core::loc::fmt(
+                "ui.briefing.subtitle",
+                &[
+                    ("seed", &seed.to_string()),
+                    ("venue", &offer.venue),
+                    ("district", &offer.district),
+                ],
+            ),
             Style::default().fg(Color::DarkGray),
         ),
         Line::raw(""),
     ];
     push_wrapped(
         &mut lines,
-        format!("Target: {}", facts.target_name),
+        trf!("ui.briefing.target", name = facts.target_name),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
-        format!("Reason: the target {}", offer.hook),
+        trf!("ui.briefing.reason", hook = offer.hook),
         plain,
         width,
     );
     let locations = if facts.target_locations.is_empty() {
-        "unknown".to_string()
+        tr!("ui.briefing.locations_unknown").to_string()
     } else {
         facts.target_locations.join(", ")
     };
     push_wrapped(
         &mut lines,
-        format!("Likely locations: {locations}"),
+        trf!("ui.briefing.locations", rooms = locations),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
-        format!(
-            "Condition: {}",
-            offer.constraint.describe(data, &offer.venue)
+        trf!(
+            "ui.briefing.condition",
+            condition = offer.constraint.describe(data, &offer.venue)
         ),
         Style::default().fg(Color::LightCyan),
         width,
     );
     push_wrapped(
         &mut lines,
-        format!("Payout on a clean job: {}", offer.payout),
+        trf!("ui.briefing.payout", payout = offer.payout),
         plain,
         width,
     );
     lines.push(Line::raw(""));
     push_wrapped(
         &mut lines,
-        format!(
-            "Security: {} guards on shift; {} staff; about {} guests",
-            facts.guard_count, facts.staff_count, facts.civilian_count
+        murmur_core::loc::fmt(
+            "ui.briefing.security",
+            &[
+                ("guards", &facts.guard_count.to_string()),
+                ("staff", &facts.staff_count.to_string()),
+                ("guests", &facts.civilian_count.to_string()),
+            ],
         ),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
-        format!("Restricted areas: {}", facts.restricted_rooms.join(", ")),
-        plain,
-        width,
-    );
-    push_wrapped(
-        &mut lines,
-        format!(
-            "Disguises seen on site: {}",
-            facts.available_disguises.join(", ")
+        trf!(
+            "ui.briefing.restricted",
+            rooms = facts.restricted_rooms.join(", ")
         ),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
-        format!(
-            "Places to hide a body: {} known containers",
-            facts.container_count
+        trf!(
+            "ui.briefing.disguises",
+            disguises = facts.available_disguises.join(", ")
         ),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
-        format!("Extraction: {}", facts.extraction_exits.join(" or ")),
+        trf!("ui.briefing.containers", count = facts.container_count),
+        plain,
+        width,
+    );
+    push_wrapped(
+        &mut lines,
+        trf!(
+            "ui.briefing.extraction",
+            exits = facts.extraction_exits.join(" or ")
+        ),
         plain,
         width,
     );
     push_wrapped(
         &mut lines,
         if facts.opportunities.is_empty() {
-            "Word on the inside: nothing unusual".to_string()
+            tr!("ui.briefing.word.none").to_string()
         } else {
-            format!("Word on the inside: {}", facts.opportunities.join("; "))
+            trf!(
+                "ui.briefing.word.some",
+                hints = facts.opportunities.join("; ")
+            )
         },
         plain,
         width,
@@ -576,21 +622,25 @@ pub fn draw_briefing(
     push_wrapped(
         &mut lines,
         if loadout_names.is_empty() {
-            "You go in empty-handed.".to_string()
+            tr!("ui.briefing.loadout.none").to_string()
         } else {
-            format!("You carry: {}", loadout_names.join(", "))
+            trf!("ui.briefing.loadout.some", items = loadout_names.join(", "))
         },
         plain,
         width,
     );
-    lines.push(Line::raw("You enter as a guest, in civilian clothes."));
+    lines.push(Line::raw(tr!("ui.briefing.entry")));
 
     let green = Style::default().fg(Color::LightGreen);
     let prompts = [
-        (ShellInput::Enter, "Enter: go in".to_string(), green),
+        (
+            ShellInput::Enter,
+            tr!("ui.briefing.prompt.go").to_string(),
+            green,
+        ),
         (
             ShellInput::Esc,
-            "Esc: let the contract pass".to_string(),
+            tr!("ui.briefing.prompt.pass").to_string(),
             green,
         ),
     ];
@@ -608,7 +658,7 @@ pub fn draw_briefing(
 
 pub fn draw_debrief(
     frame: &mut Frame,
-    headline: &str,
+    headline: DebriefHeadline,
     summary: &ResolutionSummary,
     campaign: &CampaignState,
     turns: u32,
@@ -616,54 +666,63 @@ pub fn draw_debrief(
 ) -> ScreenLayout {
     let mut layout = ScreenLayout::default();
     let area = centered(frame.area(), 62, 20);
-    let color = match headline {
-        "CONTRACT COMPLETED" => Color::LightGreen,
-        "CONTRACT BREACHED" | "CONTRACT ABANDONED" => Color::Yellow,
-        _ => Color::LightRed,
+    let color = match headline.tone() {
+        Tone::Good => Color::LightGreen,
+        Tone::Mixed => Color::Yellow,
+        Tone::Bad => Color::LightRed,
     };
     let mut lines = vec![
         Line::styled(
-            headline.to_string(),
+            headline.text().to_string(),
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::from(format!("the contract {}", summary.result.describe())),
-        Line::from(format!("payout: {}", summary.payout)),
+        Line::from(trf!(
+            "ui.debrief.result",
+            result = summary.result.describe()
+        )),
+        Line::from(trf!("ui.debrief.payout", payout = summary.payout)),
     ];
     if let Some(reason) = &summary.breach_reason {
         lines.push(Line::styled(
-            format!("breached: {reason}"),
+            trf!("ui.debrief.breach", reason = reason),
             Style::default().fg(Color::LightRed),
         ));
     }
     if summary.fine > 0 {
         lines.push(Line::styled(
-            format!("fine paid: {}", summary.fine),
+            trf!("ui.debrief.fine", fine = summary.fine),
             Style::default().fg(Color::LightRed),
         ));
     }
     if !summary.confiscated.is_empty() {
         lines.push(Line::styled(
-            format!("confiscated: {}", summary.confiscated.join(", ")),
+            trf!(
+                "ui.debrief.confiscated",
+                items = summary.confiscated.join(", ")
+            ),
             Style::default().fg(Color::LightRed),
         ));
     }
     if summary.district_heat_change > 0 {
         lines.push(Line::styled(
-            "the district runs hotter now".to_string(),
+            tr!("ui.debrief.heat_rose").to_string(),
             Style::default().fg(Color::Yellow),
         ));
     }
     lines.push(Line::raw(""));
-    lines.push(Line::from(format!("cash: {}", campaign.cash)));
+    lines.push(Line::from(trf!("ui.debrief.cash", cash = campaign.cash)));
     lines.push(Line::styled(
-        format!("{turns} turns   seed {seed}"),
+        murmur_core::loc::fmt(
+            "ui.debrief.footer",
+            &[("turns", &turns.to_string()), ("seed", &seed.to_string())],
+        ),
         Style::default().fg(Color::DarkGray),
     ));
 
     let prompts = [(
         ShellInput::Enter,
-        "Enter: back to the desk".to_string(),
+        tr!("ui.debrief.prompt.back").to_string(),
         Style::default().fg(Color::LightGreen),
     )];
     frame.render_widget(Block::default().borders(Borders::ALL), area);
@@ -690,27 +749,31 @@ pub fn draw_campaign_over(frame: &mut Frame, campaign: &CampaignState) -> Screen
     let earned: i64 = campaign.history.iter().map(|r| r.payout).sum();
     let mut lines = vec![
         Line::styled(
-            "THE CAMPAIGN ENDS HERE",
+            tr!("ui.campaign_over.title"),
             Style::default()
                 .fg(Color::LightRed)
                 .add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::from(format!(
-            "{} contracts taken, {} targets eliminated",
-            campaign.history.len(),
-            completed
+        Line::from(murmur_core::loc::fmt(
+            "ui.campaign_over.tally",
+            &[
+                ("taken", &campaign.history.len().to_string()),
+                ("killed", &completed.to_string()),
+            ],
         )),
-        Line::from(format!("{earned} earned across the run")),
+        Line::from(trf!("ui.campaign_over.earned", earned = earned)),
         Line::raw(""),
     ];
     for record in campaign.history.iter().rev().take(6) {
         lines.push(Line::styled(
-            format!(
-                "{} in {}: {}",
-                record.venue,
-                record.district,
-                record.result.describe()
+            murmur_core::loc::fmt(
+                "ui.campaign_over.record",
+                &[
+                    ("venue", &record.venue),
+                    ("district", &record.district),
+                    ("result", record.result.describe()),
+                ],
             ),
             Style::default().fg(Color::Gray),
         ));
@@ -718,12 +781,12 @@ pub fn draw_campaign_over(frame: &mut Frame, campaign: &CampaignState) -> Screen
     let prompts = [
         (
             ShellInput::Enter,
-            "Enter: a new operative takes the desk".to_string(),
+            tr!("ui.campaign_over.prompt.again").to_string(),
             Style::default().fg(Color::LightGreen),
         ),
         (
             ShellInput::Char('q'),
-            "q: quit".to_string(),
+            tr!("ui.campaign_over.prompt.quit").to_string(),
             Style::default().fg(Color::DarkGray),
         ),
     ];
