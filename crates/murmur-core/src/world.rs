@@ -533,6 +533,25 @@ impl World {
     /// Whether a mover may swap places with this actor instead of being
     /// blocked. Civilians and staff step aside for anyone; guards and the
     /// player hold their ground.
+    /// Whether `id` gives way to `mover` specifically.
+    ///
+    /// A bodyguard stands its ground against everyone except the person it
+    /// is guarding. Without this the formation is a cage: guards are not
+    /// displaceable, they occupy every side of their principal, and the
+    /// principal cannot take a single step — the target simply stops
+    /// walking its schedule, which is invisible from any single test and
+    /// silently disables every protection rule downstream.
+    pub fn is_displaceable_by(&self, id: ActorId, mover: ActorId) -> bool {
+        if self.is_displaceable(id) {
+            return true;
+        }
+        matches!(
+            self.actor(id).ai.as_ref().and_then(|ai| ai.detail.as_ref()),
+            Some(DetailRole::Bodyguard { principal, .. }) if *principal == mover
+        ) && self.actor(id).alive()
+            && !self.actor(id).departed
+    }
+
     pub fn is_displaceable(&self, id: ActorId) -> bool {
         let actor = self.actor(id);
         !actor.is_player()

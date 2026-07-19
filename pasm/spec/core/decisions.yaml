@@ -835,3 +835,34 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-core/src/data.rs]
+
+  - decision: the-schedule-must-actually-advance
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Beat Index Advances At Runtime, And A Principal Walks Through Its Own Detail
+      summary: Three defects made every protection rule inert in actual play, none of them visible from any single test. The beat index was never advanced by the AI, so schedule.current() sat on beat zero forever and the target read as permanently escorted - the escort tests passed only because they set the index by hand. The detail encircled its principal and guards are not displaceable, so the target was caged by its own bodyguards and stopped walking its schedule entirely. And the target's first beat could be the entrance hall, which put it next to the player's spawn with the mission over before any of this mattered. Beats now advance in step with the routine they mirror, a bodyguard gives way to the person it guards, and the day starts at the escorted beat furthest from any exit.
+      rationale:
+        - Each of these was invisible to unit tests and only showed up when a full mission was played end to end, which is the argument for keeping a scripted playthrough as a first-class test rather than a smoke check.
+        - Displacement is granted specifically to the principal rather than generally to guards, so the ring still denies the player every tile it denied before.
+      references: [escort-is-an-assignment-not-a-mood, beats-mirror-the-routine-index-for-index]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/world.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/populate.rs]
+      symbols: [is_displaceable_by]
+      tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]
+
+  - decision: a-detail-covers-its-principal
+    core:
+      status: implemented
+      confidence: confirmed
+      title: A Detail Covers Its Principal, Not Just The Tiles It Stands On
+      summary: A bodyguard standing beside its principal takes a shot aimed at them, nearest to the shooter first with ties broken by ascending actor id. Requiring a guard to be exactly on the supercover ray was far too narrow for what a bodyguard is for - with three guards on four sides most firing angles have a clean line, and an escorted target could simply be shot from across the room. Measured end to end, that left the escorted and alone distinction with no teeth whatsoever in play however carefully the route planner reasoned about it.
+      rationale:
+        - The stated design inversion is that an escorted target is attackable only by accident. A rule that makes escorting merely inconvenient does not deliver it.
+        - Firing into a detail still resolves - it costs a round, a gunshot, a witnessed death and a live principal - so the player is refused a shortcut rather than an action.
+      references: [bodies-stop-bullets-but-not-sight]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions.rs]
+      tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]

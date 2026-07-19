@@ -83,6 +83,7 @@ fn routine_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionInte
         let step_wait = ai.routine[ai.routine_index].wait;
         ai.routine_index = (ai.routine_index + 1) % ai.routine.len();
         ai.wait_remaining = step_wait;
+        advance_schedule(ai);
         return ActionIntent::Wait;
     }
     match first_step_towards(world, data, id, goal) {
@@ -276,6 +277,33 @@ fn escort_intent(
     }
 }
 
+/// Keeps the beat index in step with the routine index it mirrors, and
+/// honours a pending resume.
+///
+/// Beats are index-aligned with the routine by construction, but nothing
+/// advanced the beat index at runtime until now: `schedule.current()` sat
+/// on beat zero forever, so `Protection` was never observed in play and
+/// the target was permanently "escorted" as far as any runtime rule could
+/// tell. The escort tests passed only because they set the index by hand.
+fn advance_schedule(ai: &mut crate::world::AiState) {
+    let routine_index = ai.routine_index;
+    let Some(schedule) = ai.schedule.as_mut() else {
+        return;
+    };
+    if schedule.beats.is_empty() {
+        return;
+    }
+    // A beat reached by summons hands control back to the interrupted day
+    // rather than running on from where it jumped to, so the cycle keeps
+    // every beat it had.
+    if let Some(resume) = schedule.resume_index.take() {
+        schedule.index = resume;
+    } else {
+        schedule.index = routine_index % schedule.beats.len();
+    }
+    schedule.dwell_remaining = schedule.beats[schedule.index].dwell;
+}
+
 /// Suspicious: stand and face the trouble spot, letting suspicion evolve.
 fn watch_intent(world: &World, id: ActorId) -> ActionIntent {
     let actor = world.actor(id);
@@ -403,20 +431,21 @@ fn has_live_detail(world: &World, principal: ActorId) -> bool {
     })
 }
 
-/// The deepest room a principal can be put behind: personal tier first,
-/// then secure. Rooms are taken in generation order, never by distance,
-/// so the choice does not depend on where the panic started.
-fn safe_room_tile(world: &World, from: Pos) -> Option<Pos> {
+/// Rooms a principal can be put behind, deepest tier first. Rooms are
+/// taken in generation order, never by distance, so the choice does not
+/// depend on where the panic started.
+fn safe_room_tiles(world: &World, from: Pos) -> Vec<Pos> {
+    let mut tiles = Vec::new();
     for zone in [crate::data::Zone::Personal, crate::data::Zone::Secure] {
         for room in world.rooms.iter().filter(|r| r.zone == zone) {
-            if let Some(w) = room.waypoints.first()
-                && w.pos != from
-            {
-                return Some(w.pos);
+            for w in &room.waypoints {
+                if w.pos != from {
+                    tiles.push(w.pos);
+                }
             }
         }
     }
-    None
+    tiles
 }
 
 fn flee_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent {
@@ -429,15 +458,22 @@ fn flee_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent 
     // target, which does not. If nothing defensible is reachable the
     // principal flees like anyone else, and a target that reaches the
     // street still ends the mission.
-    if has_live_detail(world, id)
-        && let Some(safe) = safe_room_tile(world, pos)
-    {
-        if pos == safe {
-            return ActionIntent::Wait;
+    if has_live_detail(world, id) {
+        for safe in safe_room_tiles(world, pos) {
+            if pos == safe {
+                return ActionIntent::Wait;
+            }
+            if let Some(dir) = first_step_towards(world, data, id, safe) {
+                return ActionIntent::Step(dir);
+            }
         }
-        if let Some(dir) = first_step_towards(world, data, id, safe) {
-            return ActionIntent::Step(dir);
-        }
+        // Nothing defensible within reach — most of the deep rooms are
+        // locked to this principal too. A guarded principal still does not
+        // bolt for the street: the detail holds them where they are. Only
+        // a principal whose detail is gone runs, which is what keeps the
+        // target-escapes-ends-the-mission rule alive without letting a
+        // panic hand the player a loss they could not prevent.
+        return ActionIntent::Wait;
     }
 
     let mut exits = world.extraction_tiles.clone();

@@ -167,6 +167,32 @@ pub fn build_schedule(
         beat.dwell = dwell.max(1);
     }
 
+    // Start the day away from the door. The player spawns on an
+    // extraction tile, so a target whose first beat is the entrance hall
+    // begins the mission standing next to the assassin — and every
+    // protection rule downstream is irrelevant because the mission is
+    // over before the detail matters. Rotating to the beat furthest from
+    // any exit is deterministic and costs the cycle nothing, since a cycle
+    // has no privileged starting point.
+    if !layout.extraction_tiles.is_empty() {
+        let distance_from_exit = |p: Pos| {
+            layout
+                .extraction_tiles
+                .iter()
+                .map(|e| travel_estimate(*e, p))
+                .min()
+                .unwrap_or(0)
+        };
+        let start = beats
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| b.protection == Protection::Escorted)
+            .max_by_key(|(i, b)| (distance_from_exit(b.pos), std::cmp::Reverse(*i)))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        beats.rotate_left(start);
+    }
+
     let dwell_remaining = beats[0].dwell;
     Ok(Schedule {
         beats,

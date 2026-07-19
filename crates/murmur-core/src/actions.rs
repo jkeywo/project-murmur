@@ -262,12 +262,12 @@ pub fn translate(
                         return Err(RejectReason::DoorIsLocked);
                     }
                     if world.door(id).open {
-                        validate_step_destination(world, dest)?;
+                        validate_step_destination(world, dest, world.player)?;
                     }
                     Ok(ActionIntent::Step(dir))
                 }
                 TileKind::Floor | TileKind::Stairs(_) => {
-                    validate_step_destination(world, dest)?;
+                    validate_step_destination(world, dest, world.player)?;
                     Ok(ActionIntent::Step(dir))
                 }
             }
@@ -542,7 +542,7 @@ fn validate_drop_destination(
     Ok(())
 }
 
-fn validate_step_destination(world: &World, dest: Pos) -> Result<(), RejectReason> {
+fn validate_step_destination(world: &World, dest: Pos, mover: ActorId) -> Result<(), RejectReason> {
     let landing = world.map.resolve_step_destination(dest);
     if world.furniture_at(dest).is_some() {
         return Err(RejectReason::PathBlocked(Blockage::Furniture));
@@ -551,7 +551,7 @@ fn validate_step_destination(world: &World, dest: Pos) -> Result<(), RejectReaso
         // Civilians and staff step aside (the mover swaps places with
         // them at resolution) — but not across a stairs transition, where
         // a swap would teleport the bystander between storeys.
-        if landing != dest || !world.is_displaceable(occupant.id) {
+        if landing != dest || !world.is_displaceable_by(occupant.id, mover) {
             return Err(RejectReason::OccupiedByActor);
         }
     }
@@ -927,7 +927,7 @@ fn resolve_shoot(
     // body absolutely stops a bullet. This is what makes a bodyguard
     // detail worth walking through: firing into it costs a round, a
     // gunshot, a witnessed death, and leaves the principal alive.
-    let hit = interposed_actor(world, shooter_pos, target_pos).unwrap_or(target);
+    let hit = interposed_actor(world, shooter_pos, target_pos, target).unwrap_or(target);
 
     kill(world, events, actor, hit);
     // Silenced, but still a local sound incident.
@@ -951,18 +951,49 @@ fn resolve_shoot(
 /// The first standing actor strictly between shooter and target, if any.
 /// Tiles are walked from the shooter outwards, so the nearest body is the
 /// one that stops the round.
-fn interposed_actor(world: &World, from: Pos, to: Pos) -> Option<ActorId> {
+fn interposed_actor(world: &World, from: Pos, to: Pos, target: ActorId) -> Option<ActorId> {
     if from.floor != to.floor {
         return None;
     }
-    crate::geom::supercover_between(from, to)
+    // Anyone standing on the line stops the round.
+    let on_the_line = crate::geom::supercover_between(from, to)
         .into_iter()
         .find_map(|pos| {
             world
                 .standing_actor_at(pos)
                 .filter(|a| !a.is_player())
                 .map(|a| a.id)
+        });
+    if on_the_line.is_some() {
+        return on_the_line;
+    }
+
+    // A detail covers its principal. Standing on the exact ray is far too
+    // narrow a rule for what a bodyguard is *for*: with three guards on
+    // four sides, most firing angles have a clean line, and an escorted
+    // target could simply be shot from across the room — which would leave
+    // the whole escorted/alone distinction with no teeth in actual play,
+    // however carefully the route planner reasons about it.
+    //
+    // So a bodyguard standing beside its principal takes the shot instead.
+    // The nearest to the shooter goes first, ties broken by ascending
+    // actor id so the choice never depends on iteration order.
+    let principal_pos = world.actor(target).pos;
+    let mut covering: Vec<(i16, ActorId)> = world
+        .actors
+        .iter()
+        .filter(|a| {
+            a.alive()
+                && !a.departed
+                && a.pos.is_adjacent(principal_pos)
+                && a.ai.as_ref().and_then(|ai| ai.detail.as_ref()).is_some_and(
+                    |crate::world::DetailRole::Bodyguard { principal, .. }| *principal == target,
+                )
         })
+        .map(|a| (a.pos.chebyshev(from).unwrap_or(i16::MAX), a.id))
+        .collect();
+    covering.sort();
+    covering.first().map(|(_, id)| *id)
 }
 
 fn resolve_melee(
@@ -1292,7 +1323,7 @@ fn resolve_movement(
                 let occupant_is_moving = pending
                     .iter()
                     .any(|&other| other != index && moves[other].actor == occupant);
-                if !occupant_is_moving && world.is_displaceable(occupant) {
+                if !occupant_is_moving && world.is_displaceable_by(occupant, moves[index].actor) {
                     let origin = world.actor(moves[index].actor).pos;
                     apply_move(world, events, moves[index].actor, moves[index].dir, dest);
                     world.actor_mut(occupant).pos = origin;

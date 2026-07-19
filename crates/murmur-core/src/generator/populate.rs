@@ -377,6 +377,7 @@ pub fn populate(
         .take(escort_slots)
         .collect();
     let mut detail: Vec<ActorId> = Vec::new();
+    let target_pos = actors[target_id.0 as usize].pos;
     for (slot, guard) in guards.into_iter().enumerate() {
         if let Some(ai) = actors[guard.0 as usize].ai.as_mut() {
             ai.detail = Some(crate::world::DetailRole::Bodyguard {
@@ -386,6 +387,24 @@ pub fn populate(
                 waited: 0,
             });
             detail.push(guard);
+        }
+        // Spawn the detail already in formation. Left to walk there from
+        // wherever population dropped them, the guards need dozens of
+        // turns to close, and the target stands unescorted through exactly
+        // the opening minutes when the player is nearest the entrance —
+        // which made every protection rule downstream irrelevant in play.
+        let ring: Vec<Pos> = Dir4::ALL
+            .into_iter()
+            .map(|d| target_pos.step(d))
+            .filter(|p| {
+                matches!(layout.map.tile(*p), crate::map::TileKind::Floor)
+                    && !layout.furniture.iter().any(|f| f.pos == *p)
+            })
+            .collect();
+        if let Some(spot) = ring.iter().find(|p| !taken.contains(p)) {
+            let spot = *spot;
+            actors[guard.0 as usize].pos = spot;
+            taken.push(spot);
         }
     }
 

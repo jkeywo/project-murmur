@@ -437,7 +437,15 @@ mod tests {
         let target = world
             .actors
             .iter()
-            .filter(|a| !a.is_player() && a.alive())
+            // Not the target and not its detail: a shot at an escorted
+            // principal is covered by a bodyguard, which is a different
+            // mechanic and has its own tests.
+            .filter(|a| {
+                !a.is_player()
+                    && a.alive()
+                    && !a.is_target
+                    && a.ai.as_ref().and_then(|ai| ai.detail.as_ref()).is_none()
+            })
             .find(|a| {
                 a.pos.floor == world.player_actor().pos.floor
                     && world
@@ -450,6 +458,11 @@ mod tests {
                         a.pos,
                         world.sight_blocker(false),
                     )
+                    // And nobody standing in the way: a body stops the
+                    // round, which is its own mechanic.
+                    && crate::geom::supercover_between(world.player_actor().pos, a.pos)
+                        .into_iter()
+                        .all(|p| world.standing_actor_at(p).is_none())
             })
             .map(|a| a.id);
         let Some(target) = target else { return };
