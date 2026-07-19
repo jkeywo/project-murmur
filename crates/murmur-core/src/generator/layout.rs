@@ -46,13 +46,21 @@ struct FloorRealisation {
     main_rooms: Vec<usize>,
 }
 
+/// Builds a venue's tiles with whichever realiser its form selects.
 pub fn build_layout(
     data: &GameData,
     venue: &crate::data::VenueSpec,
     rng: &mut Pcg32,
 ) -> Result<Layout, LayoutError> {
-    let graph = grammar::build_graph(data, venue, rng).map_err(LayoutError)?;
-    realise(data, venue, &graph, rng)
+    match &venue.form {
+        crate::data::Form::Banded => {
+            let graph = grammar::build_graph(data, venue, rng).map_err(LayoutError)?;
+            realise(data, venue, &graph, rng)
+        }
+        crate::data::Form::Districts(pattern) => {
+            super::district::build_layout(data, venue, pattern, rng)
+        }
+    }
 }
 
 /// Realises a venue graph into tiles.
@@ -315,6 +323,76 @@ fn realise(
         extraction_tiles,
         stairs,
     })
+}
+
+/// The shared tail of every realiser: waypoints, extraction tiles, and
+/// furniture. Form-agnostic — it reads only the finished rooms and map,
+/// so any topology can hand off to it.
+pub(crate) fn finish_layout(
+    data: &GameData,
+    map: GameMap,
+    doors: Vec<DoorState>,
+    mut rooms: Vec<Room>,
+    rng: &mut Pcg32,
+) -> Result<Layout, LayoutError> {
+    if rooms.is_empty() {
+        return Err(LayoutError("the venue placed no rooms".to_string()));
+    }
+
+    // Waypoints before furniture so lingering spots stay clear.
+    for room in &mut rooms {
+        let template = &data.rooms[template_index_of(data, &room.template)];
+        room.waypoints = pick_waypoints(template, room, rng);
+    }
+
+    // Extraction exits, public first so the player still spawns at the
+    // front door, then restricted ones.
+    let mut extraction_tiles = Vec::new();
+    let mut ordered: Vec<&Room> = rooms.iter().filter(|r| r.external_exit).collect();
+    ordered.sort_by_key(|r| (r.zone != crate::data::Zone::Public, r.id.0));
+    for room in ordered {
+        extraction_tiles.push(street_side_tile(room, &map));
+    }
+    if extraction_tiles.is_empty() {
+        return Err(LayoutError("the venue has no way out".to_string()));
+    }
+
+    let mut furniture = Vec::new();
+    for room in &rooms {
+        let template = &data.rooms[template_index_of(data, &room.template)];
+        place_furniture(template, room, &map, &extraction_tiles, &mut furniture, rng);
+    }
+
+    let stairs = map.stair_links().iter().map(|link| link.a).collect();
+    Ok(Layout {
+        map,
+        doors,
+        rooms,
+        furniture,
+        extraction_tiles,
+        stairs,
+    })
+}
+
+/// The interior tile on whichever side of the room lies closest to the
+/// building's outer wall — the side the street is on.
+fn street_side_tile(room: &Room, map: &GameMap) -> Pos {
+    let b = room.bounds;
+    let sides = [
+        Pos::new(room.floor, b.x + b.w / 2, b.y),
+        Pos::new(room.floor, b.x + b.w / 2, b.y + b.h - 1),
+        Pos::new(room.floor, b.x, b.y + b.h / 2),
+        Pos::new(room.floor, b.x + b.w - 1, b.y + b.h / 2),
+    ];
+    let edge_gap = |p: &Pos| {
+        let dx = p.x.min(map.width() as i16 - 1 - p.x);
+        let dy = p.y.min(map.height() as i16 - 1 - p.y);
+        dx.min(dy)
+    };
+    sides
+        .into_iter()
+        .min_by_key(|p| (edge_gap(p), p.y, p.x))
+        .expect("four sides")
 }
 
 fn graph_template(data: &GameData, room: &Room) -> usize {

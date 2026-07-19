@@ -480,6 +480,12 @@ venue.warehouse.zone.staff,What the warehouse calls its staff tier.,[the floor]
 venue.warehouse.zone.secure,What the warehouse calls its secure tier.,[the cage]
 venue.warehouse.zone.personal,What the warehouse calls its personal tier.,[management]
 venue.warehouse.invitation,What the warehouse calls its secure-tier invitation.,[visitor pass]
+venue.grand-hotel.name,Venue name on the contract board and briefing.,[grand hotel]
+venue.grand-hotel.zone.public,What the hotel calls its public tier.,[the floor]
+venue.grand-hotel.zone.staff,What the hotel calls its staff tier.,[back of house]
+venue.grand-hotel.zone.secure,What the hotel calls its secure tier.,[the residence]
+venue.grand-hotel.zone.personal,What the hotel calls its personal tier.,[private]
+venue.grand-hotel.invitation,What the hotel calls its secure-tier invitation.,[residence key card]
 
 # --- disguises -------------------------------------------------------------
 disguise.civilian.name,Disguise name in the sidebar and briefing.,[civilian clothes]

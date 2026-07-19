@@ -46,4 +46,61 @@
             (role: Guard, count_min: 5, count_max: 7),
         ],
     ),
+
+    // A three-storey festival: a public spine with a staff branch that
+    // deepens into the manager's office, and a secure floor above that
+    // deepens again into the top-floor security office. Same engine as
+    // every other district venue; only the tree's shape differs.
+    (
+        id: "grand-hotel",
+        floor_width: 58,
+        floor_height: 32,
+        floor_count: 3,
+        room_templates: [
+            "entrance",
+            "dance-floor",
+            "bar",
+            "bathroom",
+            "kitchen",
+            "storage",
+            "maintenance",
+            "manager-office",
+            "vip-lounge",
+            "security-office",
+        ],
+        role_counts: [
+            (role: Guard, count_min: 6, count_max: 8),
+            (role: Civilian, count_min: 10, count_max: 14),
+        ],
+        form: Districts((
+            zone: Public,
+            rooms: ["entrance", "dance-floor", "bar"],
+            children: [
+                (
+                    zone: Staff,
+                    rooms: ["kitchen", "storage"],
+                    children: [
+                        (
+                            zone: Personal,
+                            rooms: ["manager-office"],
+                            locked_by: Some("office-key"),
+                        ),
+                    ],
+                ),
+                (
+                    zone: Secure,
+                    rooms: ["vip-lounge", "bathroom"],
+                    own_storey: true,
+                    children: [
+                        (
+                            zone: Personal,
+                            rooms: ["security-office", "maintenance"],
+                            own_storey: true,
+                            locked_by: Some("security-key"),
+                        ),
+                    ],
+                ),
+            ],
+        )),
+    ),
 ]

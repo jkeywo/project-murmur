@@ -7,6 +7,7 @@
 //! derives from the mission config through the generation RNG stream, so
 //! a fixed config always produces the identical world.
 
+pub mod district;
 pub mod grammar;
 pub mod layout;
 pub mod opportunities;
@@ -243,6 +244,14 @@ mod tests {
         GameData::embedded().unwrap()
     }
 
+    /// Every shipped venue, whatever its form. Structural invariants are
+    /// properties of a playable venue, not of the realiser that built it,
+    /// so they are asserted over the catalogue rather than a hardcoded
+    /// list — a new venue is covered the moment it is authored.
+    fn venues(data: &GameData) -> Vec<String> {
+        data.venues.iter().map(|v| v.id.clone()).collect()
+    }
+
     /// Stairwells join consecutive storeys through linked pairs, with a
     /// distinct tile for up and for down. That is what lets a venue be
     /// taller than two floors: a middle storey needs both, and they
@@ -250,7 +259,8 @@ mod tests {
     #[test]
     fn stairwells_link_every_consecutive_storey() {
         let data = data();
-        for venue in ["nightclub", "warehouse"] {
+        for venue in venues(&data) {
+            let venue = venue.as_str();
             for seed in 0..8u64 {
                 let world =
                     generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
@@ -285,12 +295,104 @@ mod tests {
         }
     }
 
+    /// The security gradient must read outward-to-inward in the geometry,
+    /// not merely in the recipe: the shallowest way into a deeper tier is
+    /// never shorter, in doors crossed from the player's start, than the
+    /// shallowest way into a shallower one. This is the property that makes
+    /// a venue feel layered, and it is a property of the finished building,
+    /// so it holds whatever form realised it.
+    #[test]
+    fn tiers_get_no_closer_to_the_street_as_they_get_deeper() {
+        use crate::data::Zone;
+        use crate::geom::{Dir4, Pos};
+        use std::collections::VecDeque;
+
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..40u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                let start = world.actors[world.player.0 as usize].pos;
+
+                // 0-1 BFS: crossing a door costs one, everything else free.
+                let mut cost: std::collections::HashMap<Pos, u32> =
+                    std::collections::HashMap::new();
+                let mut queue: VecDeque<Pos> = VecDeque::new();
+                cost.insert(start, 0);
+                queue.push_back(start);
+                while let Some(pos) = queue.pop_front() {
+                    let here = cost[&pos];
+                    let mut visit = |next: Pos, step: u32, queue: &mut VecDeque<Pos>| {
+                        let entry = cost.get(&next).copied();
+                        if entry.is_none_or(|c| c > here + step) {
+                            cost.insert(next, here + step);
+                            if step == 0 {
+                                queue.push_front(next);
+                            } else {
+                                queue.push_back(next);
+                            }
+                        }
+                    };
+                    for dir in Dir4::ALL {
+                        let next = pos.step(dir);
+                        match world.map.tile(next) {
+                            TileKind::Floor => visit(next, 0, &mut queue),
+                            TileKind::Stairs(_) => {
+                                visit(next, 0, &mut queue);
+                                let across = world.map.resolve_step_destination(next);
+                                if across != next {
+                                    visit(across, 0, &mut queue);
+                                }
+                            }
+                            TileKind::Door(_) => visit(next, 1, &mut queue),
+                            TileKind::Wall | TileKind::Void => {}
+                        }
+                    }
+                }
+
+                // Cheapest way into each tier.
+                let mut cheapest: [Option<u32>; 3] = [None; 3];
+                for room in &world.rooms {
+                    let tier = usize::from(room.zone.depth());
+                    let b = room.bounds;
+                    for y in b.y..b.y + b.h {
+                        for x in b.x..b.x + b.w {
+                            if let Some(c) = cost.get(&Pos::new(room.floor, x, y)) {
+                                cheapest[tier] =
+                                    Some(cheapest[tier].map_or(*c, |best: u32| best.min(*c)));
+                            }
+                        }
+                    }
+                }
+
+                let label = |t: usize| match t {
+                    0 => Zone::Public.name(),
+                    1 => "secure/staff",
+                    _ => Zone::Personal.name(),
+                };
+                let mut deepest_so_far = 0u32;
+                for (tier, entry) in cheapest.iter().enumerate() {
+                    let Some(c) = *entry else { continue };
+                    assert!(
+                        c >= deepest_so_far,
+                        "{venue} seed {seed}: {} is {c} doors from the street but the tier \
+                         outside it is {deepest_so_far} — the gradient runs backwards",
+                        label(tier),
+                    );
+                    deepest_so_far = c;
+                }
+            }
+        }
+    }
+
     /// Every door must connect two walkable tiles across it — no door
     /// opens onto void or a wall on either side (a "door to nowhere").
     #[test]
     fn no_door_opens_onto_nothing() {
         let data = data();
-        for venue in ["nightclub", "warehouse"] {
+        for venue in venues(&data) {
+            let venue = venue.as_str();
             for seed in 0..40u64 {
                 let world =
                     generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();

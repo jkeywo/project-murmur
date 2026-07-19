@@ -688,3 +688,35 @@ entities:
       paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs]
       symbols: [Blockage, DebriefHeadline, Tone]
       tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: district-engine-is-one-recursive-rule
+    core:
+      status: implemented
+      confidence: confirmed
+      title: One Recursive District Rule Expresses Every Venue Topology
+      summary: A district is a rectangle on one storey owning a two-tile corridor - its spine - along its top edge, and everything it contains hangs below that spine as a cell reached through a single doorway - either a leaf room or a nested child district. That one rule is the entire engine. The three Hitman topologies come out of the authored tree's shape alone - a chain is an onion, a star is a festival, and siblings that are themselves chains are an archipelago - so there is no match on form anywhere in the carving code. A district marked own-storey is laid out on its own floor and reached by a stairwell from its parent's spine, which is how a venue gains height without giving up the gradient. The engine is selected by a form field on the venue and lives alongside the original banded realiser rather than replacing it, so the two shipped venues carry on unchanged as the regression canary.
+      rationale:
+        - Authoring three topologies as three code paths would have made the engine a collection of special cases, and the acceptance test for generality is precisely that onion and archipelago can then be added as data with no engine change.
+        - Building alongside the banded realiser keeps seed-stable layout for every existing replay and contract test, so a bug in the new engine cannot present as a regression in the old venues.
+        - The corridor width of two is not tunable - a non-displaceable guard standing in a one-wide corridor is a permanent wall, which is the same anti-deadlock reasoning the banded realiser already documents.
+      references: [two-corridor-banded-realisation]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-core/src/data.rs, data/venues.ron]
+      symbols: [Form, DistrictPattern, build_layout]
+      tests: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/mod.rs]
+
+  - decision: gradient-is-checked-as-tree-and-as-geometry
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Security Gradient Is Checked Twice - Once As A Tree, Once As A Building
+      summary: Zone gained a depth ordering in which Public is outermost, Secure and Staff are siblings one step off the street, and Personal is innermost. The district engine refuses at expansion time any recipe that nests a shallower tier inside a deeper one, while the tree still exists and before any geometry has been carved. Separately a form-agnostic test asserts the finished building honours the same ordering - the cheapest way into a deeper tier, counted in doors crossed from the player's start, is never shorter than the cheapest way into a shallower one - and it runs over every venue in the catalogue rather than a hardcoded list, so a newly authored venue is covered the moment it exists.
+      rationale:
+        - A recipe error caught as a tree names the offending pair of districts; the same error caught after carving presents as a confusing map, so the cheap check earns its place even though the geometric one subsumes it.
+        - Asserting the gradient over the built world rather than the recipe keeps the invariant true of any realiser, which is what lets the banded and district engines coexist under one guarantee.
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/data.rs, crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/mod.rs]
+      symbols: [depth, expand]
+      tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/generator/district.rs]

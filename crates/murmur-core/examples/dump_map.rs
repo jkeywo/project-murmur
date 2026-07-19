@@ -1,7 +1,7 @@
-//! Developer tool: print a generated nightclub as ASCII.
+//! Developer tool: print a generated venue as ASCII.
 //!
 //! ```text
-//! cargo run -p murmur-core --example dump_map -- 42
+//! cargo run -p murmur-core --example dump_map -- 42 grand-hotel
 //! ```
 
 use murmur_core::data::GameData;
@@ -15,14 +15,17 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(42);
+    let venue = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "nightclub".to_string());
     let data = GameData::embedded().expect("embedded data");
     let world = generate(
         &data,
-        &murmur_core::contract::MissionConfig::new(seed, "nightclub"),
+        &murmur_core::contract::MissionConfig::new(seed, &venue),
     )
     .expect("generation");
 
-    println!("seed {seed}");
+    println!("seed {seed} venue {venue}");
     println!(
         "target: {} ({}), reason: {}",
         world.facts.target_name,

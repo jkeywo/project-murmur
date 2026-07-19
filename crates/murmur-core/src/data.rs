@@ -55,6 +55,19 @@ impl Zone {
         }
     }
 
+    /// How far into the venue this tier sits. A district may nest into an
+    /// equal or deeper tier, never a shallower one: that monotone gradient is
+    /// what makes the layout read outward-to-inward whatever its shape.
+    /// `Secure` and `Staff` are siblings — two different ways to be one step
+    /// off the street, neither behind the other.
+    pub fn depth(self) -> u8 {
+        match self {
+            Zone::Public => 0,
+            Zone::Secure | Zone::Staff => 1,
+            Zone::Personal => 2,
+        }
+    }
+
     pub const ALL: [Zone; 4] = [Zone::Public, Zone::Secure, Zone::Staff, Zone::Personal];
 }
 
@@ -154,6 +167,67 @@ pub struct VenueSpec {
     /// has few guests and more guards than a nightclub).
     #[serde(default)]
     pub role_counts: Vec<RoleCountOverride>,
+    /// How the venue is laid out. Defaults to the original banded
+    /// two-corridor realisation so existing venues need no change.
+    #[serde(default)]
+    pub form: Form,
+}
+
+/// Which realiser builds a venue's tiles.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub enum Form {
+    /// The original two-corridor, two-shelf storey.
+    #[default]
+    Banded,
+    /// A recursive tree of districts. One engine, three topologies: a
+    /// chain of nested districts is an onion, a spine with sibling
+    /// branches is a festival, and siblings that are themselves chains
+    /// are an archipelago. The shape is entirely in this pattern.
+    Districts(DistrictPattern),
+}
+
+/// One node of a venue's district tree.
+///
+/// Every district owns a two-tile corridor (its *spine*) along its
+/// leading edge; its rooms and its child districts hang off that spine
+/// as cells, each reached through a doorway in the spine's far wall. The
+/// topology is therefore entirely a property of the tree's *shape*:
+///
+/// * a **chain** (one child per level) is an onion — every tier's
+///   corridor must be crossed to reach the next;
+/// * a **star** (several children on one spine) is a festival — a public
+///   spine with branching backstage;
+/// * **siblings that are themselves chains** is an archipelago — a public
+///   plaza serving several self-contained fortresses.
+///
+/// `count_min`/`count_max` let one authored level expand into several
+/// sibling branches.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct DistrictPattern {
+    pub zone: Zone,
+    /// Room templates this district may place, in authored order.
+    #[serde(default)]
+    pub rooms: Vec<RoomTemplateId>,
+    /// How many sibling districts this pattern expands into.
+    #[serde(default = "one")]
+    pub count_min: u8,
+    #[serde(default = "one")]
+    pub count_max: u8,
+    /// Put this district (and its subtree) on its own storey, reached by
+    /// a stairwell from the parent's spine rather than a doorway.
+    #[serde(default)]
+    pub own_storey: bool,
+    /// Lock the gateway into this district with the named room's key.
+    #[serde(default)]
+    pub locked_by: Option<ItemSpecId>,
+    #[serde(default)]
+    pub children: Vec<DistrictPattern>,
+}
+
+fn one() -> u8 {
+    1
 }
 
 /// One per-venue role count override.
