@@ -2,9 +2,15 @@
 
 A turn-based ASCII social-stealth contract campaign. Take a job from the
 syndicate desk, buy your kit, slip into a generated venue — a heaving
-nightclub or a bonded warehouse — eliminate the target under the
-contract's one hard condition, and walk out unremarked. Arrest costs
-your carried kit and a fine; death ends the campaign.
+nightclub, a bonded warehouse, a layered hotel, an embassy villa, a
+working port — and eliminate a *protected* target under the contract's
+one hard condition. The mark walks a daily cycle with a bodyguard
+detail: surrounded in public, alone only during private beats behind
+locked doors. Shoot into the escort and a bodyguard takes the round;
+wait for the window, engineer it with the staff paging desk, or rig an
+accident that does not care who is standing guard. Then walk out
+unremarked. Arrest costs your carried kit and a fine; death ends the
+campaign.
 
 **Play in the browser:** <https://jkeywo.github.io/project-murmur/>
 
@@ -23,9 +29,14 @@ that cannot be submitted is rejected without time passing and cancels the
 queued remainder; a valid action can still fail during simultaneous
 resolution, and that turn stands. The mouse works everywhere: hover
 inspects any tile (hovering a person shows exactly what they can see),
-and clicking a sidebar action equals pressing its key. NPCs run generated routines on a relaxed cadence,
-see through facing cones, grow suspicious of trespass, crouching, drawn
-weapons, and bodies, and propagate alerts by line of sight only.
+and clicking a sidebar action equals pressing its key. Hold `z` to wait
+until something changes — a message, damage, or the target's protection
+flipping, which the sidebar tracks as standing intel. NPCs run generated
+routines on a relaxed cadence, see through facing cones, grow suspicious
+of trespass, crouching, drawn weapons, and bodies, and propagate alerts
+by line of sight only. The target's detail trails it through the crowd,
+posts up outside rooms it takes private calls in, and comes looking if
+the call runs long.
 
 Every mission derives from its contract's seed: layout, population,
 schedules, items, opportunity machines, and tie-breaker randomness.

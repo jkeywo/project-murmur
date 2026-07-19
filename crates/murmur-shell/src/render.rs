@@ -528,6 +528,32 @@ fn draw_sidebar(
     };
     lines.push(Line::styled(alert_label, Style::default().fg(alert_color)));
 
+    // Target intel: the schedule state the whole mission turns on. Your
+    // handler feeds you this — it is briefing-grade knowledge, not
+    // something the player must deduce from pixels.
+    let target = world.actor(world.target);
+    let (intel, intel_color) = if !target.alive() {
+        (tr!("ui.mission.target.down").to_string(), Color::DarkGray)
+    } else {
+        match target
+            .ai
+            .as_ref()
+            .and_then(|ai| ai.schedule.as_ref())
+            .and_then(|s| s.current())
+            .map(|b| b.protection)
+        {
+            Some(murmur_core::world::Protection::Alone) => (
+                trf!("ui.mission.target.alone", name = target.name),
+                Color::LightGreen,
+            ),
+            _ => (
+                trf!("ui.mission.target.escorted", name = target.name),
+                Color::LightRed,
+            ),
+        }
+    };
+    lines.push(Line::styled(intel, Style::default().fg(intel_color)));
+
     // The contract's mandatory constraint, and whether it still holds.
     if let Some(constraint) = &world.constraint {
         if world.constraint_breach.is_some() {

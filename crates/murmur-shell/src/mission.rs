@@ -232,6 +232,9 @@ pub struct Mission {
     inspected_slot: Option<usize>,
     explored: Vec<Vec<bool>>,
     frame: u64,
+    /// Hold-to-wait: the shell submits Wait turns on the player's behalf
+    /// until something worth reacting to happens or any key is pressed.
+    pub fast_forward: bool,
 }
 
 impl Mission {
@@ -246,6 +249,7 @@ impl Mission {
             queue: CommandQueue::new(usize::from(data.tuning.queue_capacity)),
             mode: InputMode::Normal,
             speed: Speed::Fast,
+            fast_forward: false,
             log: vec![LogEntry {
                 text: tr!("mission.notice.entered").to_string(),
                 kind: LogKind::Routine,
@@ -417,6 +421,12 @@ impl Mission {
     }
 
     pub fn handle_input(&mut self, data: &GameData, input: ShellInput) {
+        // Any deliberate input ends a fast-forward: the player has seen
+        // something and wants the turn back. Mouse movement is not
+        // deliberate in that sense.
+        if self.fast_forward && !matches!(input, ShellInput::MouseMove { .. }) {
+            self.fast_forward = false;
+        }
         match input {
             ShellInput::MouseMove { column, row } => {
                 let hover = self
@@ -726,6 +736,13 @@ impl Mission {
             ShellInput::Left => self.enqueue(Command::Move(Dir4::West)),
             ShellInput::Right => self.enqueue(Command::Move(Dir4::East)),
             ShellInput::Char('.') | ShellInput::Char(' ') => self.enqueue(Command::Wait),
+            ShellInput::Char('z') => {
+                self.fast_forward = true;
+                self.push_log_kind(
+                    tr!("mission.notice.fast_forward").to_string(),
+                    LogKind::Notice,
+                );
+            }
             ShellInput::Char('c') => self.enqueue(Command::ToggleCrouch),
             ShellInput::Char('r') => self.enqueue(Command::DrawOrHolster),
             ShellInput::Char('g') => self.mode = InputMode::Pending(PendingAction::Garrote),
@@ -970,6 +987,7 @@ impl Mission {
     /// current speed, then refresh exploration memory.
     pub fn tick(&mut self, data: &GameData) {
         self.frame += 1;
+        self.fast_forward_turns(data);
         let turns = self.speed.turns_due(self.frame, data.tuning.batch_turns);
         for _ in 0..turns {
             if !self.step_one(data) {
@@ -981,6 +999,63 @@ impl Mission {
 
     /// Runs at most one simulation turn. Returns false when no turn was
     /// due (idle, look mode, or mission over).
+    /// Runs held-down waiting: submit Wait turns until something worth
+    /// reacting to happens. The commands go through the ordinary driver,
+    /// so they land in `accepted_commands` and replay is untouched — this
+    /// is purely presentation deciding how fast to press the wait key.
+    fn fast_forward_turns(&mut self, data: &GameData) {
+        if !self.fast_forward {
+            return;
+        }
+        let target_state = |driver: &TurnDriver| {
+            let world = driver.world();
+            let target = world.actor(world.target);
+            (
+                target.alive(),
+                target
+                    .ai
+                    .as_ref()
+                    .and_then(|ai| ai.schedule.as_ref())
+                    .and_then(|s| s.current())
+                    .map(|b| b.protection),
+            )
+        };
+        // A bounded burst per frame keeps the interface responsive while
+        // still skipping dead time quickly.
+        for _ in 0..data.tuning.batch_turns.max(1) {
+            if self.driver.mission_over() || self.queue.is_paused() || !self.queue.is_empty() {
+                self.fast_forward = false;
+                return;
+            }
+            if self.driver.player_busy() {
+                let report = self.driver.continue_busy(data);
+                self.absorb(report);
+                continue;
+            }
+            let hp_before = self.world().player_actor().hp;
+            let before = target_state(&self.driver);
+            let log_before = self.log.len();
+            match self.driver.submit(data, &Command::Wait) {
+                Ok(report) => self.absorb(report),
+                Err(_) => {
+                    self.fast_forward = false;
+                    return;
+                }
+            }
+            // Interrupt on anything the player would want to react to: a
+            // message, the mission ending, taking damage, or the target's
+            // protection changing — the last is the window opening.
+            if self.log.len() != log_before
+                || self.driver.mission_over()
+                || self.world().player_actor().hp != hp_before
+                || target_state(&self.driver) != before
+            {
+                self.fast_forward = false;
+                return;
+            }
+        }
+    }
+
     fn step_one(&mut self, data: &GameData) -> bool {
         if self.driver.mission_over() {
             return false;

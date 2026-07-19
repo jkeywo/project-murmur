@@ -866,3 +866,32 @@ entities:
       status: declared
       paths: [crates/murmur-core/src/actions.rs]
       tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]
+
+  - decision: five-defects-only-a-playthrough-could-see
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Five Engine Defects Only A Full Playthrough Could See
+      summary: Rewriting the scripted assassin to play the intended loop surfaced five engine defects, none visible to a unit test because each needed many actors, many turns, and real geometry at once. Stair tiles sat inline in spine corridors and per-turn re-planning teleport-oscillated NPCs between storeys, fixed twice over - pathfinding now prices a stair transition at several plain steps so up-and-straight-back-down is never shortest, and stairwell anchors fill the spine's dead-end tip column-major so no route ever walks through a stair tile. Pathfinding refused locked doors that were standing open, stranding anyone without the key on the wrong side of a doorway the target itself had just walked through. NPCs bumped a parked player forever because pathing ignored actors and the player alone is never displaced, so NPCs now route around the player's tile except when it is the goal. And the escort ring contested its own principal's next tile every turn, halving the target's pace through its own day - a walking principal's detail now trails in column and rings it only when it stands.
+      rationale:
+        - Every fix is engine-level and benefits the human player identically - click-to-move used the same pathfinder that refused open doors.
+        - The scripted playthrough stays a first-class test precisely because this class of defect reappears whenever systems compose, and nothing smaller catches it.
+      references: [the-schedule-must-actually-advance, escort-is-an-assignment-not-a-mood]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/path.rs, crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/ai.rs]
+      tests: [crates/murmur-core/tests/playthrough.rs, crates/murmur-core/tests/escort.rs]
+
+  - decision: fast-forward-is-pure-presentation
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Fast-Forward Presses The Wait Key, Nothing More
+      summary: The shell's hold-to-wait submits ordinary Wait commands through the ordinary driver until something worth reacting to happens - a log message, damage, the mission ending, or the target's protection changing, which is the window opening. The commands land in accepted_commands like any other, so replay and determinism are untouched; fast-forward is purely presentation deciding how fast to press a key the player already had. Any deliberate input cancels it. The sidebar gained a target-intel line showing the current beat's protection, treated as briefing-grade knowledge from the handler rather than something deduced from pixels, because the whole milestone turns on when that state flips and hiding it would make waiting a guessing game.
+      rationale:
+        - Longer missions without a way to skip dead time are strictly worse missions; the plan called this lever mandatory alongside the paging desk.
+        - Stopping on protection change makes the intel line and the fast-forward two views of the same fact.
+      references: [the-player-can-open-the-window, protection-not-reachability-is-the-difficulty]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/keymap.rs, data/loc/strings.csv]

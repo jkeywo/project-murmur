@@ -1,0 +1,131 @@
+# Milestone 3 — Deep Venues, Protected Targets, Interlocking Routines
+#
+# Playtesting M2 exposed two structural problems: missions were over in
+# 30-60 turns, and the target was trivially killable because nothing in
+# generation could make it hard — the planner proved reachability and
+# difficulty lived entirely downstream in perception. This milestone moves
+# difficulty into protection: the target is surrounded in public and
+# vulnerable only during private beats in hard-to-reach space, which the
+# player can wait for or engineer.
+
+entities:
+  - system: milestone-3-protected-targets
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Milestone 3 — Deep Venues, Protected Targets, Interlocking Routines
+      summary: >-
+        Still single-venue scope. Venues become genuinely layered through a
+        recursive district engine expressing the onion, festival, and
+        archipelago topologies as authored trees; venues may stand two to
+        four storeys via linked stair pairs. The target walks a cyclic
+        schedule of labelled beats, escorted by a bodyguard detail in public
+        and alone behind an access tier during private beats; the route
+        planner certifies weapon kills only at alone beats while accidents
+        remain valid anywhere, and a paging desk lets the player bring the
+        private window forward instead of waiting for it. The old beeline
+        assassin went from winning six of ten seeds in 30-60 turns to being
+        killed in seven of ten.
+      references:
+        - milestone-3-district-engine
+        - milestone-3-beat-schedules
+        - milestone-3-bodyguard-details
+        - milestone-3-acceptance
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/ai.rs, crates/murmur-core/src/planner.rs]
+      tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]
+
+  - component: milestone-3-district-engine
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The District Engine And Three Topologies
+      summary: >-
+        One recursive rule — a district is a rectangle owning a two-tile
+        spine, with rooms and child districts hanging off it as cells —
+        expresses every venue topology through the shape of the authored
+        tree alone. Onion and archipelago venues were added as pure data,
+        which was the engine's acceptance test, and the banded realiser was
+        retired once both shipped venues had been re-authored as trees.
+        Stairwell anchors fill the spine's dead-end tip column-major,
+        because inline mid-spine stair tiles teleport anyone who steps on
+        them and once severed a spine outright.
+      references: [milestone-3-beat-schedules]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/generator/district.rs, crates/murmur-core/src/data.rs, data/venues.ron]
+      symbols: [build_layout, DistrictPattern]
+      tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/generator/district.rs]
+
+  - component: milestone-3-beat-schedules
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Beats, Protection, And The Planner Guarantee
+      summary: >-
+        The target's day is a cycle of beats labelled Escorted or Alone,
+        index-aligned with the routine it mirrors so every pre-beat system
+        keeps working. Generation guarantees at least one alone beat
+        somewhere the player can eventually stand; the planner reads
+        vulnerable positions for weapon kills and the whole schedule for
+        accidents; dwells are fitted to a cycle budget with alone beats run
+        long, because the private window is the whole mechanism and it has
+        to be long enough to use.
+      references: [milestone-3-bodyguard-details]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/proof.rs, crates/murmur-core/src/planner.rs, data/population.ron]
+      symbols: [Beat, Schedule, Protection, build_schedule]
+      tests: [crates/murmur-core/src/generator/mod.rs]
+
+  - component: milestone-3-bodyguard-details
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Bodyguard Details And The Behaviours Around Them
+      summary: >-
+        The target walks with a detail holding formation slots — trailing in
+        column while the principal moves, ringing it while it stands, and
+        standing off at posts outside no-follow beats with a search clock
+        that ends the window. A detail covers its principal against gunfire,
+        carries copies of its keys, and evacuates a panicking principal
+        inward rather than letting it bolt for the street. The assignment is
+        orthogonal to mood, so perception keeps full authority and a calmed
+        guard resumes escorting for free.
+      references: []
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/populate.rs, crates/murmur-core/src/world.rs, data/tuning.ron]
+      symbols: [DetailRole]
+      tests: [crates/murmur-core/tests/escort.rs]
+
+  - component: milestone-3-acceptance
+    core:
+      status: partially-implemented
+      confidence: confirmed
+      title: Acceptance, Pacing, And What Remains Open
+      summary: >-
+        The acceptance criterion is a scripted assassin playing the intended
+        loop - disguise, page, post up at the threshold, follow the target
+        in, kill quietly, extract. It completes a minority of seeds; the
+        rest time out or die on the exit, and the shortfall is script
+        crudeness rather than unwinnable venues, since the planner certifies
+        every seed. Writing the script surfaced five engine defects no unit
+        test saw, which is recorded as the argument for keeping a scripted
+        playthrough as a first-class test. Performance was measured rather
+        than assumed - two to five milliseconds a world, a fifth of a
+        millisecond a turn - and the indexing budget deliberately left
+        unspent. The shell gained hold-to-wait fast-forward and a
+        target-protection intel line, both pure presentation.
+      references: []
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/tests/playthrough.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-core/examples/bench_gen.rs]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/playthrough.rs
+        summary: missions_are_winnable_start_to_finish plays the intended loop end to end and asserts every completion lands above one hundred turns.
+      - kind: decision-record
+        reference: crates/murmur-core/examples/bench_gen.rs
+        summary: Generation measured at two to five milliseconds per world across all five venues, forty seeds each; the performance budget was closed on measurement, not assumption.

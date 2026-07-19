@@ -203,6 +203,11 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
         "keymap.control.speed.help",
     ),
     (
+        "z",
+        "keymap.control.fast_forward.short",
+        "keymap.control.fast_forward.help",
+    ),
+    (
         "Esc",
         "keymap.control.cancel.short",
         "keymap.control.cancel.help",
