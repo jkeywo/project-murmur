@@ -16,6 +16,7 @@
     cone_den: 2,                 // 3/2 ~= 112 degree total cone
 
     suspicion_max: 100,
+    escort_slots: 3,
     suspicion_suspicious_at: 30,
     suspicion_investigate_at: 70,
     gain_illegal_zone: 25,

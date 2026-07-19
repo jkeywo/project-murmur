@@ -257,6 +257,7 @@ fn spawn_reinforcements(world: &mut World, data: &GameData) {
                 focus,
                 knows_player_hostile: false,
                 schedule: None,
+                detail: None,
             }),
             hidden_in: None,
             departed: false,

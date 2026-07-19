@@ -248,6 +248,7 @@ pub fn populate(
                 focus: None,
                 knows_player_hostile: false,
                 schedule: Some(schedule),
+                detail: None,
             }),
             hidden_in: None,
             departed: false,
@@ -339,6 +340,7 @@ pub fn populate(
                     focus: None,
                     knows_player_hostile: false,
                     schedule: None,
+                    detail: None,
                 }),
                 hidden_in: None,
                 departed: false,
@@ -360,6 +362,28 @@ pub fn populate(
             location: ItemLocation::CarriedBy(player_id),
             charges: spec.charges,
         });
+    }
+
+    // The target's detail. Guards are picked in ascending actor id and
+    // handed formation slots in order — never "the nearest guards", which
+    // would depend on iteration order and break replay. Guards are not
+    // displaceable, so a detail in formation denies the player the tiles
+    // beside the target without a line of movement code.
+    let escort_slots = usize::from(data.tuning.escort_slots);
+    let guards: Vec<ActorId> = actors
+        .iter()
+        .filter(|a| a.role == Some(Role::Guard))
+        .map(|a| a.id)
+        .take(escort_slots)
+        .collect();
+    for (slot, guard) in guards.into_iter().enumerate() {
+        if let Some(ai) = actors[guard.0 as usize].ai.as_mut() {
+            ai.detail = Some(crate::world::DetailRole::Bodyguard {
+                principal: target_id,
+                slot: slot as u8,
+                post: None,
+            });
+        }
     }
 
     // World items. Explicit generation rules per spec kind:

@@ -745,3 +745,20 @@ entities:
       paths: [crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/populate.rs]
       symbols: [routine_for, assert_aligned]
       tests: [crates/murmur-core/src/generator/mod.rs]
+
+  - decision: escort-is-an-assignment-not-a-mood
+    core:
+      status: implemented
+      confidence: confirmed
+      title: A Bodyguard Detail Is An Assignment, Not A Mood
+      summary: Bodyguards carry an AiState.detail independent of their mood, dispatched ahead of the mood match so that escorting replaces only the relaxed behaviour. Mood::Escorting looked free but is semantically taken - it means escorting the arrested player off the premises, renders hostile, and every de-escalation path in perception and AI returns an NPC to Mood::Relaxed and nothing else. An escort expressed as a mood would be destroyed by the first noise a guard investigated, and details would quietly dissolve mid-mission with nothing to say so. Adjacency denial then costs no code at all - guards are already not displaceable, so a detail in formation denies the player exactly the tiles a garrote needs.
+      rationale:
+        - Perception keeps full authority over mood, which is what lets a guard investigate a sound and resume escorting for free.
+        - Formation slots are handed out by ascending actor id and read from a fixed table rather than chosen by proximity, because nearest-free-side depends on iteration order and would drift replays.
+        - A slot is a preference rather than an entitlement. In a corridor the north and south slots are walls, and a guard pathing at a wall never arrives and never gives up, so slots are tried from the guard's own index onwards and wrap.
+      references: [protection-not-reachability-is-the-difficulty]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/ai.rs, crates/murmur-core/src/generator/populate.rs, data/tuning.ron]
+      symbols: [DetailRole]
+      tests: [crates/murmur-core/tests/escort.rs]

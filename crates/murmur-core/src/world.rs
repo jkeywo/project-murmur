@@ -265,6 +265,29 @@ impl Schedule {
     }
 }
 
+/// A standing assignment that outlives any single mood.
+///
+/// Deliberately *not* a [`Mood`]. `Mood::Escorting` already means
+/// "escorting the arrested player off the premises", is rendered hostile,
+/// and — fatally — every de-escalation path in perception and AI returns
+/// only to `Mood::Relaxed`. A bodyguard knocked out of an escorting mood
+/// by one noise would never resume, and details would quietly dissolve
+/// mid-mission. Keeping the assignment orthogonal means perception retains
+/// full authority over mood, and a guard that investigates a sound and
+/// calms down goes back to escorting for free.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DetailRole {
+    Bodyguard {
+        principal: ActorId,
+        /// Which formation position this guard holds, indexing a fixed
+        /// table — never "nearest", which would depend on iteration order.
+        slot: u8,
+        /// Where to wait while the principal is somewhere guards do not
+        /// follow. Resolved when the principal enters such a beat.
+        post: Option<Pos>,
+    },
+}
+
 /// Mutable NPC mind: routine progress, mood, memory, and knowledge.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AiState {
@@ -284,6 +307,9 @@ pub struct AiState {
     /// off `routine`.
     #[serde(default)]
     pub schedule: Option<Schedule>,
+    /// A standing assignment, independent of mood.
+    #[serde(default)]
+    pub detail: Option<DetailRole>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

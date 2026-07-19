@@ -539,6 +539,9 @@ pub struct Tuning {
 
     /// Suspicion meter bounds and state thresholds.
     pub suspicion_max: u16,
+    /// How many bodyguards walk with the target. The formation table holds
+    /// four slots; asking for more simply leaves the extras unassigned.
+    pub escort_slots: u8,
     pub suspicion_suspicious_at: u16,
     pub suspicion_investigate_at: u16,
     /// Per-turn-seen suspicion gains by cause.

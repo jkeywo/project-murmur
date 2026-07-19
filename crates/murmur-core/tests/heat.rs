@@ -11,9 +11,14 @@ use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
 use murmur_core::world::{ActorId, Mood, World};
 
+/// A driver whose NPCs are already inert. The quieting must happen before
+/// the driver is built: construction primes each NPC's first action, so a
+/// world calmed afterwards still has one turn of escorting and walking
+/// queued up.
 fn setup(seed: u64) -> (GameData, TurnDriver) {
     let data = GameData::embedded().unwrap();
-    let world = generate(&data, &MissionConfig::new(seed, "nightclub")).unwrap();
+    let mut world = generate(&data, &MissionConfig::new(seed, "nightclub")).unwrap();
+    quiet_all_npcs(&mut world);
     (data.clone(), TurnDriver::new(world, &data))
 }
 
@@ -30,6 +35,10 @@ fn quiet_all_npcs(world: &mut World) {
             ai.mood = Mood::Relaxed;
             ai.suspicion = 0;
             ai.focus = None;
+            // Including standing assignments: a bodyguard would walk off
+            // towards its principal instead of standing where the scenario
+            // put it.
+            ai.detail = None;
         }
     }
 }
@@ -98,7 +107,6 @@ fn firing_line(world: &World) -> Pos {
 #[test]
 fn heard_gunshots_accumulate_heat_and_unheard_ones_do_not() {
     let (data, mut driver) = setup(21);
-    quiet_all_npcs(driver.world_mut());
     let player = driver.world().player;
     let target = driver.world().target;
 
@@ -117,7 +125,6 @@ fn heard_gunshots_accumulate_heat_and_unheard_ones_do_not() {
 
     // A guard within earshot on the second shot's turn: heat lands.
     let (data2, mut driver2) = setup(23);
-    quiet_all_npcs(driver2.world_mut());
     let player2 = driver2.world().player;
     let target2 = driver2.world().target;
     let guard = driver2
@@ -145,7 +152,6 @@ fn heard_gunshots_accumulate_heat_and_unheard_ones_do_not() {
 #[test]
 fn tier_two_heat_brings_reinforcements_through_the_door() {
     let (data, mut driver) = setup(25);
-    quiet_all_npcs(driver.world_mut());
     let player = driver.world().player;
     let target = driver.world().target;
     let guard = driver

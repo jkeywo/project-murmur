@@ -13,9 +13,9 @@
 
 use crate::actions::{ActionIntent, PreparedAction, intent_duration};
 use crate::data::GameData;
-use crate::geom::Dir4;
+use crate::geom::{Dir4, Pos};
 use crate::path::first_step_towards;
-use crate::world::{ActorId, Hands, Mood, World};
+use crate::world::{ActorId, DetailRole, Hands, Mood, Protection, World};
 
 /// Prepares one action per eligible NPC for the upcoming turn.
 pub fn prepare_npc_actions(world: &mut World, data: &GameData) -> Vec<PreparedAction> {
@@ -33,7 +33,17 @@ pub fn prepare_npc_actions(world: &mut World, data: &GameData) -> Vec<PreparedAc
         if mood == Mood::Relaxed && (u64::from(world.turn) + u64::from(id.0)) % cadence != 0 {
             continue;
         }
+        // A standing detail assignment replaces only the *relaxed*
+        // behaviour. Anything that raised this guard's mood — a noise, a
+        // body, the player behaving oddly — outranks the escort, and when
+        // perception calms them back to Relaxed they resume escorting with
+        // no special handling. That is the whole reason the assignment is
+        // orthogonal to mood rather than a mood of its own.
+        let escorting = world.actor(id).ai.as_ref().and_then(|ai| ai.detail.clone());
         let intent = match mood {
+            Mood::Relaxed if escorting.is_some() => {
+                escort_intent(world, data, id, &escorting.unwrap())
+            }
             Mood::Relaxed => routine_intent(world, data, id),
             Mood::Suspicious => watch_intent(world, id),
             Mood::Investigating => investigate_intent(world, data, id),
@@ -73,6 +83,148 @@ fn routine_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionInte
         let step_wait = ai.routine[ai.routine_index].wait;
         ai.routine_index = (ai.routine_index + 1) % ai.routine.len();
         ai.wait_remaining = step_wait;
+        return ActionIntent::Wait;
+    }
+    match first_step_towards(world, data, id, goal) {
+        Some(dir) => ActionIntent::Step(dir),
+        None => ActionIntent::Wait,
+    }
+}
+
+/// Formation offsets, in a fixed order. Slots are handed out by ascending
+/// actor id and read from this table, never chosen by proximity — "the
+/// nearest free side" would depend on iteration order and quietly break
+/// determinism.
+const FORMATION: [Dir4; 4] = [Dir4::North, Dir4::South, Dir4::East, Dir4::West];
+
+/// Where a guard waits while the principal is somewhere it does not
+/// follow: just outside a door of the room the principal is in. Doors are
+/// taken in their stored order and offset by the slot, so two guards on
+/// the same room pick different doors when it has more than one.
+fn no_follow_post(world: &World, principal: Pos, slot: u8) -> Option<Pos> {
+    let room = world.room_at(principal)?;
+    if room.doors.is_empty() {
+        return None;
+    }
+    let door_index = usize::from(slot) % room.doors.len();
+    let door_id = room.doors[door_index];
+    // Find the door's tile, then step to the side of it outside the room.
+    for pos in world.map.floor_positions(room.floor) {
+        if world.map.tile(pos) != crate::map::TileKind::Door(door_id) {
+            continue;
+        }
+        for dir in FORMATION {
+            let outside = pos.step(dir);
+            if !room.bounds.contains(outside.x, outside.y)
+                && matches!(world.map.tile(outside), crate::map::TileKind::Floor)
+            {
+                return Some(outside);
+            }
+        }
+    }
+    None
+}
+
+/// The tile this guard should stand on beside its principal.
+///
+/// A slot is a *preference*, not an entitlement: in a corridor the north
+/// and south slots are walls, and a guard that paths at a wall never
+/// arrives and never gives up. Slots are therefore tried from the guard's
+/// own index onwards, wrapping — a fixed order, so which guard ends up
+/// where is still a function of actor id alone and replay is unaffected.
+fn formation_tile(world: &World, id: ActorId, principal: Pos, slot: u8) -> Option<Pos> {
+    for offset in 0..FORMATION.len() {
+        let dir = FORMATION[(usize::from(slot) + offset) % FORMATION.len()];
+        let tile = principal.step(dir);
+        if !matches!(world.map.tile(tile), crate::map::TileKind::Floor) {
+            continue;
+        }
+        if world.furniture_at(tile).is_some() {
+            continue;
+        }
+        // Another guard already holding this side is fine to walk towards
+        // only if it is this guard.
+        match world.standing_actor_at(tile) {
+            Some(other) if other.id != id => continue,
+            _ => return Some(tile),
+        }
+    }
+    None
+}
+
+/// Escort the principal: hold a formation slot beside them in public, and
+/// stand off at a post while they take a beat guards do not follow.
+///
+/// Adjacency denial is not implemented here and needs no code: a guard is
+/// not displaceable, so a guard standing on a tile beside the principal
+/// denies that tile to the player outright. The garrote needs to stand
+/// directly behind the target, and the formation occupies exactly those
+/// tiles.
+fn escort_intent(
+    world: &mut World,
+    data: &GameData,
+    id: ActorId,
+    detail: &DetailRole,
+) -> ActionIntent {
+    let DetailRole::Bodyguard {
+        principal, slot, ..
+    } = detail;
+    let principal = *principal;
+    let slot = *slot;
+    if !world.actor(principal).alive() || world.actor(principal).departed {
+        // Nothing left to guard; fall back to the guard's own routine.
+        return routine_intent(world, data, id);
+    }
+
+    let principal_pos = world.actor(principal).pos;
+    let no_follow = world
+        .actor(principal)
+        .ai
+        .as_ref()
+        .and_then(|ai| ai.schedule.as_ref())
+        .and_then(|s| s.current())
+        .is_some_and(|b| b.no_follow || b.protection == Protection::Alone);
+
+    let goal = if no_follow {
+        // Resolve the post once and remember it, so the detail does not
+        // drift while the principal is out of sight.
+        let cached = match world
+            .actor(id)
+            .ai
+            .as_ref()
+            .and_then(|ai| ai.detail.as_ref())
+        {
+            Some(DetailRole::Bodyguard { post, .. }) => *post,
+            None => None,
+        };
+        match cached.or_else(|| no_follow_post(world, principal_pos, slot)) {
+            Some(post) => {
+                if let Some(ai) = world.actor_mut(id).ai.as_mut()
+                    && let Some(DetailRole::Bodyguard { post: p, .. }) = ai.detail.as_mut()
+                {
+                    *p = Some(post);
+                }
+                post
+            }
+            None => return ActionIntent::Wait,
+        }
+    } else {
+        // Back in formation; forget any post from the last private beat.
+        if let Some(ai) = world.actor_mut(id).ai.as_mut()
+            && let Some(DetailRole::Bodyguard { post: p, .. }) = ai.detail.as_mut()
+        {
+            *p = None;
+        }
+        match formation_tile(world, id, principal_pos, slot) {
+            Some(tile) => tile,
+            // Nowhere to stand: hold position rather than crowd. Walking
+            // at an impossible tile is what a naive slot lookup does, and
+            // it strands the guard several tiles out forever.
+            None => return ActionIntent::Wait,
+        }
+    };
+
+    if world.actor(id).pos == goal {
         return ActionIntent::Wait;
     }
     match first_step_towards(world, data, id, goal) {
