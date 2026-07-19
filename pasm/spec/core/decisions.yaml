@@ -455,7 +455,7 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
-      symbols: [Shell, HubLayout, draw_hub]
+      symbols: [Shell, ScreenLayout, draw_hub]
       tests: [crates/murmur-shell/src/lib.rs]
 
   - decision: warehouse-second-venue
@@ -518,3 +518,19 @@ entities:
       paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/render.rs]
       symbols: [describe, short]
       tests: [crates/murmur-core/tests/contracts.rs]
+
+  - decision: mouse-parity-across-every-screen
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Mouse Parity Across Every Screen
+      summary: The mouse drives the whole game, not just the mission palette. Interface screens record a ScreenLayout of clickable rows carrying a ShellInput rather than a bare key, so Enter and Esc prompts are clickable alongside keyed rows; the shell resolves a click to its row's input before dispatching, and the screens' own handlers stay keyboard-shaped. Prompts render in a fixed footer reserved at the bottom of each panel, so they are always visible and sit at known rows however long the body runs, and long panels word-wrap at build time (not render time) to keep those row positions exact. In the mission, clicking any tile already seen queues one step along the shortest path towards it, using the same pathfinder the NPCs use; clicking again walks the next step, preserving one intention per turn.
+      rationale:
+        - Playtest asked for click-to-act everywhere including the contract screens; carrying an input rather than a key in the layout makes every prompt reachable without special cases per screen.
+        - One step per click keeps movement inside the queue model rather than introducing multi-turn autopilot the player cannot interrupt.
+      references: [mouse-inspection-and-clickable-actions, ascii-presentation, queue-input-contract]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/mission.rs]
+      symbols: [ScreenLayout, body_and_footer, render_footer]
+      tests: [crates/murmur-shell/src/lib.rs]

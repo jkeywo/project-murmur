@@ -16,6 +16,7 @@ use murmur_core::actions::{ActionResult, Command};
 use murmur_core::data::GameData;
 use murmur_core::geom::{Dir4, Pos};
 use murmur_core::map::{TileKind, line_of_sight, tiles_visible_from};
+use murmur_core::path::first_step_towards;
 use murmur_core::turn::{TurnDriver, TurnReport};
 use murmur_core::world::{ActorId, FurnitureKind, Hands, World};
 
@@ -360,7 +361,22 @@ impl Mission {
                 self.mode = InputMode::Normal;
                 self.enqueue(Command::ThrowNoisemaker(pos));
             }
-            InputMode::Normal => {}
+            // Click-to-move: one step along the shortest path to any tile
+            // you have already seen. Clicking again walks the next step,
+            // so movement stays one intention per turn like the keys.
+            InputMode::Normal => {
+                if !self.is_explored(pos) {
+                    return;
+                }
+                let world = self.world();
+                if world.player_actor().pos == pos {
+                    return;
+                }
+                match first_step_towards(world, data, world.player, pos) {
+                    Some(dir) => self.enqueue(Command::Move(dir)),
+                    None => self.push_log("no way through to there".to_string()),
+                }
+            }
         }
     }
 

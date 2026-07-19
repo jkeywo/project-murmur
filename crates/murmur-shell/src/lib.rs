@@ -27,6 +27,7 @@ use murmur_core::generator::generate;
 use murmur_core::rng::split_mix_64;
 use murmur_core::turn::TurnDriver;
 use ratatui::Frame;
+use ratatui::layout::Rect;
 
 use mission::Mission;
 
@@ -48,19 +49,30 @@ pub enum ShellInput {
     MouseClick { column: u16, row: u16 },
 }
 
-/// Clickable rows recorded by the hub renderer: (row, x0, x1, key).
-/// Clicking one is exactly pressing its key.
+/// Clickable rows recorded by an interface screen. Clicking a row is
+/// exactly the input it carries, so every prompt on every screen — keys,
+/// Enter, Esc — is reachable with the mouse.
 #[derive(Clone, Debug, Default)]
-pub struct HubLayout {
-    pub actions: Vec<(u16, u16, u16, char)>,
+pub struct ScreenLayout {
+    pub actions: Vec<(u16, u16, u16, ShellInput)>,
 }
 
-impl HubLayout {
-    fn key_at(&self, column: u16, row: u16) -> Option<char> {
+impl ScreenLayout {
+    /// Records a clickable span on `row` from `x0` to `x1` inclusive.
+    pub fn push(&mut self, row: u16, x0: u16, x1: u16, input: ShellInput) {
+        self.actions.push((row, x0, x1, input));
+    }
+
+    /// Records a whole-width row: forgiving targets for centred prompts.
+    pub fn push_row(&mut self, area: Rect, row: u16, input: ShellInput) {
+        self.push(row, area.x, area.x + area.width.saturating_sub(1), input);
+    }
+
+    fn input_at(&self, column: u16, row: u16) -> Option<ShellInput> {
         self.actions
             .iter()
             .find(|(r, x0, x1, _)| *r == row && column >= *x0 && column <= *x1)
-            .map(|(_, _, _, key)| *key)
+            .map(|(_, _, _, input)| *input)
     }
 }
 
@@ -107,7 +119,7 @@ pub struct Shell {
     campaign: CampaignState,
     store: Box<dyn CampaignStore>,
     screen: Screen,
-    hub_layout: HubLayout,
+    screen_layout: ScreenLayout,
     quit_requested: bool,
 }
 
@@ -125,7 +137,7 @@ impl Shell {
             campaign,
             store,
             screen: Screen::Start,
-            hub_layout: HubLayout::default(),
+            screen_layout: ScreenLayout::default(),
             quit_requested: false,
         }
     }
@@ -154,6 +166,20 @@ impl Shell {
 
     /// Handles one input event in the current screen.
     pub fn handle_input(&mut self, input: ShellInput) {
+        // Outside the mission every screen is a list of prompts: a click
+        // resolves to the input of the row it lands on, so the mouse
+        // drives the campaign exactly like the keyboard. The mission
+        // handles its own clicks (map and action palette).
+        let input = match (&self.screen, input) {
+            (Screen::Playing { .. }, _) => input,
+            (_, ShellInput::MouseClick { column, row }) => {
+                match self.screen_layout.input_at(column, row) {
+                    Some(resolved) => resolved,
+                    None => return,
+                }
+            }
+            _ => input,
+        };
         match &mut self.screen {
             Screen::Start => match input {
                 ShellInput::Enter => {
@@ -241,13 +267,7 @@ impl Shell {
     }
 
     fn handle_hub_input(&mut self, input: ShellInput) {
-        // Clicks route through the recorded hub layout: click == key.
-        if let ShellInput::MouseClick { column, row } = input {
-            if let Some(key) = self.hub_layout.key_at(column, row) {
-                self.handle_hub_input(ShellInput::Char(key));
-            }
-            return;
-        }
+        // Clicks were already resolved to their row's input upstream.
         let Screen::Hub { accepting, message } = &mut self.screen else {
             return;
         };
@@ -422,10 +442,10 @@ impl Shell {
         let data = &self.data;
         match &mut self.screen {
             Screen::Start => {
-                screens::draw_start(frame, self.store.load().is_some());
+                self.screen_layout = screens::draw_start(frame, self.store.load().is_some());
             }
             Screen::Hub { accepting, message } => {
-                self.hub_layout = screens::draw_hub(
+                self.screen_layout = screens::draw_hub(
                     frame,
                     data,
                     &self.campaign,
@@ -437,22 +457,29 @@ impl Shell {
                 mission,
                 offer,
                 loadout,
-            } => screens::draw_briefing(
-                frame,
-                data,
-                &mission.world().facts,
-                offer,
-                loadout,
-                mission.world().seed,
-            ),
+            } => {
+                self.screen_layout = screens::draw_briefing(
+                    frame,
+                    data,
+                    &mission.world().facts,
+                    offer,
+                    loadout,
+                    mission.world().seed,
+                );
+            }
             Screen::Playing { mission, .. } => mission.draw(frame, data),
             Screen::Debrief {
                 headline,
                 summary,
                 turns,
                 seed,
-            } => screens::draw_debrief(frame, headline, summary, &self.campaign, *turns, *seed),
-            Screen::CampaignOver => screens::draw_campaign_over(frame, &self.campaign),
+            } => {
+                self.screen_layout =
+                    screens::draw_debrief(frame, headline, summary, &self.campaign, *turns, *seed);
+            }
+            Screen::CampaignOver => {
+                self.screen_layout = screens::draw_campaign_over(frame, &self.campaign);
+            }
         }
     }
 }
@@ -673,10 +700,10 @@ mod tests {
         let mut terminal = Terminal::new(TestBackend::new(110, 40)).unwrap();
         terminal.draw(|frame| shell.draw(frame)).unwrap();
         let (row, x0, _, _) = *shell
-            .hub_layout
+            .screen_layout
             .actions
             .iter()
-            .find(|(_, _, _, key)| *key == '1')
+            .find(|(_, _, _, input)| *input == ShellInput::Char('1'))
             .expect("the first offer is clickable");
         shell.handle_input(ShellInput::MouseClick { column: x0, row });
         assert!(matches!(
@@ -686,5 +713,80 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    /// Every interface screen's prompts are clickable, not just the hub's
+    /// keyed rows: Enter and Esc included.
+    #[test]
+    fn prompts_on_every_campaign_screen_are_clickable() {
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let mut terminal = Terminal::new(TestBackend::new(110, 44)).unwrap();
+        let mut shell = shell();
+
+        // Start screen: clicking "Enter: ..." opens the hub.
+        terminal.draw(|frame| shell.draw(frame)).unwrap();
+        let (row, x0, _, _) = *shell
+            .screen_layout
+            .actions
+            .iter()
+            .find(|(_, _, _, input)| *input == ShellInput::Enter)
+            .expect("the start screen offers a clickable Enter prompt");
+        shell.handle_input(ShellInput::MouseClick { column: x0, row });
+        assert!(matches!(shell.screen(), Screen::Hub { .. }));
+
+        // Briefing: clicking "Esc: let the contract pass" returns to the
+        // hub without taking the job.
+        shell.handle_input(ShellInput::Char('1')); // pick the first offer
+        shell.handle_input(ShellInput::Enter); // take it with no loadout
+        assert!(matches!(shell.screen(), Screen::Briefing { .. }));
+        terminal.draw(|frame| shell.draw(frame)).unwrap();
+        let (row, x0, _, _) = *shell
+            .screen_layout
+            .actions
+            .iter()
+            .find(|(_, _, _, input)| *input == ShellInput::Esc)
+            .expect("the briefing offers a clickable Esc prompt");
+        shell.handle_input(ShellInput::MouseClick { column: x0, row });
+        assert!(matches!(shell.screen(), Screen::Hub { .. }));
+    }
+
+    /// Clicking a tile you have already seen walks one step towards it.
+    #[test]
+    fn clicking_a_seen_tile_steps_towards_it() {
+        use murmur_core::actions::Command;
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        let mut shell = shell();
+        start_mission(&mut shell);
+        let mut terminal = Terminal::new(TestBackend::new(110, 44)).unwrap();
+        terminal.draw(|frame| shell.draw(frame)).unwrap();
+
+        // Find a seen floor tile a few steps off, and the screen cell it
+        // was drawn in.
+        let ui = mission(&shell).ui.clone();
+        let origin = ui.origin.expect("the map was drawn");
+        let start = mission(&shell).world().player_actor().pos;
+        let goal = (2..6)
+            .find_map(|d| {
+                let candidate = murmur_core::geom::Pos::new(start.floor, start.x + d, start.y);
+                mission(&shell).is_explored(candidate).then_some(candidate)
+            })
+            .expect("some explored tile lies east of the spawn");
+        let column = ui.map_x + u16::try_from(goal.x - origin.x).unwrap();
+        let row = ui.map_y + u16::try_from(goal.y - origin.y).unwrap();
+
+        shell.handle_input(ShellInput::MouseClick { column, row });
+        assert_eq!(
+            mission(&shell).queue.head(),
+            Some(&Command::Move(murmur_core::geom::Dir4::East)),
+            "the click queues a single step along the path"
+        );
+
+        // An unseen tile is not a destination.
+        let unseen = murmur_core::geom::Pos::new(start.floor, 0, 0);
+        assert!(!mission(&shell).is_explored(unseen));
     }
 }
