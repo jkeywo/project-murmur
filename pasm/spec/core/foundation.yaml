@@ -170,7 +170,7 @@ entities:
       references: [queue-control-surface, world-model]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/render.rs, crates/murmur-shell/src/mission.rs]
+      paths: [crates/murmur-shell/src/render.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/hitmap.rs]
       symbols: [draw_mission, Speed, UiLayout]
 
   - component: mission-outcome-rules

@@ -446,7 +446,7 @@ entities:
       references: [milestone-2-campaign-state, campaign-single-slot-autosave, queue-desurfacing, mouse-inspection-and-clickable-actions]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
+      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/screens.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
       symbols: [Shell, ScreenLayout, draw_hub]
       tests: [crates/murmur-shell/src/lib.rs]
 
