@@ -140,12 +140,9 @@ pub(super) fn resolve_shoot(
         item.charges -= 1;
     }
     if actor == world.player
-        && matches!(
-            world.constraint,
-            Some(crate::contract::Constraint::NoFirearms)
-        )
+        && let Some(reason) = world.constraint.as_ref().and_then(|c| c.on_shot())
     {
-        super::breach_constraint(world, events, crate::tr!("contract.no_firearms.breach"));
+        super::breach_constraint(world, events, &reason);
     }
     // Whoever is standing on the line takes the round. Actors do not block
     // sight — that is deliberate and symmetric, and adding it would rewrite

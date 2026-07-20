@@ -474,22 +474,10 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
     let target_dead = world.actor(world.target).condition == BodyCondition::Dead;
     if target_dead && world.extraction_tiles.contains(&player.pos) {
         let player_pos = player.pos;
-        if let Some(crate::contract::Constraint::SpecificExit { room_template }) =
-            world.constraint.clone()
+        if let Some(constraint) = world.constraint.clone()
+            && let Some(reason) = constraint.on_exit(world, player_pos)
         {
-            let via_required = world
-                .room_at(player_pos)
-                .is_some_and(|r| r.template == room_template);
-            if !via_required {
-                let exit_name = world
-                    .rooms
-                    .iter()
-                    .find(|r| r.template == room_template)
-                    .map(|r| r.name.clone())
-                    .unwrap_or_else(|| room_template.clone());
-                let reason = crate::trf!("contract.exit_via.breach", room = exit_name);
-                breach_constraint(world, events, &reason);
-            }
+            breach_constraint(world, events, &reason);
         }
         world.outcome = Some(MissionOutcome::Extracted);
         events
@@ -527,44 +515,11 @@ pub(super) fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, 
     target_mut.hands = Hands::Free;
     target_mut.killed_by_player = player_kill;
 
-    if player_kill {
-        match &world.constraint {
-            Some(crate::contract::Constraint::NoCivilianCasualties)
-                if !is_target && victim_role != Some(crate::data::Role::Guard) =>
-            {
-                breach_constraint(world, events, crate::tr!("contract.no_collateral.breach"));
-            }
-            Some(crate::contract::Constraint::PrivateKill) if is_target => {
-                let private = world
-                    .room_at(pos)
-                    .is_some_and(|r| r.zone == crate::data::Zone::Personal);
-                if !private {
-                    let where_ = world
-                        .room_at(pos)
-                        .map(|r| r.name.clone())
-                        .unwrap_or_else(|| {
-                            crate::tr!("contract.private_kill.open_floor").to_string()
-                        });
-                    let offices: Vec<String> = world
-                        .rooms
-                        .iter()
-                        .filter(|r| r.zone == crate::data::Zone::Personal)
-                        .map(|r| r.name.clone())
-                        .collect();
-                    let needed = if offices.is_empty() {
-                        crate::tr!("contract.private_kill.fallback_room").to_string()
-                    } else {
-                        offices.join(" or ")
-                    };
-                    let reason = crate::loc::fmt(
-                        "contract.private_kill.breach",
-                        &[("where", &where_), ("needed", &needed)],
-                    );
-                    breach_constraint(world, events, &reason);
-                }
-            }
-            _ => {}
-        }
+    if player_kill
+        && let Some(constraint) = world.constraint.clone()
+        && let Some(reason) = constraint.on_kill(world, pos, is_target, victim_role)
+    {
+        breach_constraint(world, events, &reason);
     }
 
     // A kill in the open is witnessable evidence this turn.

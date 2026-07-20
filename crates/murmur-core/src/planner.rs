@@ -262,65 +262,7 @@ pub fn prove_constraint(
     start: Pos,
     constraint: &crate::contract::Constraint,
 ) -> Result<RouteProof, String> {
-    use crate::contract::Constraint;
-    let filters = match constraint {
-        Constraint::NoFirearms => RouteFilters {
-            forbid_items: vec!["silenced-pistol".to_string()],
-            ..Default::default()
-        },
-        Constraint::NoCivilianCasualties => RouteFilters::default(),
-        Constraint::NoBodiesFound => {
-            // Discretion needs somewhere to stow the body: at least one
-            // container must be reachable under the trespass model.
-            let outcome = capability_closure(data, layout, population, start, true, false);
-            let stowable = layout.furniture.iter().any(|f| {
-                f.kind == crate::world::FurnitureKind::Container
-                    && crate::geom::Dir4::ALL
-                        .into_iter()
-                        .any(|d| outcome.seen.contains(f.pos.step(d)))
-            });
-            if !stowable {
-                return Err("no reachable container to hide a body in".to_string());
-            }
-            RouteFilters::default()
-        }
-        Constraint::PrivateKill => {
-            let personal: Vec<String> = layout
-                .rooms
-                .iter()
-                .filter(|r| r.zone == crate::data::Zone::Personal)
-                .map(|r| r.name.clone())
-                .collect();
-            if personal.is_empty() {
-                return Err("venue has no personal-tier rooms".to_string());
-            }
-            RouteFilters {
-                kill_rooms: Some(personal),
-                ..Default::default()
-            }
-        }
-        Constraint::SpecificExit { room_template } => {
-            let exits: Vec<Pos> = layout
-                .extraction_tiles
-                .iter()
-                .copied()
-                .filter(|tile| {
-                    layout
-                        .rooms
-                        .iter()
-                        .find(|r| r.floor == tile.floor && r.bounds.contains(tile.x, tile.y))
-                        .is_some_and(|r| &r.template == room_template)
-                })
-                .collect();
-            if exits.is_empty() {
-                return Err(format!("venue has no '{room_template}' exit"));
-            }
-            RouteFilters {
-                allowed_exits: Some(exits),
-                ..Default::default()
-            }
-        }
-    };
+    let filters = constraint.certify_filters(data, layout, population, start)?;
     prove_route(
         data,
         layout,

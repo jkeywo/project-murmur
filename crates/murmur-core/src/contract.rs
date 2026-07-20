@@ -13,7 +13,12 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::data::{GameData, RoomTemplateId, VenueId, Zone};
+use crate::data::{GameData, Role, RoomTemplateId, VenueId, Zone};
+use crate::generator::layout::Layout;
+use crate::generator::populate::Population;
+use crate::geom::Pos;
+use crate::planner::RouteFilters;
+use crate::world::World;
 
 /// The mandatory condition a contract imposes. Exactly one per contract.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,6 +83,157 @@ impl Constraint {
                     room = room_display_name(data, room_template)
                 )
             }
+        }
+    }
+
+    /// The planner filters that certify this constraint at generation
+    /// time, or why this venue cannot host it. The planner composes the
+    /// result over its standard physical-stealth proof; everything the
+    /// constraint itself demands lives here.
+    pub fn certify_filters(
+        &self,
+        data: &GameData,
+        layout: &Layout,
+        population: &Population,
+        start: Pos,
+    ) -> Result<RouteFilters, String> {
+        match self {
+            Constraint::NoFirearms => Ok(RouteFilters {
+                forbid_items: vec!["silenced-pistol".to_string()],
+                ..Default::default()
+            }),
+            Constraint::NoCivilianCasualties => Ok(RouteFilters::default()),
+            Constraint::NoBodiesFound => {
+                // Discretion needs somewhere to stow the body: at least one
+                // container must be reachable under the trespass model.
+                let outcome = crate::generator::proof::capability_closure(
+                    data, layout, population, start, true, false,
+                );
+                let stowable = layout.furniture.iter().any(|f| {
+                    f.kind == crate::world::FurnitureKind::Container
+                        && crate::geom::Dir4::ALL
+                            .into_iter()
+                            .any(|d| outcome.seen.contains(f.pos.step(d)))
+                });
+                if !stowable {
+                    return Err("no reachable container to hide a body in".to_string());
+                }
+                Ok(RouteFilters::default())
+            }
+            Constraint::PrivateKill => {
+                let personal: Vec<String> = layout
+                    .rooms
+                    .iter()
+                    .filter(|r| r.zone == Zone::Personal)
+                    .map(|r| r.name.clone())
+                    .collect();
+                if personal.is_empty() {
+                    return Err("venue has no personal-tier rooms".to_string());
+                }
+                Ok(RouteFilters {
+                    kill_rooms: Some(personal),
+                    ..Default::default()
+                })
+            }
+            Constraint::SpecificExit { room_template } => {
+                let exits: Vec<Pos> = layout
+                    .extraction_tiles
+                    .iter()
+                    .copied()
+                    .filter(|tile| {
+                        layout
+                            .rooms
+                            .iter()
+                            .find(|r| r.floor == tile.floor && r.bounds.contains(tile.x, tile.y))
+                            .is_some_and(|r| &r.template == room_template)
+                    })
+                    .collect();
+                if exits.is_empty() {
+                    return Err(format!("venue has no '{room_template}' exit"));
+                }
+                Ok(RouteFilters {
+                    allowed_exits: Some(exits),
+                    ..Default::default()
+                })
+            }
+        }
+    }
+
+    /// Breach check when the player fires a shot.
+    pub fn on_shot(&self) -> Option<String> {
+        match self {
+            Constraint::NoFirearms => Some(crate::tr!("contract.no_firearms.breach").to_string()),
+            _ => None,
+        }
+    }
+
+    /// Breach check when the player kills somebody at `pos`.
+    pub fn on_kill(
+        &self,
+        world: &World,
+        pos: Pos,
+        victim_is_target: bool,
+        victim_role: Option<Role>,
+    ) -> Option<String> {
+        match self {
+            Constraint::NoCivilianCasualties
+                if !victim_is_target && victim_role != Some(Role::Guard) =>
+            {
+                Some(crate::tr!("contract.no_collateral.breach").to_string())
+            }
+            Constraint::PrivateKill if victim_is_target => {
+                let private = world.room_at(pos).is_some_and(|r| r.zone == Zone::Personal);
+                if private {
+                    return None;
+                }
+                let where_ = world
+                    .room_at(pos)
+                    .map(|r| r.name.clone())
+                    .unwrap_or_else(|| crate::tr!("contract.private_kill.open_floor").to_string());
+                let offices: Vec<String> = world
+                    .rooms
+                    .iter()
+                    .filter(|r| r.zone == Zone::Personal)
+                    .map(|r| r.name.clone())
+                    .collect();
+                let needed = join_or(&offices, crate::tr!("contract.private_kill.fallback_room"));
+                Some(crate::loc::fmt(
+                    "contract.private_kill.breach",
+                    &[("where", &where_), ("needed", &needed)],
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    /// Breach check when the player extracts standing at `pos`.
+    pub fn on_exit(&self, world: &World, pos: Pos) -> Option<String> {
+        match self {
+            Constraint::SpecificExit { room_template } => {
+                let via_required = world
+                    .room_at(pos)
+                    .is_some_and(|r| &r.template == room_template);
+                if via_required {
+                    return None;
+                }
+                let exit_name = world
+                    .rooms
+                    .iter()
+                    .find(|r| &r.template == room_template)
+                    .map(|r| r.name.clone())
+                    .unwrap_or_else(|| room_template.clone());
+                Some(crate::trf!("contract.exit_via.breach", room = exit_name))
+            }
+            _ => None,
+        }
+    }
+
+    /// Breach check when somebody first discovers a body of the player's
+    /// making.
+    pub fn on_body_found(&self) -> Option<&'static str> {
+        match self {
+            Constraint::NoBodiesFound => Some(crate::tr!("perception.body_found")),
+            _ => None,
         }
     }
 }

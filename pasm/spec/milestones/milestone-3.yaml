@@ -96,7 +96,7 @@ entities:
       references: []
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/populate.rs, crates/murmur-core/src/world.rs, data/tuning.ron]
+      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/populate.rs, crates/murmur-core/src/world.rs, data/tuning.ron]
       symbols: [DetailRole]
       tests: [crates/murmur-core/tests/escort.rs]
 

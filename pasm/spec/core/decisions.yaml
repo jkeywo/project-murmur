@@ -164,7 +164,7 @@ entities:
       references: [action-resolver, player-command-translator, npc-controller]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/world.rs]
       symbols: [is_displaceable]
       tests: [crates/murmur-core/tests/gameplay.rs]
     evidence:
@@ -366,7 +366,7 @@ entities:
       references: [milestone-2-constrained-contracts, monotone-capability-closure-planner, mission-outcome-rules]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/perception.rs, crates/murmur-core/src/planner.rs]
+      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/perception.rs, crates/murmur-core/src/planner.rs]
       symbols: [Constraint, prove_constraint]
       tests: [crates/murmur-core/tests/contracts.rs]
 
@@ -382,7 +382,7 @@ entities:
       references: [milestone-2-campaign-state, monotone-capability-closure-planner, equipment-buy-once-own-forever]
     implementation:
       status: declared
-      paths: [data/equipment.ron, data/items.ron, crates/murmur-core/src/data.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/access.rs, crates/murmur-core/src/planner.rs]
+      paths: [data/equipment.ron, data/items.ron, crates/murmur-core/src/data.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/access.rs, crates/murmur-core/src/planner.rs]
       symbols: [EquipmentSpec, Approach]
       tests: [crates/murmur-core/tests/equipment.rs]
 
@@ -398,7 +398,7 @@ entities:
       references: [milestone-2-opportunity-library, milestone-2-planning-domain-composition, constraint-catalogue-and-breach-semantics]
     implementation:
       status: declared
-      paths: [data/opportunities.ron, crates/murmur-core/src/generator/opportunities.rs, crates/murmur-core/src/actions.rs]
+      paths: [data/opportunities.ron, crates/murmur-core/src/generator/opportunities.rs, crates/murmur-core/src/actions/mod.rs]
       symbols: [place_opportunities]
       tests: [crates/murmur-core/tests/opportunities.rs]
 
@@ -492,7 +492,7 @@ entities:
       references: [mission-outcome-rules, two-corridor-banded-realisation, ascii-presentation, campaign-death-ends-arrest-continues]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
       symbols: [action_available]
       tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/tests/gameplay.rs, crates/murmur-shell/src/lib.rs]
 
@@ -507,7 +507,7 @@ entities:
       references: [constraint-catalogue-and-breach-semantics, round-two-playtest-fixes, mission-briefing]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions.rs, crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/render.rs]
+      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/render.rs]
       symbols: [describe, short]
       tests: [crates/murmur-core/tests/contracts.rs]
 
@@ -677,7 +677,7 @@ entities:
       references: [text-lives-in-a-csv-catalogue, ascii-presentation]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/world.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs]
       symbols: [Blockage, DebriefHeadline, Tone]
       tests: [crates/murmur-shell/src/lib.rs]
 
@@ -775,7 +775,7 @@ entities:
       references: [escort-is-an-assignment-not-a-mood]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, data/loc/strings.csv]
+      paths: [crates/murmur-core/src/actions/mod.rs, data/loc/strings.csv]
       tests: [crates/murmur-core/tests/escort.rs]
 
   - decision: the-private-window-has-a-clock
@@ -820,7 +820,7 @@ entities:
       references: [protection-not-reachability-is-the-difficulty, escort-is-an-assignment-not-a-mood]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/data.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/opportunities.rs, data/opportunities.ron]
+      paths: [crates/murmur-core/src/data.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/opportunities.rs, data/opportunities.ron]
       tests: [crates/murmur-core/tests/escort.rs]
 
   - decision: opportunity-coverage-not-opportunity-count
@@ -848,7 +848,7 @@ entities:
       references: [escort-is-an-assignment-not-a-mood, beats-mirror-the-routine-index-for-index]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/world.rs, crates/murmur-core/src/actions.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/populate.rs]
+      paths: [crates/murmur-core/src/ai.rs, crates/murmur-core/src/world.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/schedule.rs, crates/murmur-core/src/generator/populate.rs]
       symbols: [is_displaceable_by]
       tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]
 
@@ -864,7 +864,7 @@ entities:
       references: [bodies-stop-bullets-but-not-sight]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       tests: [crates/murmur-core/tests/escort.rs, crates/murmur-core/tests/playthrough.rs]
 
   - decision: five-defects-only-a-playthrough-could-see
@@ -895,3 +895,35 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/keymap.rs, data/loc/strings.csv]
+
+  - decision: action-rulebook-families
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Action Rulebook Is One Family Per Module
+      summary: actions.rs stated every action's rules twice - once in translate's validator, once in its resolver, five hundred lines apart - so a rule change meant editing two functions that agreed only by inspection. The file is now a directory of family rulebooks aligned with the resolver's five phases (movement, doors, violence, bodies, theft, interact); mod.rs keeps the Command and ActionIntent vocabularies and the two dispatchers. Where both sides check the same thing the check is one shared function (garrote_core, shoot_core, carry_core, pickpocket_reachable, carried_firearm) - the validator propagates the specific rejection, the resolver maps a miss to its coarser in-turn line. Where the sides deliberately differ, they sit adjacent with the asymmetry documented. Both vocabularies stay - the Command enum's lack of the NPC-only intents statically keeps them out of the player queue - and the bridge is pure mapping.
+      rationale:
+        - The two check-points are the action-batch-failure-rules contract (pre-turn rejection is pure, a valid action can still fail in simultaneous resolution); only the duplicated rule prose was the defect.
+        - Family modules over module-per-action because Wait needs no rulebook and simultaneous movement needs a whole one; the phase alignment gives every family a natural home.
+      references: [action-batch-failure-rules, primitive-action-catalog, player-command-translator, action-resolver]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/actions/movement.rs, crates/murmur-core/src/actions/violence.rs, crates/murmur-core/src/actions/bodies.rs, crates/murmur-core/src/actions/theft.rs, crates/murmur-core/src/actions/doors.rs, crates/murmur-core/src/actions/interact.rs]
+      symbols: [translate, resolve_turn]
+      tests: [crates/murmur-core/tests/gameplay.rs, crates/murmur-core/tests/playthrough.rs]
+
+  - decision: constraint-hooks-on-contract
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Each Contract Constraint Presents Hooks, Not Scattered Matches
+      summary: A constraint's knowledge was spread over four files - certification filters in the planner, breach detection at three resolver sites plus body discovery in perception, text in contract.rs - each holding a five-arm match, so a sixth constraint kind meant four coordinated edits. The Constraint enum now carries the whole rulebook in contract.rs, certify_filters for generation-time proof composition and event-shaped breach hooks (on_shot, on_kill, on_exit, on_body_found) for the runtime, alongside the existing describe and short. Call sites in planner, resolver, and perception are one-liners; a hook returns the breach reason and the caller records it. Semantics are unchanged - this relocates the constraint-catalogue-and-breach-semantics implementation, it does not reopen it.
+      rationale:
+        - Event-shaped hooks fit how breaches actually happen (a shot, a kill, an exit, a discovery), so each call site asks one question instead of restating the catalogue.
+        - Hooks on the enum in one file over module-per-constraint because five variants sharing text helpers do not warrant five files plus dispatch.
+      references: [constraint-catalogue-and-breach-semantics, contract-conditions-name-their-rooms, action-rulebook-families]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/planner.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/actions/violence.rs, crates/murmur-core/src/perception.rs]
+      symbols: [certify_filters, on_shot, on_kill, on_exit, on_body_found]
+      tests: [crates/murmur-core/tests/contracts.rs]

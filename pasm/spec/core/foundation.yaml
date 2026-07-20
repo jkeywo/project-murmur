@@ -95,7 +95,7 @@ entities:
       references: [prepared-action-store, action-resolver]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       symbols: [translate, RejectReason]
       tests: [crates/murmur-core/src/turn.rs]
 
@@ -108,7 +108,7 @@ entities:
       references: [turn-driver, action-resolver]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/turn.rs, crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/turn.rs, crates/murmur-core/src/actions/mod.rs]
       symbols: [PreparedActionStore, PreparedAction]
 
   - component: turn-driver
@@ -133,7 +133,7 @@ entities:
       references: [world-model, turn-driver]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       symbols: [resolve_turn]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
@@ -182,7 +182,7 @@ entities:
       references: [world-model, turn-driver]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/world.rs]
       symbols: [check_outcomes, MissionOutcome]
       tests: [crates/murmur-core/tests/playthrough.rs]
 
@@ -208,7 +208,7 @@ entities:
       references: [access-and-disguise-rules, player-command-translator]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/actions/mod.rs]
       symbols: [Hands, INVENTORY_SLOTS]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
@@ -221,7 +221,7 @@ entities:
       references: [inventory-and-access-rules, generated-reachability-proof]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       symbols: [DisguiseSource]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
@@ -262,7 +262,7 @@ entities:
       references: [perception-model, action-resolver, vip-invitation-rules]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
   - component: npc-cadence-and-escalation
@@ -297,7 +297,7 @@ entities:
       references: [perception-model, action-resolver, mission-outcome-rules]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, data/tuning.ron]
+      paths: [crates/murmur-core/src/actions/mod.rs, data/tuning.ron]
       tests: [crates/murmur-core/tests/gameplay.rs]
 
   - component: body-and-container-rules
@@ -309,7 +309,7 @@ entities:
       references: [stealth-and-combat-rules, world-model]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-core/src/world.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/world.rs]
       tests: [crates/murmur-core/tests/gameplay.rs, crates/murmur-core/src/turn.rs]
 
   - component: action-batch-failure-rules
@@ -321,7 +321,7 @@ entities:
       references: [player-command-translator, action-resolver, player-command-queue]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs, crates/murmur-shell/src/mission.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-shell/src/mission.rs]
       tests: [crates/murmur-core/src/turn.rs, crates/murmur-shell/src/lib.rs]
 
   - component: deterministic-mission-replay
@@ -462,7 +462,7 @@ entities:
       references: [player-command-translator, action-resolver, body-and-container-rules]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs]
       symbols: [Command, ActionIntent]
 
   - component: queued-travel-command

@@ -246,21 +246,16 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
 
         // A discovered body of the player's making breaches a
         // no-bodies-found contract.
-        if matches!(
-            world.constraint,
-            Some(crate::contract::Constraint::NoBodiesFound)
-        ) && world.constraint_breach.is_none()
+        if let Some(reason) = world.constraint.as_ref().and_then(|c| c.on_body_found())
+            && world.constraint_breach.is_none()
             && let Some(pos) = evidence_pos
             && world
                 .actors
                 .iter()
                 .any(|a| a.pos == pos && a.is_visible_body() && a.killed_by_player)
         {
-            world.constraint_breach = Some(crate::tr!("perception.body_found").to_string());
-            messages.push(crate::trf!(
-                "log.breached",
-                reason = crate::tr!("perception.body_found")
-            ));
+            world.constraint_breach = Some(reason.to_string());
+            messages.push(crate::trf!("log.breached", reason = reason));
         }
 
         let ai_focus_default = if sees_player { Some(player_pos) } else { None };
