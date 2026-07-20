@@ -7,64 +7,18 @@ use murmur_core::actions::Command;
 use murmur_core::contract::{Constraint, MissionConfig};
 use murmur_core::data::{GameData, Lighting, OpportunityEffect, Role};
 use murmur_core::generator::generate;
-use murmur_core::geom::{Dir4, Pos};
-use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
 use murmur_core::world::{ActorId, FurnitureKind, Mood, World};
 
-fn data() -> GameData {
-    GameData::embedded().unwrap()
-}
+mod common;
+use common::{data, park_npcs_far, quiet_all_npcs, stand_beside};
 
-fn quiet_all_npcs(world: &mut World) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player())
-        .map(|a| a.id)
-        .collect();
-    for id in ids {
-        if let Some(ai) = world.actor_mut(id).ai.as_mut() {
-            ai.routine.clear();
-            ai.mood = Mood::Relaxed;
-            ai.suspicion = 0;
-            ai.focus = None;
-        }
-    }
-}
-
-/// A free tile adjacent to `pos`, for standing beside machines.
-fn stand_beside(world: &World, pos: Pos) -> Pos {
-    Dir4::ALL
-        .into_iter()
-        .map(|d| pos.step(d))
-        .find(|p| {
-            matches!(world.map.tile(*p), TileKind::Floor)
-                && world.standing_actor_at(*p).is_none()
-                && world.furniture_at(*p).is_none()
-        })
-        .expect("machine has a free adjacent tile")
-}
-
-/// Parks every NPC but `keep` on the topmost storey. The hoist test is
-/// about the crate and the tile under it, so nobody else may be close
-/// enough to walk into the target and displace it off the drop tile
-/// while the player is busy rigging the machine.
+/// Parks every NPC but `keep`. The hoist test is about the crate and
+/// the tile under it, so nobody else may be close enough to walk into
+/// the target and displace it off the drop tile while the player is
+/// busy rigging the machine.
 fn park_all_but(world: &mut World, keep: ActorId) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player() && a.id != keep)
-        .map(|a| a.id)
-        .collect();
-    let mut spare: Vec<Pos> = world
-        .map
-        .floor_positions(world.map.floor_count() - 1)
-        .filter(|p| matches!(world.map.tile(*p), TileKind::Floor))
-        .collect();
-    for id in ids {
-        world.actor_mut(id).pos = spare.pop().expect("room on the top storey");
-    }
+    park_npcs_far(world, &[keep]);
 }
 
 fn find_machine(

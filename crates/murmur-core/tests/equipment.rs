@@ -13,34 +13,18 @@ use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
 use murmur_core::world::{ActorId, Mood, World};
 
-fn setup_loadout(seed: u64, loadout: &[&str]) -> (GameData, TurnDriver) {
-    let data = GameData::embedded().unwrap();
-    let config = MissionConfig::new(seed, "nightclub")
-        .with_loadout(loadout.iter().map(|s| s.to_string()).collect());
-    let world = generate(&data, &config).unwrap();
-    let driver = TurnDriver::new(world, &data);
-    (data, driver)
-}
+mod common;
+use common::{quiet_all_npcs, setup_config};
 
-fn quiet_all_npcs(world: &mut World) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player())
-        .map(|a| a.id)
-        .collect();
-    for id in ids {
-        if let Some(ai) = world.actor_mut(id).ai.as_mut() {
-            ai.routine.clear();
-            ai.mood = Mood::Relaxed;
-            ai.suspicion = 0;
-            ai.focus = None;
-        }
-    }
+fn setup_loadout(seed: u64, loadout: &[&str]) -> (GameData, TurnDriver) {
+    setup_config(
+        MissionConfig::new(seed, "nightclub")
+            .with_loadout(loadout.iter().map(|s| s.to_string()).collect()),
+    )
 }
 
 fn place(world: &mut World, actor: ActorId, pos: Pos) {
-    world.actor_mut(actor).pos = pos;
+    common::place(world, actor, pos, None);
 }
 
 #[test]

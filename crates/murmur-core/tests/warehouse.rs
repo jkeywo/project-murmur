@@ -3,13 +3,12 @@
 //! as the nightclub — venue-driven architecture, not nightclub-specific.
 
 use murmur_core::contract::{Constraint, MissionConfig};
-use murmur_core::data::{GameData, Role, Zone};
+use murmur_core::data::{Role, Zone};
 use murmur_core::generator::generate;
 use murmur_core::planner::RouteClass;
 
-fn data() -> GameData {
-    GameData::embedded().unwrap()
-}
+mod common;
+use common::data;
 
 #[test]
 fn warehouses_generate_with_all_route_proofs_across_seeds() {

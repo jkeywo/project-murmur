@@ -8,67 +8,14 @@ use murmur_core::data::{GameData, Role};
 use murmur_core::generator::generate;
 use murmur_core::geom::{Dir4, Pos};
 use murmur_core::map::TileKind;
-use murmur_core::turn::TurnDriver;
-use murmur_core::world::{ActorId, Mood, World};
+use murmur_core::world::World;
 
 /// A driver whose NPCs are already inert. The quieting must happen before
 /// the driver is built: construction primes each NPC's first action, so a
 /// world calmed afterwards still has one turn of escorting and walking
 /// queued up.
-fn setup(seed: u64) -> (GameData, TurnDriver) {
-    let data = GameData::embedded().unwrap();
-    let mut world = generate(&data, &MissionConfig::new(seed, "nightclub")).unwrap();
-    quiet_all_npcs(&mut world);
-    (data.clone(), TurnDriver::new(world, &data))
-}
-
-fn quiet_all_npcs(world: &mut World) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player())
-        .map(|a| a.id)
-        .collect();
-    for id in ids {
-        if let Some(ai) = world.actor_mut(id).ai.as_mut() {
-            ai.routine.clear();
-            ai.mood = Mood::Relaxed;
-            ai.suspicion = 0;
-            ai.focus = None;
-            // Including standing assignments: a bodyguard would walk off
-            // towards its principal instead of standing where the scenario
-            // put it.
-            ai.detail = None;
-        }
-    }
-}
-
-/// Parks every NPC except `keep` far away on the topmost storey so
-/// nothing is seen or heard. Derived from the map rather than pinned to
-/// coordinates, so re-shaping a venue cannot silently park someone in
-/// earshot and turn a heat assertion into a false pass.
-fn park_npcs_far(world: &mut World, keep: &[ActorId]) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player() && !keep.contains(&a.id))
-        .map(|a| a.id)
-        .collect();
-    let top = world.map.floor_count() - 1;
-    let spots: Vec<Pos> = world
-        .map
-        .floor_positions(top)
-        .filter(|p| matches!(world.map.tile(*p), TileKind::Floor))
-        .collect();
-    assert!(
-        spots.len() >= ids.len(),
-        "the top storey must hold every parked NPC"
-    );
-    for (pos, id) in spots.into_iter().zip(ids) {
-        world.actor_mut(id).pos = pos;
-        world.actor_mut(id).facing = Some(Dir4::North);
-    }
-}
+mod common;
+use common::{park_npcs_far, setup_quiet as setup};
 
 /// A floor tile close enough to `spot` to witness what happens there,
 /// but off the firing line itself.

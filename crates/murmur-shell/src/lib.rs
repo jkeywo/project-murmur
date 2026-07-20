@@ -569,6 +569,12 @@ mod tests {
         )
     }
 
+    /// A headless terminal for click tests, which resolve against the
+    /// layout of the last drawn frame.
+    fn terminal(width: u16, height: u16) -> ratatui::Terminal<ratatui::backend::TestBackend> {
+        ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap()
+    }
+
     fn start_mission(shell: &mut Shell) {
         shell.handle_input(ShellInput::Enter); // start -> hub
         assert!(matches!(shell.screen(), Screen::Hub { .. }));
@@ -887,12 +893,9 @@ mod tests {
 
     #[test]
     fn clicking_an_action_matches_pressing_its_key_and_hover_inspects() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         let mut shell = shell();
         start_mission(&mut shell);
-        let mut terminal = Terminal::new(TestBackend::new(110, 40)).unwrap();
+        let mut terminal = terminal(110, 40);
         terminal.draw(|frame| shell.draw(frame)).unwrap();
 
         let (row, x0, _, key) = *mission(&shell)
@@ -917,12 +920,9 @@ mod tests {
 
     #[test]
     fn clicking_a_hub_row_matches_its_key() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
         let mut shell = shell();
         shell.handle_input(ShellInput::Enter); // hub
-        let mut terminal = Terminal::new(TestBackend::new(110, 40)).unwrap();
+        let mut terminal = terminal(110, 40);
         terminal.draw(|frame| shell.draw(frame)).unwrap();
         let (row, x0, _, _) = *shell
             .screen_layout
@@ -944,10 +944,7 @@ mod tests {
     /// keyed rows: Enter and Esc included.
     #[test]
     fn prompts_on_every_campaign_screen_are_clickable() {
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
-
-        let mut terminal = Terminal::new(TestBackend::new(110, 44)).unwrap();
+        let mut terminal = terminal(110, 44);
         let mut shell = shell();
 
         // Start screen: clicking "Enter: ..." opens the hub.
@@ -981,12 +978,10 @@ mod tests {
     #[test]
     fn clicking_a_seen_tile_steps_towards_it() {
         use murmur_core::actions::Command;
-        use ratatui::Terminal;
-        use ratatui::backend::TestBackend;
 
         let mut shell = shell();
         start_mission(&mut shell);
-        let mut terminal = Terminal::new(TestBackend::new(110, 44)).unwrap();
+        let mut terminal = terminal(110, 44);
         terminal.draw(|frame| shell.draw(frame)).unwrap();
 
         // Find a seen floor tile a few steps off, and the screen cell it

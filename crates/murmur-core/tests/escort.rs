@@ -9,9 +9,8 @@ use murmur_core::geom::Dir4;
 use murmur_core::turn::TurnDriver;
 use murmur_core::world::{ActorId, DetailRole, Mood, Protection, World};
 
-fn data() -> GameData {
-    GameData::embedded().unwrap()
-}
+mod common;
+use common::data;
 
 fn world(seed: u64, venue: &str) -> World {
     generate(&data(), &MissionConfig::new(seed, venue)).unwrap()

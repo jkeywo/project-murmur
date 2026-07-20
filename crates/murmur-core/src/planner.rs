@@ -379,17 +379,18 @@ pub fn prove_base_routes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generator::{populate, proof};
+    use crate::generator::{ATTEMPT_STREAM_BASE, MAX_ATTEMPTS, populate, proof};
     use crate::rng::Pcg32;
 
     /// Mirrors the generator's front half: a proven venue plus its
-    /// population, before world assembly.
+    /// population, before world assembly. Streams and retry budget come
+    /// from the generator's own constants so the mirror cannot drift.
     fn staged(seed: u64) -> (GameData, Layout, Population, Pos) {
         let data = GameData::embedded().unwrap();
         let venue = data.venue("nightclub").unwrap().clone();
         let config_loadout = vec!["garrote".to_string(), "silenced-pistol".to_string()];
-        for attempt in 0..24 {
-            let mut rng = Pcg32::new(seed, 0x4d75726d75720000 + attempt);
+        for attempt in 0..MAX_ATTEMPTS {
+            let mut rng = Pcg32::new(seed, ATTEMPT_STREAM_BASE + attempt);
             let Ok(mut layout) = crate::generator::district::build_layout(&data, &venue, &mut rng)
             else {
                 continue;

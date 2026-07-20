@@ -21,10 +21,11 @@ use crate::world::{FurnitureKind, MissionFacts, World};
 
 /// Generation retries use derived stream selectors so one mission seed
 /// still deterministically defines the final world even when early layout
-/// attempts fail.
-const ATTEMPT_STREAM_BASE: u64 = 0x4d75726d75720000; // "Murmur" tag
+/// attempts fail. `pub(crate)` so test scaffolds that re-stage the
+/// attempt loop stay in step with the real one.
+pub(crate) const ATTEMPT_STREAM_BASE: u64 = 0x4d75726d75720000; // "Murmur" tag
 
-const MAX_ATTEMPTS: u64 = 24;
+pub(crate) const MAX_ATTEMPTS: u64 = 24;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GenError {

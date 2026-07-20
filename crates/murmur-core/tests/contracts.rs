@@ -9,72 +9,12 @@ use murmur_core::generator::generate;
 use murmur_core::geom::{Dir4, Pos};
 use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
-use murmur_core::world::{ActorId, Mood, World};
+
+mod common;
+use common::{free_run, place, quiet_all_npcs, setup_config, some_npc};
 
 fn setup(seed: u64, constraint: Constraint) -> (GameData, TurnDriver) {
-    let data = GameData::embedded().unwrap();
-    let config = MissionConfig::new(seed, "nightclub").with_constraint(constraint);
-    let world = generate(&data, &config).unwrap();
-    let driver = TurnDriver::new(world, &data);
-    (data, driver)
-}
-
-fn quiet_all_npcs(world: &mut World) {
-    let ids: Vec<ActorId> = world
-        .actors
-        .iter()
-        .filter(|a| !a.is_player())
-        .map(|a| a.id)
-        .collect();
-    for id in ids {
-        if let Some(ai) = world.actor_mut(id).ai.as_mut() {
-            ai.routine.clear();
-            ai.mood = Mood::Relaxed;
-            ai.suspicion = 0;
-            ai.focus = None;
-        }
-    }
-}
-
-fn free_run(world: &World, count: i16) -> (Pos, Dir4) {
-    for floor in 0..world.map.floor_count() {
-        for start in world.map.floor_positions(floor) {
-            'dirs: for dir in [Dir4::East, Dir4::South] {
-                for step in 0..count {
-                    let mut pos = start;
-                    for _ in 0..step {
-                        pos = pos.step(dir);
-                    }
-                    let clear = matches!(world.map.tile(pos), TileKind::Floor)
-                        && world.furniture_at(pos).is_none()
-                        && world.standing_actor_at(pos).is_none()
-                        && !world.extraction_tiles.contains(&pos);
-                    if !clear {
-                        continue 'dirs;
-                    }
-                }
-                return (start, dir);
-            }
-        }
-    }
-    panic!("no free run found");
-}
-
-fn place(world: &mut World, actor: ActorId, pos: Pos, facing: Option<Dir4>) {
-    let actor = world.actor_mut(actor);
-    actor.pos = pos;
-    if actor.facing.is_some() || facing.is_some() {
-        actor.facing = facing.or(actor.facing);
-    }
-}
-
-fn some_npc(world: &World, role: Role) -> ActorId {
-    world
-        .actors
-        .iter()
-        .find(|a| a.role == Some(role) && a.alive() && !a.is_target)
-        .map(|a| a.id)
-        .unwrap_or_else(|| panic!("world has a {} NPC", role.name()))
+    setup_config(MissionConfig::new(seed, "nightclub").with_constraint(constraint))
 }
 
 #[test]
