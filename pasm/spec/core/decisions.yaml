@@ -1038,3 +1038,18 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/keymap.rs]
+
+  - decision: awareness-and-htn-measured-worse-than-the-ladder
+    core:
+      status: rejected
+      confidence: confirmed
+      title: Perception Awareness And An HTN Both Measured Worse Than The Flat Ladder
+      summary: Two additions were built for the autoplayer and both lost ground against the tuned priority list, so neither shipped. Wider awareness of being watched cost thirty-four permille - the guard-only watch set the route pricing already used is sparse and therefore informative, while a set covering every witness marks nearly every public tile and carries no signal at all. A break-contact move when caught trespassing measured as noise, because the existing route pricing already avoided that state. A hierarchical task network cost between one hundred and two hundred and seventy-eight permille depending on how much of it was enabled, and every component of it that was isolated measured negative. Killing a solitary worker for their clothes - the decomposition that reads most like real play - was the single most expensive method at one hundred and thirty-one permille, because the body is found, the heat rises, and the arrest follows. Seeking the paging desk, the one capability the ladder genuinely lacks, did cut deaths from two hundred and eighteen to one hundred and ninety permille but raised arrests from one hundred and sixty-two to two hundred and thirty-seven and doubled the stalls, for a net loss of one hundred and three.
+      rationale:
+        - The measurements, all against three hundred and twenty missions across five venues - baseline five hundred and fifty-nine; wider watch set five hundred and twenty-five; break-contact five hundred and fifty-six; network placed above the tactical offers four hundred and sixty-five; network at the strategic tier two hundred and eighty-one ungated and three hundred and twelve once it could see which wardrobes were already used; without the rob-a-worker method four hundred and forty-three; reduced to seeking the paging desk alone four hundred and fifty-six.
+        - The ladder is a strong local optimum tuned against this corpus, and its ordering is load bearing in a way that is easy to break from outside. Placing the network above the opportunistic offers cost ninety permille on its own, because planned movement is always legal and so is accepted every turn in front of a garrote that is only occasionally available.
+        - A planner that cannot see the tactician's state repeats bugs the tactician already solved. The network stripped the same wardrobe every turn until it was given the looted-source list, which alone was worth thirty-one permille and most of the stall regression.
+        - Strategic depth is not free in a venue that punishes time. Every plan step is turns spent not approaching the target, and the corpus scores winning, so a smarter-looking bot that walks further loses.
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/autoplay.rs]
