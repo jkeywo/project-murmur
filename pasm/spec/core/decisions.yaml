@@ -206,7 +206,7 @@ entities:
       references: [ascii-presentation, player-command-translator, look-mode-cursor-contract]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
+      paths: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/mission.rs, crates/murmur-native/src/main.rs, crates/murmur-web/src/main.rs]
       symbols: [UiLayout]
       tests: [crates/murmur-shell/src/lib.rs]
     evidence:
@@ -523,7 +523,7 @@ entities:
       references: [mouse-inspection-and-clickable-actions, ascii-presentation, queue-input-contract]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/mission.rs]
+      paths: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/mission.rs]
       symbols: [ScreenLayout, body_and_footer, render_footer]
       tests: [crates/murmur-shell/src/lib.rs]
 
@@ -975,3 +975,19 @@ entities:
       paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/fov.rs, crates/murmur-shell/src/availability.rs, crates/murmur-shell/src/inspect.rs, crates/murmur-shell/src/render.rs]
       symbols: [Mission, visible_tiles, visible_actors, action_block, describe]
       tests: [crates/murmur-shell/src/lib.rs]
+
+  - decision: one-hitmap-for-every-click
+    core:
+      status: implemented
+      confidence: confirmed
+      title: One Hit-Test Mechanism Carries Every Click
+      summary: Click-equals-key was implemented twice - ScreenLayout in lib.rs carried ShellInput for the interface screens while UiLayout in mission.rs carried bare key chars for the palette, with two byte-identical find-loops resolving them, and the mission's layout type was defined in one file, populated in a second, and consumed back in the first. Both types now live in one hitmap module. UiLayout is the map viewport plus a ScreenLayout, palette rows carry ShellInput::Char like every other row, and one input_at resolves every click on every screen. The row-recording and layout maths finally have direct unit tests - span resolution, viewport tile math, wrap_text, body_and_footer, centered, keymap_summary - where screens.rs previously had none.
+      rationale:
+        - The mission's click branch dispatched the resolved char back through handle_input as a Char anyway, so carrying the input in the row was already the truth of the mechanism - the second payload type was pure history.
+        - A future screen gets clickability by recording rows into the same type, which is what mouse-parity-across-every-screen promised.
+      references: [mouse-parity-across-every-screen, mouse-inspection-and-clickable-actions, mission-controller-narrowed]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/screens.rs]
+      symbols: [ScreenLayout, UiLayout]
+      tests: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/lib.rs]

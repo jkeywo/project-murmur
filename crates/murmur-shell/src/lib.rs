@@ -16,12 +16,15 @@
 
 pub mod availability;
 pub mod fov;
+pub mod hitmap;
 mod inspect;
 pub mod keymap;
 pub mod mission;
 pub mod queue;
 mod render;
 mod screens;
+
+pub use hitmap::ScreenLayout;
 
 use murmur_campaign::{
     CampaignState, CampaignStore, ContractOffer, MissionResolution, ResolutionSummary,
@@ -31,7 +34,6 @@ use murmur_core::generator::generate;
 use murmur_core::rng::split_mix_64;
 use murmur_core::turn::TurnDriver;
 use ratatui::Frame;
-use ratatui::layout::Rect;
 
 use mission::Mission;
 use murmur_core::tr;
@@ -52,33 +54,6 @@ pub enum ShellInput {
     Char(char),
     MouseMove { column: u16, row: u16 },
     MouseClick { column: u16, row: u16 },
-}
-
-/// Clickable rows recorded by an interface screen. Clicking a row is
-/// exactly the input it carries, so every prompt on every screen — keys,
-/// Enter, Esc — is reachable with the mouse.
-#[derive(Clone, Debug, Default)]
-pub struct ScreenLayout {
-    pub actions: Vec<(u16, u16, u16, ShellInput)>,
-}
-
-impl ScreenLayout {
-    /// Records a clickable span on `row` from `x0` to `x1` inclusive.
-    pub fn push(&mut self, row: u16, x0: u16, x1: u16, input: ShellInput) {
-        self.actions.push((row, x0, x1, input));
-    }
-
-    /// Records a whole-width row: forgiving targets for centred prompts.
-    pub fn push_row(&mut self, area: Rect, row: u16, input: ShellInput) {
-        self.push(row, area.x, area.x + area.width.saturating_sub(1), input);
-    }
-
-    fn input_at(&self, column: u16, row: u16) -> Option<ShellInput> {
-        self.actions
-            .iter()
-            .find(|(r, x0, x1, _)| *r == row && column >= *x0 && column <= *x1)
-            .map(|(_, _, _, input)| *input)
-    }
 }
 
 /// Loadout selection while accepting a contract.
@@ -904,13 +879,14 @@ mod tests {
         let mut terminal = terminal(110, 40);
         terminal.draw(|frame| shell.draw(frame)).unwrap();
 
-        let (row, x0, _, key) = *mission(&shell)
+        let (row, x0, _, input) = *mission(&shell)
             .ui()
+            .rows
             .actions
             .iter()
-            .find(|(_, _, _, key)| *key == '.')
+            .find(|(_, _, _, input)| *input == ShellInput::Char('.'))
             .expect("wait is in the palette");
-        assert_eq!(key, '.');
+        assert_eq!(input, ShellInput::Char('.'));
         shell.handle_input(ShellInput::MouseClick { column: x0, row });
         assert_eq!(mission(&shell).queue().head(), Some(&Command::Wait));
 

@@ -705,7 +705,12 @@ fn draw_sidebar(
             let text = format!("{key} {label}");
             let width = text.chars().count() as u16;
             let padded = format!("{text:<16}");
-            ui.actions.push((row, column, column + width - 1, key));
+            ui.rows.push(
+                row,
+                column,
+                column + width - 1,
+                crate::ShellInput::Char(key),
+            );
             // Actions with no valid target right now are dimmed; they
             // still click through and report why they can't be used.
             let available = mission.action_available(data, key);

@@ -796,3 +796,79 @@ pub fn draw_campaign_over(frame: &mut Frame, campaign: &CampaignState) -> Screen
     render_footer(frame, &mut layout, footer, Alignment::Center, &prompts);
     layout
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wrap_text_packs_words_to_width() {
+        assert_eq!(wrap_text("one two three", 7), vec!["one two", "three"]);
+        assert_eq!(
+            wrap_text("word", 2),
+            vec!["word"],
+            "a word longer than the width still lands on its own line"
+        );
+        assert_eq!(wrap_text("", 10), vec![""], "empty text is one empty line");
+        assert_eq!(
+            wrap_text("a b", 0),
+            vec!["a b"],
+            "zero width means no wrapping at all"
+        );
+    }
+
+    #[test]
+    fn body_and_footer_split_a_bordered_panel() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 10,
+        };
+        let (body, footer) = body_and_footer(area, 3);
+        assert_eq!((body.x, body.y, body.width, body.height), (1, 1, 18, 5));
+        assert_eq!(
+            (footer.x, footer.y, footer.width, footer.height),
+            (1, 6, 18, 3)
+        );
+        // The footer never overflows a short panel's interior.
+        let tiny = Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 4,
+        };
+        let (body, footer) = body_and_footer(tiny, 5);
+        assert_eq!(body.height, 0);
+        assert_eq!(footer.height, 2);
+    }
+
+    #[test]
+    fn centered_clamps_to_the_area() {
+        let area = Rect {
+            x: 0,
+            y: 0,
+            width: 30,
+            height: 10,
+        };
+        let rect = centered(area, 10, 4);
+        assert_eq!((rect.x, rect.y, rect.width, rect.height), (10, 3, 10, 4));
+        let clamped = centered(area, 99, 99);
+        assert_eq!(
+            (clamped.width, clamped.height),
+            (30, 10),
+            "an oversized request fills the area instead of overflowing it"
+        );
+    }
+
+    #[test]
+    fn keymap_summary_lines_respect_the_width() {
+        for line in keymap_summary(30) {
+            assert!(
+                line.chars().count() <= 30 || !line.contains("   "),
+                "packed line '{line}' exceeds the width with room to split"
+            );
+        }
+        assert!(!keymap_summary(30).is_empty());
+    }
+}

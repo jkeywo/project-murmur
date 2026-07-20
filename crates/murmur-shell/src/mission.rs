@@ -171,47 +171,7 @@ impl Speed {
     }
 }
 
-/// Where the last frame put things, for mouse hit-testing. Rebuilt on
-/// every draw.
-#[derive(Clone, Debug, Default)]
-pub struct UiLayout {
-    /// Interior of the map viewport in terminal cells (borders excluded).
-    pub map_x: u16,
-    pub map_y: u16,
-    pub map_w: u16,
-    pub map_h: u16,
-    /// The map tile rendered at the viewport's top-left interior cell.
-    pub origin: Option<Pos>,
-    /// Clickable action items: (row, first column, last column, key).
-    pub actions: Vec<(u16, u16, u16, char)>,
-}
-
-impl UiLayout {
-    /// The map tile under a terminal cell, if any.
-    pub fn tile_at(&self, column: u16, row: u16) -> Option<Pos> {
-        let origin = self.origin?;
-        if column < self.map_x
-            || row < self.map_y
-            || column >= self.map_x + self.map_w
-            || row >= self.map_y + self.map_h
-        {
-            return None;
-        }
-        Some(Pos::new(
-            origin.floor,
-            origin.x + (column - self.map_x) as i16,
-            origin.y + (row - self.map_y) as i16,
-        ))
-    }
-
-    /// The action key under a terminal cell, if any.
-    pub fn action_at(&self, column: u16, row: u16) -> Option<char> {
-        self.actions
-            .iter()
-            .find(|(r, x0, x1, _)| *r == row && column >= *x0 && column <= *x1)
-            .map(|(_, _, _, key)| *key)
-    }
-}
+pub use crate::hitmap::UiLayout;
 
 /// The in-mission controller. Its public face is deliberately narrow:
 /// input in ([`Mission::handle_input`]), frames out ([`Mission::draw`]),
@@ -407,8 +367,10 @@ impl Mission {
     /// clicking the map completes pending targeting, aims shots, or moves
     /// the look cursor.
     fn handle_click(&mut self, data: &GameData, column: u16, row: u16) {
-        if let Some(key) = self.ui.action_at(column, row) {
-            self.handle_input(data, ShellInput::Char(key));
+        // Clicking a recorded row is exactly the input it carries — the
+        // same resolution every interface screen uses.
+        if let Some(input) = self.ui.rows.input_at(column, row) {
+            self.handle_input(data, input);
             return;
         }
         let Some(pos) = self
