@@ -1,33 +1,23 @@
 [project]
-name = "project-murmur-pasm"
+name = "project-murmur-tooling"
 version = "0.1.0"
-description = "PASM architecture-model foundation for Project Murmur."
+description = "Development tooling for Project Murmur: the PASM architecture model."
 readme = "README.md"
 requires-python = ">=3.11"
+# PASM itself lives in its own repository, shared with rogue-hunter, which had
+# grown a byte-identical copy of it. What stays here is pasm/spec -- the model
+# of *this* codebase.
+#
+# Pinned to a rev: the scanner's findings are a gate, so which version produced
+# them matters.
 dependencies = [
-  "PyYAML>=6.0",
+  "pasm @ git+https://github.com/jkeywo/pasm@de8a7bfce3aefa799eea51f8e5a2708e996e8b6e",
 ]
 
-[project.scripts]
-pasm = "pasm.cli.main:main"
-
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
-packages = [
-  "pasm",
-  "pasm.architecture",
-  "pasm.cli",
-  "pasm.core",
-  "pasm.domains",
-  "pasm.domains.game_design",
-  "pasm.implementation",
-  "pasm.integration",
-  "pasm.migration",
-  "pasm.scanners",
-]
+# This project ships no Python of its own any more; it exists so that `uv run
+# pasm` resolves the pinned tooling.
+[tool.uv]
+package = false
 
 [dependency-groups]
 dev = [

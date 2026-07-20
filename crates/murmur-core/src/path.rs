@@ -29,6 +29,26 @@ pub fn first_step_towards(
     actor: ActorId,
     goal: Pos,
 ) -> Option<Dir4> {
+    first_step_priced(world, data, actor, goal, |_| 0)
+}
+
+/// As [`first_step_towards`], with an extra per-tile price.
+///
+/// Terrain and stairs are priced here; `surcharge` is whatever else the caller
+/// would rather avoid but is not forbidden — a room it has no business in, a
+/// corridor a guard is watching. Returning zero everywhere gives the plain
+/// shortest path.
+///
+/// The search itself is `vellum-grid`. What stays here is the part that is
+/// actually about this game: which tiles are passable for *this* actor, what a
+/// stair transition costs, and the rule that NPCs route around the player.
+pub fn first_step_priced(
+    world: &World,
+    data: &GameData,
+    actor: ActorId,
+    goal: Pos,
+    surcharge: impl Fn(Pos) -> u32,
+) -> Option<Dir4> {
     let start = world.actor(actor).pos;
     if start == goal {
         return None;
@@ -54,18 +74,16 @@ pub fn first_step_towards(
         }
     };
 
-    // Dijkstra over landings, storing the first step of the cheapest
-    // route to each tile. A stair transition costs several plain steps.
-    //
-    // The weight is not flavour — it is what keeps routes stable. Stair
-    // tiles sit inline in corridors, so under uniform costs a walker
-    // beside a stairwell often has two equal-length routes, one through
-    // the stairs and one around, and per-turn re-planning with equal
-    // costs can pick a different winner from each end of the same pair of
-    // tiles. The observed result was an NPC teleport-oscillating between
-    // two storeys forever. Pricing the transition breaks every such tie:
-    // up-and-straight-back-down is now strictly worse than any flat
-    // alternative, while a genuinely necessary climb is still found.
+    // A stair transition costs several plain steps. The weight is not flavour
+    // — it is what keeps routes stable. Stair tiles sit inline in corridors,
+    // so under uniform costs a walker beside a stairwell often has two
+    // equal-length routes, one through the stairs and one around, and per-turn
+    // re-planning with equal costs can pick a different winner from each end
+    // of the same pair of tiles. The observed result was an NPC
+    // teleport-oscillating between two storeys forever. Pricing the transition
+    // breaks every such tie: up-and-straight-back-down is now strictly worse
+    // than any flat alternative, while a genuinely necessary climb is still
+    // found.
     const STEP_COST: u32 = 1;
     const STAIR_COST: u32 = 4;
 
@@ -79,60 +97,43 @@ pub fn first_step_towards(
                     + pos.x as usize
             })
     };
+    let from_index = |node: usize| -> Pos {
+        let plane = (width as usize) * (height as usize);
+        let floor = node / plane;
+        let rest = node % plane;
+        Pos::new(
+            floor as u8,
+            (rest % width as usize) as i16,
+            (rest / width as usize) as i16,
+        )
+    };
     let size = (width * height) as usize * floors as usize;
-    let mut first_step: Vec<Option<Dir4>> = vec![None; size];
-    let mut best: Vec<u32> = vec![u32::MAX; size];
-    best[index(start)?] = 0;
 
-    // Deterministic priority queue: cost first, then insertion order, so
-    // equal-cost tiles expand in the order they were discovered and the
-    // chosen route is a pure function of the world.
-    type QueueEntry = std::cmp::Reverse<(u32, u32, i16, i16, u8)>;
-    let mut heap: std::collections::BinaryHeap<QueueEntry> = std::collections::BinaryHeap::new();
-    let mut seq: u32 = 0;
-    heap.push(std::cmp::Reverse((0, seq, start.x, start.y, start.floor)));
-    while let Some(std::cmp::Reverse((cost, _, x, y, floor))) = heap.pop() {
-        let pos = Pos::new(floor, x, y);
-        let pos_index = index(pos)?;
-        if cost > best[pos_index] {
-            continue; // a stale queue entry
-        }
-        if pos == goal {
-            return first_step[pos_index];
-        }
-        for dir in Dir4::ALL {
-            let ahead = pos.step(dir);
-            if !passable(ahead) {
-                continue;
+    let move_index =
+        vellum_grid::first_move_towards(size, index(start)?, index(goal)?, |node, out| {
+            let pos = from_index(node);
+            // Dir4::ALL order is what breaks equal-cost ties, so it is the
+            // order neighbours are offered in.
+            for (order, dir) in Dir4::ALL.into_iter().enumerate() {
+                let ahead = pos.step(dir);
+                if !passable(ahead) {
+                    continue;
+                }
+                let landing = world.map.resolve_step_destination(ahead);
+                let Some(node) = index(landing) else { continue };
+                let base = if landing == ahead {
+                    STEP_COST
+                } else {
+                    STAIR_COST
+                };
+                out.push(vellum_grid::Step {
+                    node,
+                    move_index: order as u8,
+                    cost: base + surcharge(landing),
+                });
             }
-            let landing = world.map.resolve_step_destination(ahead);
-            let Some(i) = index(landing) else { continue };
-            let step_cost = if landing == ahead {
-                STEP_COST
-            } else {
-                STAIR_COST
-            };
-            let next = cost + step_cost;
-            if next >= best[i] {
-                continue;
-            }
-            best[i] = next;
-            first_step[i] = if pos == start {
-                Some(dir)
-            } else {
-                first_step[pos_index]
-            };
-            seq += 1;
-            heap.push(std::cmp::Reverse((
-                next,
-                seq,
-                landing.x,
-                landing.y,
-                landing.floor,
-            )));
-        }
-    }
-    None
+        })?;
+    Some(Dir4::ALL[usize::from(move_index)])
 }
 
 #[cfg(test)]

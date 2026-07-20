@@ -1,0 +1,17 @@
+[package]
+name = "murmur-cli"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+description = "Headless developer CLI: mission inspector, autoplay driver, and corpus validation."
+
+[[bin]]
+name = "murmur"
+path = "src/main.rs"
+
+[dependencies]
+murmur-core = { workspace = true }
+clap = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"

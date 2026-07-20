@@ -84,6 +84,13 @@ pub enum LocError {
         row: usize,
         id: String,
     },
+    /// The file is not well-formed CSV: an unterminated quote, or text after a
+    /// closing one. Previously these were quietly absorbed and produced
+    /// plausible-looking rubbish; the shared reader refuses them instead.
+    Malformed {
+        line: usize,
+        message: &'static str,
+    },
 }
 
 impl std::fmt::Display for LocError {
@@ -98,6 +105,9 @@ impl std::fmt::Display for LocError {
             LocError::UnclosedPlaceholder { row, id } => {
                 write!(f, "row {row}: {id:?} has an unclosed {{placeholder")
             }
+            LocError::Malformed { line, message } => {
+                write!(f, "strings.csv line {line}: {message}")
+            }
         }
     }
 }
@@ -108,7 +118,11 @@ impl Catalogue {
     /// Parses the three-column table, rejecting the authoring mistakes that
     /// would otherwise surface as garbled text mid-mission.
     pub fn parse(source: &str) -> Result<Self, LocError> {
-        let mut rows = parse_csv(source).into_iter().enumerate();
+        let parsed = vellum_strings::parse_csv(source).map_err(|error| LocError::Malformed {
+            line: error.line,
+            message: error.message,
+        })?;
+        let mut rows = parsed.into_iter().enumerate();
         let (_, header) = rows.next().ok_or(LocError::MissingHeader)?;
         if header.len() < 3 || header[0].trim() != "id" {
             return Err(LocError::MissingHeader);
@@ -230,87 +244,7 @@ pub fn fmt(id: &str, args: &[(&str, &str)]) -> String {
 /// Substitutes `{name}` slots in `template`. Split out from [`fmt`] so the
 /// substitution itself is testable without a catalogue.
 pub fn interpolate(template: &str, args: &[(&str, &str)]) -> String {
-    if !template.contains('{') {
-        return template.to_string();
-    }
-    let mut out = String::with_capacity(template.len());
-    let mut rest = template;
-    while let Some(open) = rest.find('{') {
-        out.push_str(&rest[..open]);
-        let after = &rest[open + 1..];
-        match after.find('}') {
-            Some(close) => {
-                let name = &after[..close];
-                match args.iter().find(|(key, _)| *key == name) {
-                    Some((_, value)) => out.push_str(value),
-                    None => {
-                        debug_assert!(false, "no argument for placeholder {{{name}}}");
-                        out.push('{');
-                        out.push_str(name);
-                        out.push('}');
-                    }
-                }
-                rest = &after[close + 1..];
-            }
-            // Unbalanced braces are rejected at parse time; a template from
-            // elsewhere just keeps its trailing text verbatim.
-            None => {
-                out.push('{');
-                out.push_str(after);
-                return out;
-            }
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-/// A minimal RFC 4180 reader: quoted fields, `""` for a literal quote, and
-/// newlines inside quotes. The full `csv` crate would do this too, but the
-/// game embeds one small table and the workspace keeps its dependency
-/// surface (and wasm payload) deliberately thin.
-fn parse_csv(source: &str) -> Vec<Vec<String>> {
-    let mut rows = Vec::new();
-    let mut row = Vec::new();
-    let mut field = String::new();
-    let mut quoted = false;
-    let mut chars = source.chars().peekable();
-    // Tracks whether the row holds anything at all, so a trailing newline
-    // does not produce a phantom final row.
-    let mut started = false;
-
-    while let Some(ch) = chars.next() {
-        started = true;
-        if quoted {
-            if ch == '"' {
-                if chars.peek() == Some(&'"') {
-                    chars.next();
-                    field.push('"');
-                } else {
-                    quoted = false;
-                }
-            } else {
-                field.push(ch);
-            }
-            continue;
-        }
-        match ch {
-            '"' if field.is_empty() => quoted = true,
-            ',' => row.push(std::mem::take(&mut field)),
-            '\r' => {}
-            '\n' => {
-                row.push(std::mem::take(&mut field));
-                rows.push(std::mem::take(&mut row));
-                started = false;
-            }
-            _ => field.push(ch),
-        }
-    }
-    if started || !field.is_empty() {
-        row.push(field);
-        rows.push(row);
-    }
-    rows
+    vellum_strings::interpolate(template, args)
 }
 
 /// Looks up a localised string by literal ID.
@@ -342,6 +276,14 @@ macro_rules! trf {
 mod tests {
     use super::*;
 
+    // The reader itself is shared, but the behaviour murmur's strings.csv
+    // relies on is asserted here too. An engine change that broke quoting
+    // should fail in the game that depends on it, not only in the crate that
+    // made it.
+    fn parse_csv(source: &str) -> Vec<Vec<String>> {
+        vellum_strings::parse_csv(source).expect("well-formed CSV")
+    }
+
     #[test]
     fn parses_quoted_fields_and_embedded_commas() {
         let rows =
@@ -353,6 +295,16 @@ mod tests {
     #[test]
     fn trailing_newline_does_not_make_a_phantom_row() {
         assert_eq!(parse_csv("id,context,english\n").len(), 1);
+    }
+
+    /// The shared reader is stricter than the one it replaced: malformed CSV
+    /// is refused rather than absorbed into plausible-looking rubbish.
+    #[test]
+    fn malformed_csv_is_rejected_rather_than_guessed_at() {
+        assert!(matches!(
+            Catalogue::parse("id,context,english\na.b,note,\"never closed"),
+            Err(LocError::Malformed { .. })
+        ));
     }
 
     #[test]

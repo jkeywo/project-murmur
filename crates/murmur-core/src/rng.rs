@@ -2,10 +2,20 @@
 //!
 //! The simulation must produce identical results for one mission seed on
 //! every platform (x86_64 native and wasm32), across compiler versions, and
-//! across releases of third-party crates. To guarantee that, Murmur carries
-//! its own small PCG32 implementation instead of depending on the `rand`
-//! ecosystem, and all randomness flows from a mission seed through named
-//! streams (see [`Stream`]).
+//! across releases of third-party crates. To guarantee that, Murmur uses a
+//! small PCG32 rather than the `rand` ecosystem, and all randomness flows from
+//! a mission seed through named streams (see [`Stream`]).
+//!
+//! The arithmetic lives in `vellum-rng`, shared with the other game that wrote
+//! the same generator for the same reason. The *layout* stays here: this type
+//! is a field of [`World`](crate::world::World), and `World`'s RON text is the
+//! mission fingerprint, so its shape is part of the save format. The shared
+//! crate is borrowed a draw at a time rather than stored.
+//!
+//! Note that the bounded draw is Lemire's multiply-and-shift, and the other
+//! game's is a remainder. They compute the same rejection threshold, which
+//! makes them look interchangeable in a diff; they are not, and swapping them
+//! would change every value every mission draws.
 
 use serde::{Deserialize, Serialize};
 
@@ -39,8 +49,6 @@ pub struct Pcg32 {
     inc: u64,
 }
 
-const PCG_MULT: u64 = 6364136223846793005;
-
 impl Pcg32 {
     /// Creates the generator for one named stream of a mission seed.
     pub fn for_stream(mission_seed: u64, stream: Stream) -> Self {
@@ -49,40 +57,37 @@ impl Pcg32 {
 
     /// Creates a generator from a seed and an arbitrary stream selector.
     pub fn new(seed: u64, stream: u64) -> Self {
-        let inc = (stream << 1) | 1;
-        let mut rng = Self { state: 0, inc };
-        rng.step();
-        rng.state = rng.state.wrapping_add(seed);
-        rng.step();
-        rng
-    }
-
-    fn step(&mut self) {
-        self.state = self.state.wrapping_mul(PCG_MULT).wrapping_add(self.inc);
+        let (state, inc) = vellum_rng::Pcg32::canonical(seed, stream).into_parts();
+        Self { state, inc }
     }
 
     /// Returns the next 32 uniformly distributed bits.
     pub fn next_u32(&mut self) -> u32 {
-        let old = self.state;
-        self.step();
-        let xorshifted = (((old >> 18) ^ old) >> 27) as u32;
-        let rot = (old >> 59) as u32;
-        xorshifted.rotate_right(rot)
+        self.borrow(vellum_rng::Pcg32::next_u32)
     }
 
     /// Returns a uniform value in `0..bound` (`bound` must be non-zero).
     ///
-    /// Uses Lemire-style rejection to avoid modulo bias.
+    /// Uses Lemire-style multiply-and-shift. Not interchangeable with the
+    /// remainder-based draw the other game uses: for the same state the two
+    /// return different values, which is why the shared crate keeps both under
+    /// their own names rather than offering one `below`.
     pub fn below(&mut self, bound: u32) -> u32 {
         debug_assert!(bound > 0, "Pcg32::below requires a non-zero bound");
-        let threshold = bound.wrapping_neg() % bound;
-        loop {
-            let value = self.next_u32();
-            let mul = u64::from(value) * u64::from(bound);
-            if (mul as u32) >= threshold {
-                return (mul >> 32) as u32;
-            }
-        }
+        self.borrow(|rng| rng.below_lemire(bound))
+    }
+
+    /// Run one draw on the shared generator and take the advanced state back.
+    ///
+    /// The fields stay here rather than being replaced by
+    /// `vellum_rng::Pcg32`, because this struct is a field of `World` and
+    /// `World`'s RON text *is* the mission fingerprint. The layout is part of
+    /// the save format; only the arithmetic is shared.
+    fn borrow<T>(&mut self, draw: impl FnOnce(&mut vellum_rng::Pcg32) -> T) -> T {
+        let mut rng = vellum_rng::Pcg32::from_parts(self.state, self.inc);
+        let result = draw(&mut rng);
+        (self.state, self.inc) = rng.into_parts();
+        result
     }
 
     /// Returns a uniform value in the inclusive range `lo..=hi`.
@@ -118,10 +123,7 @@ impl Pcg32 {
 /// SplitMix64, used to derive successor mission seeds from a previous seed so
 /// "play again" stays reproducible from the first seed of a session.
 pub fn split_mix_64(seed: u64) -> u64 {
-    let mut z = seed.wrapping_add(0x9E3779B97F4A7C15);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D049BB133111EB);
-    z ^ (z >> 31)
+    vellum_rng::split_mix_64(seed)
 }
 
 #[cfg(test)]

@@ -6,8 +6,16 @@ repository.workspace = true
 description = "Deterministic discrete-turn simulation core for Project Murmur."
 
 [dependencies]
+vellum-digest = { workspace = true }
+vellum-grid = { workspace = true }
+vellum-replay = { workspace = true }
+vellum-rng = { workspace = true }
+vellum-strings = { workspace = true }
 serde = { workspace = true }
 ron = { workspace = true }
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[dev-dependencies]
+vellum-replay = { workspace = true, features = ["testkit"] }

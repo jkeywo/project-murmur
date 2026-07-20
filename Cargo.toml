@@ -5,6 +5,7 @@ members = [
   "crates/murmur-campaign",
   "crates/murmur-shell",
   "crates/murmur-native",
+  "crates/murmur-cli",
   "crates/murmur-web",
 ]
 # murmur-web only builds for wasm32; keep it out of default native builds.
@@ -13,6 +14,7 @@ default-members = [
   "crates/murmur-campaign",
   "crates/murmur-shell",
   "crates/murmur-native",
+  "crates/murmur-cli",
 ]
 
 [workspace.package]
@@ -27,7 +29,17 @@ murmur-shell = { path = "crates/murmur-shell" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 ron = "0.12"
+# Shared engine layer, pinned to a rev. Bumping it is a PR whose diff
+# touches nothing but this file and Cargo.lock; anything else means the
+# engine changed behaviour. For local work against a checkout, use a
+# gitignored .cargo/config.toml [patch] -- see vellum's README.
+vellum-digest = { git = "https://github.com/jkeywo/vellum", rev = "1e18ad1bc16e3c6c546ab9200e13a05a5819e05c", features = ["ron-digest"] }
+vellum-grid = { git = "https://github.com/jkeywo/vellum", rev = "1e18ad1bc16e3c6c546ab9200e13a05a5819e05c" }
+vellum-replay = { git = "https://github.com/jkeywo/vellum", rev = "1e18ad1bc16e3c6c546ab9200e13a05a5819e05c" }
+vellum-rng = { git = "https://github.com/jkeywo/vellum", rev = "1e18ad1bc16e3c6c546ab9200e13a05a5819e05c" }
+vellum-strings = { git = "https://github.com/jkeywo/vellum", rev = "1e18ad1bc16e3c6c546ab9200e13a05a5819e05c" }
 ratatui = { version = "0.30", default-features = false }
+clap = { version = "4", features = ["derive"] }
 
 [profile.release]
 # Web delivery cares about payload size; the sim is cheap enough that this

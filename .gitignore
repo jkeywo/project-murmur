@@ -31,3 +31,9 @@ pasm-reports/
 
 # Trunk build output
 crates/murmur-web/dist/
+
+# Local override pointing vellum at a sibling checkout, for working on the
+# engine and this game together. Never committed: a checked-in override would
+# make CI build whatever happened to be on disk instead of the pinned rev,
+# which is the one thing that makes pinning a rev worthless.
+.cargo/config.toml

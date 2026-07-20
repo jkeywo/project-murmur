@@ -30,6 +30,14 @@ wheels = [
 ]
 
 [[package]]
+name = "pasm"
+version = "0.1.0"
+source = { git = "https://github.com/jkeywo/pasm?rev=de8a7bfce3aefa799eea51f8e5a2708e996e8b6e#de8a7bfce3aefa799eea51f8e5a2708e996e8b6e" }
+dependencies = [
+    { name = "pyyaml" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -39,11 +47,11 @@ wheels = [
 ]
 
 [[package]]
-name = "project-murmur-pasm"
+name = "project-murmur-tooling"
 version = "0.1.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
-    { name = "pyyaml" },
+    { name = "pasm" },
 ]
 
 [package.dev-dependencies]
@@ -52,7 +60,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pyyaml", specifier = ">=6.0" }]
+requires-dist = [{ name = "pasm", git = "https://github.com/jkeywo/pasm?rev=de8a7bfce3aefa799eea51f8e5a2708e996e8b6e" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]
