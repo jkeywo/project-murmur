@@ -43,7 +43,7 @@ pub fn draw_mission(frame: &mut Frame, data: &GameData, mission: &Mission) -> Ui
     // Overlays draw last, over the map they explain. Help is reachable at
     // any point in a run: the key list should never be something you have
     // to abandon a mission to read.
-    if mission.mode == InputMode::Help {
+    if *mission.mode() == InputMode::Help {
         // Over the whole frame, not just the map: the list has to fit
         // without scrolling on the shortest terminal we support, and
         // nothing behind it is worth reading while it is up.
@@ -273,13 +273,13 @@ fn tile_cell(
 
 fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, ui: &mut UiLayout) {
     let world = mission.world();
-    let focus = match &mission.mode {
+    let focus = match mission.mode() {
         InputMode::Look(cursor) => *cursor,
         InputMode::ThrowTarget(cursor) => *cursor,
         InputMode::TargetSelect { candidates, index } => world.actor(candidates[*index]).pos,
         _ => world.player_actor().pos,
     };
-    let visible: HashSet<Pos> = mission.visible_tiles(data).into_iter().collect();
+    let visible: HashSet<Pos> = crate::fov::visible_tiles(world, data).into_iter().collect();
 
     // Inspecting a visible NPC overlays every tile they can currently see.
     let inspected = mission.inspected_tile();
@@ -309,7 +309,7 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
     ui.map_h = rows as u16;
     ui.origin = Some(Pos::new(focus.floor, origin_x as i16, origin_y as i16));
 
-    let selected = inspected.or(match &mission.mode {
+    let selected = inspected.or(match mission.mode() {
         InputMode::TargetSelect { candidates, index } => Some(world.actor(candidates[*index]).pos),
         _ => None,
     });
@@ -365,7 +365,7 @@ fn log_style(kind: LogKind) -> Style {
 
 fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
-    match &mission.mode {
+    match mission.mode() {
         InputMode::Pending(action) => {
             lines.push(Line::styled(
                 action.prompt().to_string(),
@@ -404,7 +404,7 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
             if let Some(slot) = mission.inspected_slot_text(data) {
                 lines.push(Line::styled(slot, Style::default().fg(Color::LightCyan)));
             } else if let Some(pos) = mission.inspected_tile() {
-                let visible = mission.visible_tiles(data).contains(&pos);
+                let visible = crate::fov::visible_tiles(mission.world(), data).contains(&pos);
                 lines.push(Line::styled(
                     trf!(
                         "ui.mission.here",
@@ -416,8 +416,8 @@ fn draw_log(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
         }
     }
     let budget = usize::from(area.height).saturating_sub(2 + lines.len());
-    let start = mission.log.len().saturating_sub(budget);
-    for entry in &mission.log[start..] {
+    let start = mission.log().len().saturating_sub(budget);
+    for entry in &mission.log()[start..] {
         lines.push(Line::styled(entry.display(), log_style(entry.kind)));
     }
     let block = Block::default()
@@ -621,7 +621,7 @@ fn draw_sidebar(
         tr!("ui.mission.insight.title"),
         Style::default().add_modifier(Modifier::UNDERLINED),
     ));
-    let seen = mission.visible_actors(data);
+    let seen = crate::fov::visible_actors(world, data);
     if seen.is_empty() {
         lines.push(Line::styled(
             tr!("ui.mission.insight.nobody"),
@@ -727,7 +727,7 @@ fn draw_sidebar(
         Style::default().fg(Color::DarkGray),
     ));
     lines.push(Line::styled(
-        trf!("ui.mission.footer.speed", speed = mission.speed.label()),
+        trf!("ui.mission.footer.speed", speed = mission.speed().label()),
         Style::default().fg(Color::DarkGray),
     ));
 

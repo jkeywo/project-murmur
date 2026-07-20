@@ -10,12 +10,10 @@
 //! resumes it on exit, so the player is never left in an invisible paused
 //! state.
 
-use std::collections::HashSet;
-
 use murmur_core::actions::{ActionResult, Command};
 use murmur_core::data::GameData;
 use murmur_core::geom::{Dir4, Pos};
-use murmur_core::map::{TileKind, line_of_sight, tiles_visible_from};
+use murmur_core::map::TileKind;
 use murmur_core::path::first_step_towards;
 use murmur_core::turn::{TurnDriver, TurnReport};
 use murmur_core::world::{ActorId, FurnitureKind, Hands, World};
@@ -215,35 +213,36 @@ impl UiLayout {
     }
 }
 
+/// The in-mission controller. Its public face is deliberately narrow:
+/// input in ([`Mission::handle_input`]), frames out ([`Mission::draw`]),
+/// time via [`Mission::tick`] — plus read-only accessors naming exactly
+/// what a frame or a test needs. The representation is private; the
+/// renderer and the tests cannot reach past the surface.
 pub struct Mission {
-    pub driver: TurnDriver,
-    pub queue: CommandQueue,
-    pub mode: InputMode,
-    pub speed: Speed,
-    pub log: Vec<LogEntry>,
+    driver: TurnDriver,
+    queue: CommandQueue,
+    mode: InputMode,
+    speed: Speed,
+    log: Vec<LogEntry>,
     /// The map tile under the mouse cursor, for hover inspection.
-    pub hover: Option<Pos>,
+    hover: Option<Pos>,
     /// Last frame's layout, for mouse hit-testing.
-    pub ui: UiLayout,
+    ui: UiLayout,
     /// A confirmed prompt waiting for the shell to act on it.
     confirmed: Option<ConfirmAction>,
     /// The inventory slot the player last asked about, shown in the
     /// inspection line until they look at something else.
     inspected_slot: Option<usize>,
-    explored: Vec<Vec<bool>>,
+    explored: crate::fov::Explored,
     frame: u64,
     /// Hold-to-wait: the shell submits Wait turns on the player's behalf
     /// until something worth reacting to happens or any key is pressed.
-    pub fast_forward: bool,
+    fast_forward: bool,
 }
 
 impl Mission {
     pub fn new(driver: TurnDriver, data: &GameData) -> Self {
-        let world = driver.world();
-        let floor_len = usize::from(world.map.width()) * usize::from(world.map.height());
-        let explored = (0..world.map.floor_count())
-            .map(|_| vec![false; floor_len])
-            .collect();
+        let explored = crate::fov::Explored::new(&driver.world().map);
         let mut mission = Self {
             driver,
             queue: CommandQueue::new(usize::from(data.tuning.queue_capacity)),
@@ -270,144 +269,43 @@ impl Mission {
         self.driver.world()
     }
 
+    pub fn mode(&self) -> &InputMode {
+        &self.mode
+    }
+
+    pub fn speed(&self) -> Speed {
+        self.speed
+    }
+
+    pub fn log(&self) -> &[LogEntry] {
+        &self.log
+    }
+
+    pub fn queue(&self) -> &CommandQueue {
+        &self.queue
+    }
+
+    pub fn ui(&self) -> &UiLayout {
+        &self.ui
+    }
+
+    pub fn hover(&self) -> Option<Pos> {
+        self.hover
+    }
+
     /// Renders the mission and caches the layout for mouse hit-testing.
     pub fn draw(&mut self, frame: &mut ratatui::Frame, data: &GameData) {
         self.ui = crate::render::draw_mission(frame, data, self);
     }
 
     pub fn is_explored(&self, pos: Pos) -> bool {
-        let world = self.driver.world();
-        if !world.map.in_bounds(pos) {
-            return false;
-        }
-        let index = usize::try_from(pos.y).unwrap() * usize::from(world.map.width())
-            + usize::try_from(pos.x).unwrap();
-        self.explored[usize::from(pos.floor)][index]
-    }
-
-    /// The player's current field of view, widened so that every
-    /// sight-blocking tile bordering a visible open tile is lit too:
-    /// standing against a wall shows the whole wall face, matching how a
-    /// person actually reads a room.
-    pub fn visible_tiles(&self, data: &GameData) -> Vec<Pos> {
-        let world = self.driver.world();
-        let player = world.player_actor();
-        let base = tiles_visible_from(
-            player.pos,
-            data.tuning.player_vision_range,
-            &world.map,
-            world.sight_blocker(player.crouched),
-        );
-        let mut lit: HashSet<Pos> = base.iter().copied().collect();
-        // Classify blockers without crouch effects: walls, closed doors,
-        // and tall furniture, not low cover.
-        let blocking = world.sight_blocker(false);
-        for pos in &base {
-            if blocking(*pos) {
-                continue;
-            }
-            for dy in -1i16..=1 {
-                for dx in -1i16..=1 {
-                    let neighbour = Pos::new(pos.floor, pos.x + dx, pos.y + dy);
-                    if world.map.in_bounds(neighbour) && blocking(neighbour) {
-                        lit.insert(neighbour);
-                    }
-                }
-            }
-        }
-        lit.into_iter().collect()
-    }
-
-    /// Living NPCs the player can currently see, nearest first.
-    pub fn visible_actors(&self, data: &GameData) -> Vec<ActorId> {
-        let world = self.driver.world();
-        let player = world.player_actor();
-        let mut ids: Vec<(i16, ActorId)> = world
-            .actors
-            .iter()
-            .filter(|a| !a.is_player() && a.alive() && !a.departed && a.hidden_in.is_none())
-            .filter(|a| {
-                player
-                    .pos
-                    .chebyshev(a.pos)
-                    .is_some_and(|d| d <= data.tuning.player_vision_range)
-                    && line_of_sight(
-                        player.pos,
-                        a.pos,
-                        world.sight_blocker(player.crouched || a.crouched),
-                    )
-            })
-            .map(|a| (player.pos.chebyshev(a.pos).unwrap_or(i16::MAX), a.id))
-            .collect();
-        ids.sort();
-        ids.into_iter().map(|(_, id)| id).collect()
+        self.explored.contains(&self.driver.world().map, pos)
     }
 
     /// What the last-asked-about inventory slot holds, if any.
-    ///
-    /// Items are passive: carrying one is what enables its verb, so the
-    /// useful thing to report is which key it unlocks rather than a flavour
-    /// line. The key names come from the keymap table, so this description
-    /// follows any rebinding automatically.
     pub fn inspected_slot_text(&self, data: &GameData) -> Option<String> {
         let slot = self.inspected_slot?;
-        let world = self.world();
-        let Some(item) = world.carried_items(world.player).nth(slot) else {
-            return Some(trf!("ui.mission.slot_line.empty", n = slot + 1));
-        };
-        let Some(spec) = data.item(&item.spec) else {
-            return Some(murmur_core::loc::fmt(
-                "ui.mission.slot_line.unknown",
-                &[("n", &(slot + 1).to_string()), ("id", &item.spec)],
-            ));
-        };
-        let mut notes: Vec<String> = Vec::new();
-        let mut enables = |key: char| {
-            if let Some(action) = crate::keymap::action(key) {
-                notes.push(murmur_core::loc::fmt(
-                    "ui.mission.item.enables",
-                    &[("action", action.label()), ("key", &action.key.to_string())],
-                ));
-            }
-        };
-        if spec.firearm {
-            enables('f');
-        } else if spec.weapon {
-            enables('g');
-        }
-        if spec.lockpick {
-            enables('l');
-        }
-        if spec.noisemaker {
-            enables('t');
-        }
-        if spec.invitation {
-            notes.push(tr!("ui.mission.item.invitation").to_string());
-        }
-        if spec.staff_pass {
-            notes.push(tr!("ui.mission.item.staff_pass").to_string());
-        }
-        if spec.master_key {
-            notes.push(tr!("ui.mission.item.master_key").to_string());
-        } else if spec.unlocks.is_some() {
-            notes.push(tr!("ui.mission.item.one_lock").to_string());
-        }
-        if item.charges > 0 {
-            notes.push(trf!("ui.mission.item.charges", count = item.charges));
-        }
-        let detail = if notes.is_empty() {
-            tr!("ui.mission.item.no_use").to_string()
-        } else {
-            notes.join(", ")
-        };
-        Some(murmur_core::loc::fmt(
-            "ui.mission.slot_line",
-            &[
-                ("n", &(slot + 1).to_string()),
-                ("name", &spec.name),
-                ("detail", &detail),
-            ],
-        ))
+        crate::inspect::slot_text(self.world(), data, slot)
     }
 
     /// The tile currently being inspected: the look cursor when look mode
@@ -586,143 +484,14 @@ impl Mission {
     /// are always available; targeted ones grey out and, if pressed,
     /// report why rather than entering a dead targeting mode.
     pub fn action_available(&self, data: &GameData, key: char) -> bool {
-        self.action_block(data, key).is_none()
-    }
-
-    /// The reason a targeted action cannot be attempted right now, or
-    /// `None` when it is available (or is a non-targeted action).
-    fn action_block(&self, data: &GameData, key: char) -> Option<&'static str> {
-        let world = self.world();
-        let player = world.player_actor();
-        let here = player.pos;
-        // Own tile plus the four orthogonal neighbours — the reach of
-        // every adjacency-based command.
-        let near = |probe: &dyn Fn(Pos) -> bool| {
-            probe(here) || Dir4::ALL.into_iter().any(|d| probe(here.step(d)))
-        };
-        let carries = |pred: &dyn Fn(&murmur_core::data::ItemSpec) -> bool| {
-            world
-                .carried_items(world.player)
-                .any(|i| data.item(&i.spec).is_some_and(pred))
-        };
-        let living_npc = |p: Pos| {
-            world
-                .standing_actor_at(p)
-                .is_some_and(|a| !a.is_player() && a.alive())
-        };
-
-        match key {
-            'r' => (!carries(&|s| s.firearm)).then_some(tr!("mission.block.no_firearm_owned")),
-            'g' => {
-                if !carries(&|s| s.weapon && !s.firearm) {
-                    Some(tr!("mission.block.no_garrote"))
-                } else if !near(&living_npc) {
-                    Some(tr!("mission.block.no_garrote_target"))
-                } else {
-                    None
-                }
-            }
-            'f' => {
-                if !carries(&|s| s.firearm) {
-                    Some(tr!("mission.block.no_firearm"))
-                } else if self.visible_actors(data).is_empty() {
-                    Some(tr!("mission.block.no_target"))
-                } else {
-                    None
-                }
-            }
-            'p' => {
-                if world.carried_items(world.player).count()
-                    >= murmur_core::actions::INVENTORY_SLOTS
-                {
-                    Some(tr!("mission.block.pockets_full"))
-                } else if !near(&|p| {
-                    world.standing_actor_at(p).is_some_and(|a| !a.is_player())
-                        || world.body_at(p).is_some()
-                }) {
-                    Some(tr!("mission.block.no_mark"))
-                } else {
-                    None
-                }
-            }
-            'd' => {
-                if player.hands != Hands::Free {
-                    Some(tr!("mission.block.hands_busy"))
-                } else if !near(&|p| {
-                    world.body_at(p).is_some()
-                        || world.furniture_at(p).is_some_and(|f| {
-                            f.kind == FurnitureKind::Wardrobe && f.disguise.is_some()
-                        })
-                }) {
-                    Some(tr!("mission.block.no_clothes"))
-                } else {
-                    None
-                }
-            }
-            'b' => {
-                if matches!(player.hands, Hands::CarryingBody(_)) {
-                    None // drop is available
-                } else if player.hands != Hands::Free {
-                    Some(tr!("mission.block.hands_busy"))
-                } else if !near(&|p| world.body_at(p).is_some()) {
-                    Some(tr!("mission.block.no_body"))
-                } else {
-                    None
-                }
-            }
-            'h' => {
-                if !matches!(player.hands, Hands::CarryingBody(_)) {
-                    Some(tr!("mission.block.not_carrying"))
-                } else if !near(&|p| {
-                    world
-                        .furniture_at(p)
-                        .is_some_and(|f| f.kind == FurnitureKind::Container && f.body.is_none())
-                }) {
-                    Some(tr!("mission.block.no_container"))
-                } else {
-                    None
-                }
-            }
-            'o' => (!near(
-                &|p| matches!(world.map.tile(p), TileKind::Door(id) if !world.door(id).open),
-            ))
-            .then_some(tr!("mission.block.no_door_to_open")),
-            'k' => {
-                (!near(&|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).open)))
-                    .then_some(tr!("mission.block.no_door_to_close"))
-            }
-            'l' => {
-                if !carries(&|s| s.lockpick) {
-                    Some(tr!("mission.block.no_lockpicks"))
-                } else if !near(
-                    &|p| matches!(world.map.tile(p), TileKind::Door(id) if world.door(id).locked_by.is_some()),
-                ) {
-                    Some(tr!("mission.block.no_lock"))
-                } else {
-                    None
-                }
-            }
-            't' => {
-                let ready = world
-                    .carried_items(world.player)
-                    .any(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker) && i.charges > 0);
-                (!ready).then_some(tr!("mission.block.no_charges"))
-            }
-            'u' => (!near(&|p| {
-                world
-                    .furniture_at(p)
-                    .is_some_and(|f| f.kind == FurnitureKind::Machine && !f.used)
-            }))
-            .then_some(tr!("mission.block.nothing_to_use")),
-            _ => None,
-        }
+        crate::availability::action_block(self.world(), data, key).is_none()
     }
 
     fn handle_normal(&mut self, data: &GameData, input: ShellInput) {
         // Targeted actions with no valid target report why instead of
         // entering a dead targeting mode.
         if let ShellInput::Char(key) = input
-            && let Some(reason) = self.action_block(data, key)
+            && let Some(reason) = crate::availability::action_block(self.world(), data, key)
         {
             self.push_log_kind(
                 trf!("mission.notice.blocked", reason = reason),
@@ -764,7 +533,7 @@ impl Mission {
                 }
             }
             ShellInput::Char('f') => {
-                let candidates = self.visible_actors(data);
+                let candidates = crate::fov::visible_actors(self.world(), data);
                 if candidates.is_empty() {
                     self.push_log_kind(tr!("mission.block.no_target").to_string(), LogKind::Notice);
                 } else {
@@ -1146,132 +915,12 @@ impl Mission {
     }
 
     fn update_explored(&mut self, data: &GameData) {
-        let width = usize::from(self.driver.world().map.width());
-        for pos in self.visible_tiles(data) {
-            let index = usize::try_from(pos.y).unwrap() * width + usize::try_from(pos.x).unwrap();
-            self.explored[usize::from(pos.floor)][index] = true;
-        }
+        self.explored.extend_visible(self.driver.world(), data);
     }
 
     /// A one-line description of an inspected tile, honest about what the
     /// player can currently see.
     pub fn describe(&self, data: &GameData, pos: Pos, visible: bool) -> String {
-        let world = self.world();
-        if !visible && !self.is_explored(pos) {
-            return tr!("ui.mission.tile.unseen").to_string();
-        }
-        let mut parts: Vec<String> = Vec::new();
-        if let Some(room) = world.room_at(pos) {
-            let zone_label = data
-                .venue(&world.venue)
-                .map(|v| v.zone_label(room.zone))
-                .unwrap_or_else(|| room.zone.name());
-            parts.push(murmur_core::loc::fmt(
-                "ui.mission.tile.room",
-                &[("room", &room.name), ("zone", zone_label)],
-            ));
-        } else if matches!(world.map.tile(pos), TileKind::Floor | TileKind::Stairs(_)) {
-            parts.push(tr!("ui.mission.tile.corridor").to_string());
-        }
-        match world.map.tile(pos) {
-            TileKind::Wall => parts.push(tr!("ui.mission.tile.wall").to_string()),
-            TileKind::Stairs(_) => parts.push(tr!("ui.mission.tile.stairs").to_string()),
-            TileKind::Door(id) => {
-                let door = world.door(id);
-                let state = if door.open {
-                    tr!("ui.mission.tile.door.open")
-                } else {
-                    tr!("ui.mission.tile.door.closed")
-                };
-                if door.locked_by.is_some() {
-                    parts.push(trf!("ui.mission.tile.door.locked", state = state));
-                } else {
-                    parts.push(state.to_string());
-                }
-            }
-            _ => {}
-        }
-        if world.extraction_tiles.contains(&pos) {
-            parts.push(tr!("ui.mission.tile.exit").to_string());
-        }
-        if visible {
-            if let Some(actor) = world.standing_actor_at(pos) {
-                let role = actor
-                    .role
-                    .map(|r| r.name().to_string())
-                    .unwrap_or_else(|| tr!("ui.mission.tile.you").to_string());
-                let mood = actor
-                    .ai
-                    .as_ref()
-                    .map(|ai| ai.mood.label())
-                    .unwrap_or_default();
-                if actor.is_target {
-                    parts.push(murmur_core::loc::fmt(
-                        "ui.mission.tile.target",
-                        &[("name", &actor.name), ("role", &role), ("mood", mood)],
-                    ));
-                } else if actor.is_player() {
-                    parts.push(tr!("ui.mission.tile.you").to_string());
-                } else {
-                    parts.push(murmur_core::loc::fmt(
-                        "ui.mission.tile.actor",
-                        &[("name", &actor.name), ("role", &role), ("mood", mood)],
-                    ));
-                }
-            }
-            if let Some(body) = world.body_at(pos) {
-                parts.push(trf!("ui.mission.tile.body", name = body.name));
-            }
-            for item in world.items_at(pos) {
-                if let Some(spec) = data.item(&item.spec) {
-                    parts.push(spec.name.clone());
-                }
-            }
-            if let Some(furniture) = world.furniture_at(pos) {
-                let described = match furniture.kind {
-                    FurnitureKind::LowCover => tr!("ui.mission.tile.low_cover").to_string(),
-                    FurnitureKind::Container => {
-                        if furniture.body.is_some() {
-                            tr!("ui.mission.tile.container_full").to_string()
-                        } else {
-                            tr!("ui.mission.tile.container").to_string()
-                        }
-                    }
-                    FurnitureKind::Wardrobe => match &furniture.disguise {
-                        Some(d) => trf!(
-                            "ui.mission.tile.wardrobe",
-                            disguise = data.disguise(d).map(|s| s.name.as_str()).unwrap_or(d)
-                        ),
-                        None => tr!("ui.mission.tile.wardrobe_empty").to_string(),
-                    },
-                    FurnitureKind::Machine => {
-                        let spec = furniture
-                            .machine
-                            .as_deref()
-                            .and_then(|id| data.opportunity(id));
-                        match spec {
-                            Some(spec) if furniture.used => {
-                                trf!("ui.mission.tile.machine_spent", name = spec.name)
-                            }
-                            Some(spec) => murmur_core::loc::fmt(
-                                "ui.mission.tile.machine",
-                                &[
-                                    ("name", &spec.name),
-                                    ("presentation", &spec.presentation),
-                                    ("risk", &spec.risk),
-                                ],
-                            ),
-                            None => tr!("ui.mission.tile.machinery").to_string(),
-                        }
-                    }
-                };
-                parts.push(described);
-            }
-        }
-        if parts.is_empty() {
-            tr!("ui.mission.tile.nothing").to_string()
-        } else {
-            parts.join(", ")
-        }
+        crate::inspect::describe(self.world(), data, pos, visible, self.is_explored(pos))
     }
 }

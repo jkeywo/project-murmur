@@ -184,15 +184,15 @@ entities:
       references: [ascii-presentation, perception-model]
     implementation:
       status: declared
-      paths: [crates/murmur-shell/src/mission.rs]
+      paths: [crates/murmur-shell/src/fov.rs]
       symbols: [visible_tiles]
     evidence:
       - kind: playtest
         reference: round-one-feedback
         summary: Owner asked that standing against a wall reveals the whole wall.
       - kind: decision-record
-        reference: crates/murmur-shell/src/mission.rs
-        summary: visible_tiles widening pass in the mission controller.
+        reference: crates/murmur-shell/src/fov.rs
+        summary: visible_tiles widening pass in the player-FOV module.
 
   - decision: mouse-inspection-and-clickable-actions
     core:
@@ -492,7 +492,7 @@ entities:
       references: [mission-outcome-rules, two-corridor-banded-realisation, ascii-presentation, campaign-death-ends-arrest-continues]
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/availability.rs, crates/murmur-shell/src/render.rs, crates/murmur-campaign/src/lib.rs]
       symbols: [action_available]
       tests: [crates/murmur-core/src/generator/mod.rs, crates/murmur-core/tests/gameplay.rs, crates/murmur-shell/src/lib.rs]
 
@@ -959,3 +959,19 @@ entities:
       paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-core/src/generator/proof.rs, crates/murmur-core/src/generator/populate.rs, crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/planner.rs, crates/murmur-core/src/contract.rs]
       symbols: [room_containing, room_at]
       tests: [crates/murmur-core/src/generator/mod.rs]
+
+  - decision: mission-controller-narrowed
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Mission Controller Has a Narrow Face
+      summary: Mission was eight concerns behind seven public fields and thirteen methods, and the fields were public because the renderer and the tests reached in. Three buried modules moved out to their own files - availability (the palette's action_block probe), fov (the player's widened field of view, the visible-actor list, and the exploration memory), and inspect (the tile and slot description prose) - and every Mission field went private behind read-only accessors naming exactly what a frame or a test needs (mode, speed, log, queue, ui, hover). The renderer calls the fov module directly for sight and the Mission surface for state; describe and inspected_slot_text stay Mission methods because they combine module prose with mission-owned state (exploration, the asked-about slot).
+      rationale:
+        - The public fields existed to serve render.rs and test assertions, which is backwards - the consumers now name what they need and the representation is nobody else's business.
+        - fov is presentation sight and deliberately separate from murmur-core's perception - one decides what the player is shown, the other what NPCs see - and the module docs on each side now say so.
+      references: [liberal-player-wall-visibility, single-cell-tiles-and-inspection, inventory-slots-are-inspectable-not-usable, keymap-is-one-table]
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/fov.rs, crates/murmur-shell/src/availability.rs, crates/murmur-shell/src/inspect.rs, crates/murmur-shell/src/render.rs]
+      symbols: [Mission, visible_tiles, visible_actors, action_block, describe]
+      tests: [crates/murmur-shell/src/lib.rs]

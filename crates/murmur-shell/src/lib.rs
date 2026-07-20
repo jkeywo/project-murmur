@@ -14,6 +14,9 @@
 //! dies and the campaign ends at a tally. The campaign autosaves through
 //! the injected [`CampaignStore`] after every hub-level change.
 
+mod availability;
+mod fov;
+mod inspect;
 pub mod keymap;
 pub mod mission;
 pub mod queue;
@@ -620,10 +623,10 @@ mod tests {
         assert!(mission(&shell).action_available(&data, '.'));
         // Pressing the unavailable key reports why and stays in normal
         // mode rather than entering a dead targeting prompt.
-        let before = mission(&shell).log.len();
+        let before = mission(&shell).log().len();
         shell.handle_input(ShellInput::Char('l'));
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
-        let log = &mission(&shell).log;
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Normal));
+        let log = &mission(&shell).log();
         assert!(log.len() > before);
         assert!(log.last().unwrap().text.contains("lockpicks"));
     }
@@ -682,10 +685,10 @@ mod tests {
             shell.handle_input(ShellInput::Char('.'));
         }
         let mission = mission(&shell);
-        assert_eq!(mission.queue.len(), 32, "exactly 32 commands fit");
+        assert_eq!(mission.queue().len(), 32, "exactly 32 commands fit");
         assert!(
             mission
-                .log
+                .log()
                 .iter()
                 .any(|line| line.text.contains("can't plan any further")),
             "overflow is reported without queue jargon"
@@ -698,17 +701,17 @@ mod tests {
         start_mission(&mut shell);
         shell.handle_input(ShellInput::Char(' '));
         assert_eq!(
-            mission(&shell).queue.head(),
+            mission(&shell).queue().head(),
             Some(&Command::Wait),
             "space is wait, not a pause toggle"
         );
         shell.handle_input(ShellInput::Up);
-        assert_eq!(mission(&shell).queue.len(), 2);
+        assert_eq!(mission(&shell).queue().len(), 2);
         shell.handle_input(ShellInput::Backspace);
-        assert_eq!(mission(&shell).queue.len(), 1);
-        assert_eq!(mission(&shell).queue.head(), Some(&Command::Wait));
+        assert_eq!(mission(&shell).queue().len(), 1);
+        assert_eq!(mission(&shell).queue().head(), Some(&Command::Wait));
         shell.handle_input(ShellInput::Esc);
-        assert!(mission(&shell).queue.is_empty());
+        assert!(mission(&shell).queue().is_empty());
     }
 
     /// Round One bug: leaving look mode used to keep consumption paused,
@@ -719,18 +722,21 @@ mod tests {
         let mut shell = shell();
         start_mission(&mut shell);
         shell.handle_input(ShellInput::Char(';'));
-        assert!(mission(&shell).queue.is_paused());
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Look(_)));
+        assert!(mission(&shell).queue().is_paused());
+        assert!(matches!(
+            mission(&shell).mode(),
+            mission::InputMode::Look(_)
+        ));
         shell.handle_input(ShellInput::Up);
-        assert!(mission(&shell).queue.is_empty());
+        assert!(mission(&shell).queue().is_empty());
         for _ in 0..10 {
             shell.tick();
         }
         assert_eq!(mission(&shell).world().turn, 0);
         shell.handle_input(ShellInput::Esc);
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Normal));
         assert!(
-            !mission(&shell).queue.is_paused(),
+            !mission(&shell).queue().is_paused(),
             "leaving look mode must never strand the player in a paused state"
         );
         shell.handle_input(ShellInput::Char('.'));
@@ -748,17 +754,17 @@ mod tests {
         let mut shell = shell();
         start_mission(&mut shell);
         shell.handle_input(ShellInput::Char('?'));
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Help));
-        assert!(mission(&shell).queue.is_paused());
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Help));
+        assert!(mission(&shell).queue().is_paused());
         for _ in 0..10 {
             shell.tick();
         }
         assert_eq!(mission(&shell).world().turn, 0, "help holds the run still");
         // Any key at all closes it.
         shell.handle_input(ShellInput::Char('z'));
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Normal));
         assert!(
-            !mission(&shell).queue.is_paused(),
+            !mission(&shell).queue().is_paused(),
             "leaving help must never strand the player in a paused state"
         );
         shell.handle_input(ShellInput::Char('.'));
@@ -776,16 +782,16 @@ mod tests {
         start_mission(&mut shell);
         shell.handle_input(ShellInput::Char('Q'));
         assert!(
-            matches!(mission(&shell).mode, mission::InputMode::Confirm { .. }),
+            matches!(mission(&shell).mode(), mission::InputMode::Confirm { .. }),
             "Q must not end the run on its own"
         );
-        assert!(mission(&shell).queue.is_paused());
+        assert!(mission(&shell).queue().is_paused());
         // Anything that is not a yes declines.
         shell.handle_input(ShellInput::Char('n'));
         assert!(matches!(shell.screen(), Screen::Playing { .. }));
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Normal));
         assert!(
-            !mission(&shell).queue.is_paused(),
+            !mission(&shell).queue().is_paused(),
             "declining must never strand the player in a paused state"
         );
         shell.handle_input(ShellInput::Char('.'));
@@ -831,13 +837,13 @@ mod tests {
         for entry in keymap::ACTIONS {
             let mut shell = shell();
             start_mission(&mut shell);
-            let before_log = mission(&shell).log.len();
-            let before_queue = mission(&shell).queue.len();
+            let before_log = mission(&shell).log().len();
+            let before_queue = mission(&shell).queue().len();
             shell.handle_input(ShellInput::Char(entry.key));
             let after = mission(&shell);
-            let acted = !matches!(after.mode, mission::InputMode::Normal)
-                || after.queue.len() != before_queue
-                || after.log.len() != before_log;
+            let acted = !matches!(after.mode(), mission::InputMode::Normal)
+                || after.queue().len() != before_queue
+                || after.log().len() != before_log;
             assert!(
                 acted,
                 "key {:?} ({}) is in the keymap but handle_normal ignores it",
@@ -860,7 +866,7 @@ mod tests {
         for _ in 0..3 {
             shell.handle_input(ShellInput::Char('l'));
         }
-        let log = &mission(&shell).log;
+        let log = &mission(&shell).log();
         let last = log.last().unwrap();
         assert_eq!(last.count, 3, "three identical refusals are one entry");
         assert_eq!(last.kind, mission::LogKind::Notice);
@@ -870,7 +876,7 @@ mod tests {
         // A different message still starts a new entry.
         let entries = log.len();
         shell.handle_input(ShellInput::Char('g'));
-        assert!(mission(&shell).log.len() > entries);
+        assert!(mission(&shell).log().len() > entries);
     }
 
     /// Reading an inventory slot is inspection: it costs no time and
@@ -881,8 +887,8 @@ mod tests {
         start_mission(&mut shell);
         let data = shell.data().clone();
         shell.handle_input(ShellInput::Char('1'));
-        assert!(matches!(mission(&shell).mode, mission::InputMode::Normal));
-        assert!(mission(&shell).queue.is_empty());
+        assert!(matches!(mission(&shell).mode(), mission::InputMode::Normal));
+        assert!(mission(&shell).queue().is_empty());
         let text = mission(&shell).inspected_slot_text(&data);
         assert!(text.is_some_and(|t| t.contains("slot 1:")));
         for _ in 0..10 {
@@ -899,23 +905,23 @@ mod tests {
         terminal.draw(|frame| shell.draw(frame)).unwrap();
 
         let (row, x0, _, key) = *mission(&shell)
-            .ui
+            .ui()
             .actions
             .iter()
             .find(|(_, _, _, key)| *key == '.')
             .expect("wait is in the palette");
         assert_eq!(key, '.');
         shell.handle_input(ShellInput::MouseClick { column: x0, row });
-        assert_eq!(mission(&shell).queue.head(), Some(&Command::Wait));
+        assert_eq!(mission(&shell).queue().head(), Some(&Command::Wait));
 
-        let ui = mission(&shell).ui.clone();
+        let ui = mission(&shell).ui().clone();
         let origin = ui.origin.unwrap();
         let player_pos = mission(&shell).world().player_actor().pos;
         let column = ui.map_x + u16::try_from(player_pos.x - origin.x).unwrap();
         let row = ui.map_y + u16::try_from(player_pos.y - origin.y).unwrap();
         shell.handle_input(ShellInput::MouseMove { column, row });
-        assert_eq!(mission(&shell).hover, Some(player_pos));
-        assert!(!mission(&shell).queue.is_paused(), "hover never pauses");
+        assert_eq!(mission(&shell).hover(), Some(player_pos));
+        assert!(!mission(&shell).queue().is_paused(), "hover never pauses");
     }
 
     #[test]
@@ -986,7 +992,7 @@ mod tests {
 
         // Find a seen floor tile a few steps off, and the screen cell it
         // was drawn in.
-        let ui = mission(&shell).ui.clone();
+        let ui = mission(&shell).ui().clone();
         let origin = ui.origin.expect("the map was drawn");
         let start = mission(&shell).world().player_actor().pos;
         let goal = (2..6)
@@ -1000,7 +1006,7 @@ mod tests {
 
         shell.handle_input(ShellInput::MouseClick { column, row });
         assert_eq!(
-            mission(&shell).queue.head(),
+            mission(&shell).queue().head(),
             Some(&Command::Move(murmur_core::geom::Dir4::East)),
             "the click queues a single step along the path"
         );
