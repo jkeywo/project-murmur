@@ -27,7 +27,8 @@ mod screens;
 pub use hitmap::ScreenLayout;
 
 use murmur_campaign::{
-    CampaignState, CampaignStore, ContractOffer, MissionResolution, ResolutionSummary,
+    CampaignState, CampaignStore, ContractOffer, ContractResult, MissionResolution,
+    ResolutionSummary,
 };
 use murmur_core::data::GameData;
 use murmur_core::generator::generate;
@@ -347,17 +348,7 @@ impl Shell {
                 let index = usize::from(c as u8 - b'1');
                 let offers = self.campaign.offers(&self.data);
                 if let Some(offer) = offers.get(index).cloned() {
-                    // Default loadout: the first owned items, weapons first.
-                    let mut chosen: Vec<String> = Vec::new();
-                    let mut owned = self.campaign.owned_equipment.clone();
-                    owned.sort_by_key(|i| {
-                        std::cmp::Reverse(self.data.item(i).map(|s| s.weapon).unwrap_or(false))
-                    });
-                    for item in owned {
-                        if chosen.len() < murmur_core::contract::LOADOUT_SLOTS {
-                            chosen.push(item);
-                        }
-                    }
+                    let chosen = self.campaign.default_loadout(&self.data);
                     let Screen::Hub { accepting, .. } = &mut self.screen else {
                         unreachable!()
                     };
@@ -430,7 +421,9 @@ impl Shell {
     }
 
     /// Resolves the finished (or abandoned) mission into the campaign
-    /// and shows the debrief.
+    /// and shows the debrief. The campaign's verdict is the single
+    /// classification of how the mission ended; the headline is a pure
+    /// presentation reading of it.
     fn finish_mission(&mut self) {
         let Screen::Playing {
             mission,
@@ -441,27 +434,16 @@ impl Shell {
             return;
         };
         let world = mission.world();
-        let resolution = MissionResolution {
-            outcome: world.outcome.clone(),
-            breach_reason: world.constraint_breach.clone(),
-            mission_heat: world.mission_heat,
-            loadout,
-        };
-        let headline = match &resolution.outcome {
-            Some(murmur_core::world::MissionOutcome::Extracted)
-                if resolution.breach_reason.is_none() =>
-            {
-                DebriefHeadline::Completed
-            }
-            Some(murmur_core::world::MissionOutcome::Extracted) => DebriefHeadline::Breached,
-            Some(murmur_core::world::MissionOutcome::TargetEscaped) => {
-                DebriefHeadline::TargetEscaped
-            }
-            Some(murmur_core::world::MissionOutcome::Arrested) => DebriefHeadline::Arrested,
-            Some(murmur_core::world::MissionOutcome::PlayerKilled) => DebriefHeadline::Killed,
-            None => DebriefHeadline::Abandoned,
-        };
+        let resolution = MissionResolution::from_world(world, loadout);
         let summary = self.campaign.resolve(&self.data, &offer, &resolution);
+        let headline = match summary.result {
+            ContractResult::Completed => DebriefHeadline::Completed,
+            ContractResult::CompletedUnclean => DebriefHeadline::Breached,
+            ContractResult::TargetEscaped => DebriefHeadline::TargetEscaped,
+            ContractResult::Arrested => DebriefHeadline::Arrested,
+            ContractResult::Killed => DebriefHeadline::Killed,
+            ContractResult::Abandoned => DebriefHeadline::Abandoned,
+        };
         self.autosave();
         self.screen = Screen::Debrief {
             headline,

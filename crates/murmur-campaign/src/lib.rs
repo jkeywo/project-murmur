@@ -100,6 +100,19 @@ pub struct MissionResolution {
     pub loadout: Vec<ItemSpecId>,
 }
 
+impl MissionResolution {
+    /// Reads the finished (or abandoned) mission's facts out of the
+    /// world: the one construction point, so no caller field-plucks.
+    pub fn from_world(world: &murmur_core::world::World, loadout: Vec<ItemSpecId>) -> Self {
+        Self {
+            outcome: world.outcome.clone(),
+            breach_reason: world.constraint_breach.clone(),
+            mission_heat: world.mission_heat,
+            loadout,
+        }
+    }
+}
+
 /// What resolving a contract did, for the debrief screen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResolutionSummary {
@@ -190,6 +203,17 @@ impl CampaignState {
     /// Declines the current board; the next one differs.
     pub fn refresh_offers(&mut self) {
         self.offer_index += 1;
+    }
+
+    /// The loadout preselected when accepting a contract: the first
+    /// owned items, weapons first, up to the slot limit. Campaign
+    /// policy, not interface convenience — what an operative carries by
+    /// default is a rule of the trade.
+    pub fn default_loadout(&self, data: &GameData) -> Vec<ItemSpecId> {
+        let mut owned = self.owned_equipment.clone();
+        owned.sort_by_key(|i| std::cmp::Reverse(data.item(i).map(|s| s.weapon).unwrap_or(false)));
+        owned.truncate(murmur_core::contract::LOADOUT_SLOTS);
+        owned
     }
 
     /// Accepts an offer with a chosen loadout, producing the mission

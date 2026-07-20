@@ -991,3 +991,19 @@ entities:
       paths: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/lib.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/screens.rs]
       symbols: [ScreenLayout, UiLayout]
       tests: [crates/murmur-shell/src/hitmap.rs, crates/murmur-shell/src/screens.rs, crates/murmur-shell/src/lib.rs]
+
+  - decision: campaign-owns-its-rules
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Campaign Crate Owns Every Campaign Rule
+      summary: Two campaign rules had leaked into the shell. The outcome-to-result classification was written twice - the shell matched MissionOutcome plus breach into DebriefHeadline while campaign resolve matched the same inputs into ContractResult, two branchings in two crates that could disagree about how a mission ended - and the weapons-first default-loadout policy lived in the hub's input handler. The campaign's verdict is now the single classification, the shell's headline is a one-to-one presentation reading of ContractResult, default_loadout is a CampaignState method, and MissionResolution::from_world is the one construction point for the mission-to-campaign handoff so the shell no longer field-plucks World.
+      rationale:
+        - The debrief and the ledger reading different code paths for "how did this end" is exactly the drift breach-not-fail semantics cannot afford.
+        - What an operative carries by default is a rule of the trade, not an interface convenience; policy belongs with the other campaign policies it composes with.
+      references: [campaign-death-ends-arrest-continues, deterministic-contract-board, syndicate-desk-hub-flow, presentation-never-branches-on-text]
+    implementation:
+      status: declared
+      paths: [crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/lib.rs]
+      symbols: [default_loadout, from_world, ContractResult]
+      tests: [crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/lib.rs]
