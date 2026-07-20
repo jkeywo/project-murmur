@@ -63,11 +63,14 @@ enum Command {
         /// Fail if fewer than this many per-thousand missions are won.
         ///
         /// The default is a regression gate, not a target. The bot measures
-        /// around 536 permille over 960 missions; 450 leaves room for the
-        /// variance between one seed range and another while still catching a
-        /// venue that has stopped being finishable. Raise it as the bot
-        /// improves — never lower it to make a red run green.
-        #[arg(long, default_value_t = 450)]
+        /// around 593 permille over 960 missions since the getaway fix (a
+        /// clean kill is worth nothing if the bot loiters over the body
+        /// until the detail arrives — up from 536); 500 leaves room for the
+        /// variance between one seed range and another (a 320-seed sample
+        /// runs twenty-odd permille off the full figure) while still
+        /// catching a venue that has stopped being finishable. Raise it as
+        /// the bot improves — never lower it to make a red run green.
+        #[arg(long, default_value_t = 500)]
         min_win_permille: u32,
     },
 }

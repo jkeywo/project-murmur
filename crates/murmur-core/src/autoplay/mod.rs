@@ -35,7 +35,7 @@ use crate::geom::{Dir4, Pos};
 use crate::map::TileKind;
 use crate::turn::TurnDriver;
 use crate::world::{
-    ActorId, BodyCondition, FurnitureId, FurnitureKind, Hands, MissionOutcome, Mood, World,
+    ActorId, BodyCondition, FurnitureId, FurnitureKind, Hands, MissionOutcome, World,
 };
 
 /// Hard cap on turns. A mission that has not resolved by here is stalled in a
@@ -146,10 +146,6 @@ struct Bot {
     looted_bodies: Vec<ActorId>,
     looted_wardrobes: Vec<FurnitureId>,
 }
-
-/// How far the bot will carry a body to hide it. Short on purpose: see
-/// [`Bot::after_the_kill`].
-const STOW_RADIUS: i16 = 6;
 
 impl Bot {
     /// One decision: let a committed action run, else offer candidates
@@ -328,73 +324,25 @@ impl Bot {
     fn after_the_kill(&mut self, out: &mut Vec<Command>, world: &World, data: &GameData) {
         let player = world.player_actor();
 
-        // The one thing worth doing under threat: shut a body into whatever
-        // is already within arm's reach. It costs a single turn and it is
-        // what stops the corpse being found.
-        if matches!(player.hands, Hands::CarryingBody(_)) {
-            for id in empty_containers_beside(world, player.pos) {
-                out.push(Command::HideBody(id));
-            }
-        }
-
-        // Everything else about tidiness is for when nobody is looking. The
-        // kill itself is what raises the alarm, so the turns immediately
-        // after it are the most dangerous in the mission — standing over the
-        // body to rob it is how a won mission becomes a dead courier. When
-        // anyone nearby has stopped being relaxed, the exit is the only plan.
-        if alarm_nearby(world) {
-            self.walk_out(out, world, data);
-            return;
-        }
-
-        // Rob the corpse on the way past — free, and it exercises the loot
-        // path against a body rather than a live mark.
-        for dir in Dir4::ALL {
-            if let Some(body) = world.body_at(player.pos.step(dir)) {
-                out.push(Command::Pickpocket(body.id));
-                if !self.looted_bodies.contains(&body.id) {
-                    out.push(Command::TakeDisguiseFromBody(body.id));
-                }
-            }
-        }
-
-        // Hiding the body is worth exactly as much as it is close.
+        // The target dies on a private beat, and its detail is posted just
+        // outside the door on the escort-search clock. Those guards are
+        // Relaxed while they wait, so `alarm_nearby` does not see them, and
+        // a bot that stops to loot the corpse or haul it to a crate is
+        // still standing there when the detail comes in to look. Measured,
+        // that dawdling was the single largest loss in the corpus — a
+        // hundred and twenty-five permille of missions were clean kills
+        // followed by an arrest over the body. The getaway is the only
+        // plan the moment the target is down.
         //
-        // Carrying a corpse across the venue to find a crate was measured at
-        // seventy permille of missions lost: the detour happens in the most
-        // dangerous turns of the run, in whatever room the kill happened, with
-        // both hands full and no way to take another. Refusing to carry at all
-        // scores better than carrying far. So the bot only picks a body up
-        // when somewhere to put it is within [`STOW_RADIUS`], and otherwise
-        // leaves it where it fell and goes — worse for heat, much better for
-        // getting paid.
-        let stowable = nearest_empty_container(world, player.pos, STOW_RADIUS);
+        // The one concession is a body already in hand — a worker killed
+        // for its clothes on the way in. Drop it, or shut it into a crate
+        // if one is *adjacent* (a single turn, no detour), then go.
         if matches!(player.hands, Hands::CarryingBody(_)) {
-            match stowable {
-                Some(container) => {
-                    for dir in Dir4::ALL {
-                        if let Some(step) =
-                            first_step_staying_legal(world, data, container.step(dir))
-                        {
-                            out.push(Command::Move(step));
-                            break;
-                        }
-                    }
-                }
-                // Nothing close enough to be worth it. Put it down and go.
+            match empty_containers_beside(world, player.pos).first() {
+                Some(id) => out.push(Command::HideBody(*id)),
                 None => out.push(Command::DropBody(None)),
             }
-        } else if stowable.is_some() {
-            for dir in Dir4::ALL {
-                if let Some(body) = world.body_at(player.pos.step(dir)) {
-                    out.push(Command::CarryBody(body.id));
-                }
-            }
-            if let Some(body) = world.body_at(player.pos) {
-                out.push(Command::CarryBody(body.id));
-            }
         }
-
         self.walk_out(out, world, data);
     }
 
@@ -681,40 +629,6 @@ fn guarded_tiles(world: &World, data: &GameData) -> std::collections::BTreeSet<P
         watched.extend(crate::perception::npc_visible_tiles(world, data, actor.id));
     }
     watched
-}
-
-/// Whether anyone who can see roughly this far has stopped being relaxed.
-///
-/// Deliberately coarse. The bot has no access to what any individual NPC
-/// believes, and should not — it is a player, not the perception model. What
-/// it can fairly notice is that the room has turned, which is what a person
-/// playing would notice too.
-fn alarm_nearby(world: &World) -> bool {
-    let player = world.player_actor().pos;
-    world.actors.iter().any(|actor| {
-        !actor.is_player()
-            && actor.alive()
-            && !actor.departed
-            && actor
-                .ai
-                .as_ref()
-                .is_some_and(|ai| !matches!(ai.mood, Mood::Relaxed))
-            && actor.pos.chebyshev(player).is_some_and(|d| d <= 12)
-    })
-}
-
-/// The nearest empty container within `radius` on this storey, in world order.
-fn nearest_empty_container(world: &World, from: Pos, radius: i16) -> Option<Pos> {
-    world
-        .furniture
-        .iter()
-        .filter(|furniture| furniture.kind == FurnitureKind::Container && furniture.body.is_none())
-        .filter_map(|furniture| {
-            let distance = furniture.pos.chebyshev(from)?;
-            (distance <= radius).then_some((distance, furniture.pos))
-        })
-        .min()
-        .map(|(_, pos)| pos)
 }
 
 /// Adjacent containers with nothing in them yet. A container already holding

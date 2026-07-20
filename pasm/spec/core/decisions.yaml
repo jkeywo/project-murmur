@@ -1087,3 +1087,22 @@ entities:
       status: declared
       paths: [crates/murmur-core/src/autoplay/forecast.rs]
       symbols: [Forecast]
+
+  - decision: the-getaway-not-the-approach-was-the-loss
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Getaway, Not The Approach, Was Where The Bot Lost
+      summary: A loss-attribution pass overturned every standing assumption about why the autoplayer lost. The approach was barely the problem - trespass deaths were six permille and shooting an escorted target thirty-seven. The dominant loss, three hundred and thirty-seven permille of all missions, was a kill that landed followed by a lost getaway, and of those the largest slice was a silent garrote followed by an arrest over the body. The cause was specific and a direct consequence of the milestone-3 detail model - the target dies on a private beat with its bodyguards posted just outside the door on the escort-search clock, and those guards are Relaxed while they wait, so the bot's alarm_nearby check does not see them. The bot stopped to loot the corpse and haul it to a crate, and was still standing there when the detail came in to look. Leaving the instant the target is down - dropping a carried body or shutting it in an adjacent crate, but no detour and no looting - raised the corpus from five hundred and thirty-six permille to five hundred and ninety-three over nine hundred and sixty missions, cutting arrests from a hundred and sixty-two to a hundred and four.
+      rationale:
+        - The fix was found by measurement, not intuition. Every prior guess about the bot - awareness, the HTN, the plan-space search - had been wrong and had made it worse; attributing losses by what the bot was doing before each one pointed straight at the getaway, which no one had suspected.
+        - Re-gating the garrote on an unwatched strike was tried on top of this and lost, exactly as an older comment warned it had before, so the deaths from a witnessed garrote stay - the cure, waiting for a sightline to clear, costs more in arrests and stalls than the witnessed kills it avoids. The two hundred and thirty-five permille of deaths are left as the game being hard rather than the bot being careless.
+        - This is the local-signal pattern that has consistently worked here, against the global-reasoning pattern that has consistently failed. A better reactive rule fed to the tactician beat every attempt to replace the tactician with a planner.
+      references: [plan-space-search-measured-worse-than-the-tactician, milestone-3-bodyguard-details]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/autoplay/mod.rs, crates/murmur-core/examples/loss_attribution.rs, crates/murmur-cli/src/main.rs]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/examples/loss_attribution.rs
+        summary: Categorises every non-won mission by what the bot was doing before it lost; the getaway split is what identified the fix and would catch a regression into the old behaviour.
