@@ -1070,3 +1070,20 @@ entities:
       status: declared
       paths: [crates/murmur-core/src/autoplay/forecast.rs, crates/murmur-core/src/autoplay/mod.rs, crates/murmur-core/examples/forecast_decay.rs]
       symbols: [Forecast, Autoplayer]
+
+  - decision: plan-space-search-measured-worse-than-the-tactician
+    core:
+      status: rejected
+      confidence: confirmed
+      title: A Plan-Space A* Was Built, Measured Worse, And Removed
+      summary: The tactician the bot ships with is a flat priority list and cannot express a plan with a middle - walk across the trespass to the desk, or fetch a costume that makes the wing legal. A plan-space A* was built to price whole plans against each other, over states of position, disguise and a forward-carried alert multiplier, with edges priced against the shared forecast. It made the bot measurably worse - 437 permille against 562 on a like-for-like nightclub corpus - and roughly twenty-eight times slower, and it stalled outright on some seeds. It was removed. The forecast it was built on stays, validated and useful; the search does not.
+      rationale:
+        - The failure was integration, not the search in isolation. The planner prices trespass, decides crossing is cheapest, and returns a destination; the mover then re-prices trespass with the tactician's own conservative router and loops in the legal zone rather than crossing the line the plan chose. Two cost functions disagreeing is a two-authority problem, and every fix for one surfaced the next - a first-step that oscillated, then a mover that would not commit, then a router that refused a committed goal.
+        - Per-turn re-planning is unstable against its own movement. The plan's cheapest first step flips between two tiles as the bot moves one, so it walked one way, re-planned, walked back, and the stall detector never caught it because a two-cycle looks like a position that keeps changing.
+        - The tactician is strong precisely because it re-decides every turn with perfect current information rather than against a forecast it must then obey. A planner gives that up, and on this venue that trade did not pay.
+        - Recorded rather than quietly deleted so it is not re-attempted blindly. A future attempt should make the planner the single authority on movement to a committed waypoint - one cost function, not a plan priced one way and walked another - and re-plan on surprise rather than on a clock.
+      references: [the-venue-is-forecastable-within-a-tolerance, awareness-and-htn-measured-worse-than-the-ladder]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/autoplay/forecast.rs]
+      symbols: [Forecast]
