@@ -1052,4 +1052,21 @@ entities:
         - Strategic depth is not free in a venue that punishes time. Every plan step is turns spent not approaching the target, and the corpus scores winning, so a smarter-looking bot that walks further loses.
     implementation:
       status: declared
-      paths: [crates/murmur-core/src/autoplay.rs]
+      paths: [crates/murmur-core/src/autoplay/mod.rs]
+
+  - decision: the-venue-is-forecastable-within-a-tolerance
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Venue Is Forecastable, Within A Tolerance And A Horizon
+      summary: Before writing a search that prices one plan against another, the premise was measured - can the bot know where anyone will be by the time it gets there. The forecast is the simulation itself, run forward on a clone of the world with the player standing still, so every error is the player's own interference rather than a model being a worse account of the AI than the AI is. That measures the ceiling on predictability, since any cheaper approximation can only be worse. Over one hundred and twenty missions across five venues, exact position accuracy falls from ninety-eight percent at one turn to sixty-nine at twenty and fifty-two at forty. Accuracy within three tiles holds far better - one hundred percent at five turns, ninety-five at twenty, eighty-five at forty - and the mean error when wrong is three tiles at a twenty-turn horizon.
+      rationale:
+        - Exact position is the wrong question. A route planner asks whether a corridor will be watched, not which tile a guard is standing on, and at that tolerance the forecast is excellent out to twenty turns and usable to forty.
+        - This explains the earlier failures directly. Crossing the venue for the paging desk is a forty-turn plan, which is exactly where per-actor exact accuracy becomes a coin flip, so the plan was being made against a world that no longer existed by the time it arrived.
+        - The design consequence is a short horizon and frequent re-planning rather than one long plan, which also keeps the search small.
+        - Schedules are what make this possible. Beats with fitted dwells and routines give the venue a predictable shape that most stealth games do not have, so planning here is better supported than the general case would suggest.
+      references: [milestone-3-beat-schedules]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/autoplay/forecast.rs, crates/murmur-core/src/autoplay/mod.rs, crates/murmur-core/examples/forecast_decay.rs]
+      symbols: [Forecast, Autoplayer]

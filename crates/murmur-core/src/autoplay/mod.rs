@@ -26,6 +26,8 @@
 //! like any other and would be faithfully recorded into a replay, which would
 //! quietly make a golden fixture a record of a game nobody can play.
 
+pub mod forecast;
+
 use crate::access;
 use crate::actions::Command;
 use crate::data::{GameData, Role, Zone};
@@ -84,29 +86,7 @@ pub fn autoplay(data: &GameData, driver: &mut TurnDriver) -> AutoplayReport {
     let mut last = progress(driver.world());
 
     while bot.turns < MAX_TURNS && !driver.mission_over() {
-        // A multi-turn action already in flight is not a decision point: the
-        // player is committed, and the only legal thing is to let it run.
-        if driver.player_busy() {
-            driver.continue_busy(data);
-            bot.turns += 1;
-            continue;
-        }
-
-        let wanted = bot.candidates(driver.world(), data);
-        let mut acted = false;
-        for command in wanted {
-            if driver.submit(data, &command).is_ok() {
-                bot.accepted(&command);
-                acted = true;
-                break;
-            }
-        }
-        if !acted {
-            // Waiting is always legal, so this cannot loop forever without
-            // the stall detector noticing.
-            let _ = driver.submit(data, &Command::Wait);
-        }
-        bot.turns += 1;
+        bot.step(data, driver);
 
         let now = progress(driver.world());
         if now == last {
@@ -122,6 +102,32 @@ pub fn autoplay(data: &GameData, driver: &mut TurnDriver) -> AutoplayReport {
 
     let stalled = !driver.mission_over();
     bot.report(driver, stalled)
+}
+
+/// A bot you can drive one decision at a time.
+///
+/// The whole-mission [`autoplay`] is the usual entry point; this exists for
+/// tools that need to interleave with the bot rather than hand it the
+/// mission — measuring how long a forecast survives real play, for one,
+/// which needs the venue driven by something that actually interferes with
+/// it.
+pub struct Autoplayer(Bot);
+
+impl Autoplayer {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self(Bot {
+            turns: 0,
+            frustration: 0,
+            looted_bodies: Vec::new(),
+            looted_wardrobes: Vec::new(),
+        })
+    }
+
+    /// Plays one decision, exactly as [`autoplay`] would.
+    pub fn step(&mut self, data: &GameData, driver: &mut TurnDriver) {
+        self.0.step(data, driver);
+    }
 }
 
 struct Bot {
@@ -146,6 +152,34 @@ struct Bot {
 const STOW_RADIUS: i16 = 6;
 
 impl Bot {
+    /// One decision: let a committed action run, else offer candidates
+    /// best-first and take the first the rulebook accepts.
+    fn step(&mut self, data: &GameData, driver: &mut TurnDriver) {
+        // A multi-turn action already in flight is not a decision point: the
+        // player is committed, and the only legal thing is to let it run.
+        if driver.player_busy() {
+            driver.continue_busy(data);
+            self.turns += 1;
+            return;
+        }
+
+        let wanted = self.candidates(driver.world(), data);
+        let mut acted = false;
+        for command in wanted {
+            if driver.submit(data, &command).is_ok() {
+                self.accepted(&command);
+                acted = true;
+                break;
+            }
+        }
+        if !acted {
+            // Waiting is always legal, so this cannot loop forever without
+            // the stall detector noticing.
+            let _ = driver.submit(data, &Command::Wait);
+        }
+        self.turns += 1;
+    }
+
     /// Told what the driver actually took, so one-shot decisions are recorded
     /// against what happened rather than against what was merely offered.
     fn accepted(&mut self, command: &Command) {
