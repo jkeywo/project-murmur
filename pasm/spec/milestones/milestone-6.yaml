@@ -1,0 +1,89 @@
+# Milestone 6 — The City
+#
+# Proposed execution plan after milestone 5. All entities in this file are
+# proposed until their model and implementation land.
+#
+# The long-term wishlist defers hierarchical city layers "until venue-scale
+# contract variety is proven" (milestone 4) and defers external police
+# entry until a district model exists. Both prerequisites are satisfied by
+# the milestones before this one, which is the whole reason this is sixth
+# rather than second.
+
+entities:
+  - system: milestone-6-the-city
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Milestone 6 — City Map, Police, Traffic, Safehouses
+      summary: >-
+        The game leaves the building. A hierarchical map places venues in
+        streets and streets in a city, generated downward so each scale
+        constrains the one below it. Police stop being an abstract heat
+        number and become a response that arrives, searches and eventually
+        comes inside. Traffic and pedestrians make the street a place with
+        its own cover and its own witnesses. Safehouses become somewhere
+        the player physically goes. The venue simulation is unchanged
+        underneath — this milestone is about what surrounds it.
+      references:
+        - milestone-6-map-scales
+        - milestone-6-police-response
+        - milestone-6-street-life
+        - milestone-6-safehouses-as-places
+        - future-city-map-layers
+        - future-wanted-response
+
+  - component: milestone-6-map-scales
+    core:
+      status: proposed
+      confidence: confirmed
+      title: City, Street, Pavement, Interior
+      summary: >-
+        Four scales, each generated from and constrained by the one above.
+        The district engine already demonstrates the pattern the city needs
+        — one recursive rule whose topology comes from the shape of an
+        authored tree — and the honest question this slice answers is
+        whether that engine generalises upward from rooms to blocks or
+        whether the city wants its own.
+      references: [milestone-3-district-engine]
+
+  - component: milestone-6-police-response
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Police Who Actually Arrive
+      summary: >-
+        Witness calls, response times, searches, checkpoints and cordons,
+        escalating with the heat the campaign already tracks. Venue guards
+        remain the immediate indoor response; police become the reason a
+        loud job gets worse the longer you stay, and eventually the reason
+        it is over. The wishlist explicitly held this back until an
+        external district model existed, which is what makes it belong
+        here rather than in the heat work of milestone 2.
+      references: [future-wanted-response, observed-crime-heat-model]
+
+  - component: milestone-6-street-life
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Traffic And Crowds As Terrain
+      summary: >-
+        Vehicles and pedestrians moving on their own schedules, giving the
+        street the same qualities the venue interior already has: cover to
+        disappear into, witnesses to avoid, and timing to exploit. The
+        beat-and-schedule model from milestone 3 is the obvious substrate,
+        and reusing it rather than inventing a traffic system is the test
+        of whether that model was built at the right altitude.
+      references: [milestone-3-beat-schedules]
+
+  - component: milestone-6-safehouses-as-places
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Safehouses You Walk Into
+      summary: >-
+        The safehouse state established in milestone 5 gets a location on
+        the city map: somewhere to reach after a job, to be tracked back
+        to, and to lose. This is where the campaign's between-mission
+        state stops being a menu and becomes part of the same simulation
+        as everything else.
+      references: [milestone-5-safehouse-economy]

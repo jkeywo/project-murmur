@@ -1,0 +1,119 @@
+# Milestone 4 — The Job Is Not Always A Kill
+#
+# The agreed execution plan after the implemented protected-target work of
+# milestone 3. All entities in this file are proposed until their model and
+# implementation land.
+#
+# The roadmap gates its own next layer on this: future-city-map-layers is
+# "deferred until venue-scale contract variety is proven", and
+# future-solo-heists describes reusing infiltration, security, planning,
+# opportunity and extraction under a different objective. Contract variety
+# is the thing standing between the game as it is and everything above it.
+
+entities:
+  - system: milestone-4-objective-variety
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Milestone 4 — The Job Is Not Always A Kill
+      summary: >-
+        Five venues, three topologies, protected targets with interlocking
+        routines, six opportunity machines, five constraints, an economy
+        and a heat ledger currently all point at one sentence: kill this
+        person. Variety comes only from the condition attached. This
+        milestone gives the contract board more than one verb — steal,
+        extract alive, sabotage, plant — while keeping venue scope, and
+        makes the route planner prove objective completion rather than a
+        kill. That generalisation is the point: if the planner can certify
+        four objectives without special-casing each one, its design is
+        vindicated on a milestone that is still venue-scale, rather than
+        after the project has committed to a city.
+      references:
+        - milestone-4-playability-pass
+        - milestone-4-objective-model
+        - milestone-4-planner-generalisation
+        - milestone-4-objectives-as-data
+        - milestone-4-mixed-contract-board
+        - future-solo-heists
+
+  - component: milestone-4-playability-pass
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Slice Zero — Is The Core Loop Good Yet
+      summary: >-
+        Milestone 3 made missions substantially harder and left its
+        acceptance component partially-implemented: the scripted assassin
+        completes a minority of seeds, and several die on the way to the
+        exit rather than on the approach. Adding four objective types on
+        top of a loop that may not yet feel good multiplies unfinished
+        work, so this milestone opens with hand-played missions and
+        whatever difficulty-curve work they turn out to need. Two open
+        decisions belong here rather than to the objectives: whether a
+        cheated run should still pay out, and whether the post-kill escape
+        is tuned too hot.
+      references: [milestone-3-acceptance]
+
+  - component: milestone-4-objective-model
+    core:
+      status: proposed
+      confidence: confirmed
+      title: An Objective, Where The Target Used To Be Implicit
+      summary: >-
+        The mission's goal becomes a named thing rather than an assumption
+        spread across the codebase. MissionOutcome::Extracted is currently
+        gated on the target being dead; TargetEscaped is an
+        assassination-specific loss; MissionFacts names a target and its
+        reason; the shell's contract overlay and sidebar read the same.
+        Each of those becomes objective-driven. The escort machinery from
+        milestone 3 generalises rather than being replaced — a courier
+        carrying a ledger has a detail and private beats exactly as a
+        target does, and a person to be extracted alive has guards of
+        their own.
+      references: [milestone-4-planner-generalisation]
+
+  - component: milestone-4-planner-generalisation
+    core:
+      status: proposed
+      confidence: confirmed
+      title: The Planner Proves Objectives, Not Kills
+      summary: >-
+        The load-bearing slice. prove_route currently certifies a weapon
+        kill at a vulnerable beat or a rigged accident anywhere on the
+        schedule, then an extraction. It must instead certify objective
+        completion plus extraction, with the kill becoming one objective
+        among several rather than the shape of the proof. The monotone
+        capability closure should not need to change; if it does, that is
+        the finding the milestone exists to surface, and it is better
+        surfaced here than under a city.
+      references: [monotone-capability-closure-planner]
+
+  - component: milestone-4-objectives-as-data
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Four More Objectives, Ideally Without Engine Changes
+      summary: >-
+        Steal an item from secured space, extract a person alive,
+        sabotage a machine, plant an item on a person or in a room. Each
+        should land as data over the generalised model, in the way that
+        onion and archipelago venues landed as pure data over the district
+        engine. That was milestone 3's acceptance test for generality and
+        it is this milestone's too: if an objective needs engine code,
+        the model is not general and wants revisiting rather than
+        extending.
+      references: [milestone-4-objective-model]
+
+  - component: milestone-4-mixed-contract-board
+    core:
+      status: proposed
+      confidence: confirmed
+      title: A Board Worth Reading
+      summary: >-
+        Offers carry different job types at different payouts and risks,
+        so choosing a contract becomes a decision about what kind of
+        evening to have rather than which condition to accept. Constraints
+        stay orthogonal — no firearms and no collateral read the same
+        against a theft as against a killing — which is a useful check
+        that the constraint model was built at the right altitude.
+      references: [milestone-4-objective-model, constraint-catalogue-and-breach-semantics]

@@ -1,0 +1,92 @@
+# Milestone 5 — Persistence
+#
+# Proposed execution plan after milestone 4. All entities in this file are
+# proposed until their model and implementation land.
+#
+# Everything here is gated on contract variety: a world that remembers you
+# is only interesting if there is more than one kind of evening for it to
+# remember. The long-term wishlist's faction, nemesis and life-simulation
+# components are promoted into this milestone.
+
+entities:
+  - system: milestone-5-persistence
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Milestone 5 — Persistence
+      summary: >-
+        The campaign currently remembers cash, owned equipment and district
+        heat, and nothing else: every mission arrives at a venue that has
+        never met you. This milestone makes the world carry consequences
+        between contracts. Venues remember the entrances you used and the
+        disguises you wore; people who survived you remember your face;
+        organisations gain and lose resources and generate the contracts
+        that follow. The intent is that a campaign accumulates a history
+        rather than a balance.
+      references:
+        - milestone-5-venue-memory
+        - milestone-5-survivors-and-nemeses
+        - milestone-5-faction-state
+        - milestone-5-safehouse-economy
+        - future-faction-corporate-simulation
+        - future-nemesis-system
+        - future-life-simulation
+
+  - component: milestone-5-venue-memory
+    core:
+      status: proposed
+      confidence: confirmed
+      title: A Venue That Has Met You Before
+      summary: >-
+        Returning to a venue you have worked should not feel like the first
+        visit. Security hardens where you were seen, the routes you used
+        get watched, the disguise you wore gets checked. This is the
+        cheapest persistence to build and the easiest to feel, and it
+        rides on the district heat ledger that already exists rather than
+        needing a new one.
+      references: [observed-crime-heat-model]
+
+  - component: milestone-5-survivors-and-nemeses
+    core:
+      status: proposed
+      confidence: confirmed
+      title: The People Who Lived
+      summary: >-
+        An NPC who saw the player and survived, or a guard who made an
+        arrest, becomes a persistent person rather than a discarded actor.
+        They reappear with adapted behaviour: harder to fool with the
+        disguise that worked, quicker to raise an alarm, occasionally
+        present specifically because of what happened last time. The
+        milestone-3 detail model is the natural home for a nemesis who
+        arrives with protection of their own.
+      references: [future-nemesis-system, milestone-3-bodyguard-details]
+
+  - component: milestone-5-faction-state
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Organisations With Something To Lose
+      summary: >-
+        Syndicates, venue owners and rival outfits hold resources,
+        relationships and personnel that the player's work moves. Faction
+        state becomes the source of contract offers, so the board stops
+        being a random draw and starts being a consequence — the outfit
+        you robbed last month wants someone dealt with, and the venue you
+        burned has hired more guards with money it can now spend on
+        nothing else.
+      references: [future-faction-corporate-simulation, deterministic-contract-board]
+
+  - component: milestone-5-safehouse-economy
+    core:
+      status: proposed
+      confidence: confirmed
+      title: Somewhere To Keep Things
+      summary: >-
+        Safehouses, storage, identities and contacts become strategic
+        choices rather than a cash total. Equipment is currently bought
+        once and owned forever, which is a deliberate simplification from
+        milestone 2; persistence is the point at which where a thing is
+        kept, and what an arrest can take from you, starts to matter.
+        Scoped here to the state a campaign needs, with the physical
+        safehouse as a place deferred to the city milestone.
+      references: [future-life-simulation, milestone-6-safehouses-as-places]
