@@ -232,28 +232,7 @@ pub(super) fn resolve_interact(
             }
         }
         crate::data::OpportunityEffect::Evacuate => {
-            let ids: Vec<ActorId> = world
-                .actors
-                .iter()
-                .filter(|a| !a.is_player() && a.alive() && !a.departed && a.ai.is_some())
-                .map(|a| a.id)
-                .collect();
-            for npc in ids {
-                let is_guard = world.actor(npc).role == Some(crate::data::Role::Guard);
-                let ai = world.actor_mut(npc).ai.as_mut().unwrap();
-                if is_guard {
-                    if matches!(
-                        ai.mood,
-                        crate::world::Mood::Relaxed | crate::world::Mood::Suspicious
-                    ) {
-                        ai.mood = crate::world::Mood::Investigating;
-                        ai.focus = Some(machine_pos);
-                    }
-                } else {
-                    ai.mood = crate::world::Mood::Fleeing;
-                    ai.focus = Some(machine_pos);
-                }
-            }
+            crate::perception::evacuate(world, machine_pos);
             events
                 .messages
                 .push(crate::tr!("log.fire_alarm").to_string());

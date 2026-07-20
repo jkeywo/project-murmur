@@ -927,3 +927,19 @@ entities:
       paths: [crates/murmur-core/src/contract.rs, crates/murmur-core/src/planner.rs, crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/actions/violence.rs, crates/murmur-core/src/perception.rs]
       symbols: [certify_filters, on_shot, on_kill, on_exit, on_body_found]
       tests: [crates/murmur-core/tests/contracts.rs]
+
+  - decision: perception-owns-mood-transitions
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Perception Model Owns Every Mood Edge
+      summary: Mood was written in four files - perception's state machine, the npc-controller ending investigations, the turn driver's heat tiers, and the fire-alarm effect - so "what can make a guard Alerted" had no single home, and scenario tests staged moods by assigning AiState fields. Every transition now goes through perception. The npc-controller requests stand_down with a cause (nothing to check, concluded, unreachable - each clearing a different amount of the trail), the heat tier requests raise_guard_wariness, the alarm machine requests evacuate, and the driver asks is_visible_tampering instead of knowing which intents count. A staging edge, calm, serves the test harnesses so quiet-the-crowd setup exercises the same module. AiState stays in world.rs because the generator and serialization construct it; construction sites (populate, reinforcement spawning) set initial state and are not transitions.
+      rationale:
+        - Perception already owned escalation and the propagation hop; pulling the last four writers in makes the module doc's claim - this file is the mood machine - actually true.
+        - Cause-carrying de-escalation preserved three subtly different stand-down behaviours that a single reset function would have silently merged.
+      references: [perception-model, alert-propagation-rules, npc-cadence-and-escalation, detection-and-suspicion-rules]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/ai.rs, crates/murmur-core/src/turn.rs, crates/murmur-core/src/actions/interact.rs]
+      symbols: [stand_down, raise_guard_wariness, evacuate, calm, is_visible_tampering]
+      tests: [crates/murmur-core/tests/gameplay.rs, crates/murmur-core/tests/heat.rs]

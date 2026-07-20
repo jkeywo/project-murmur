@@ -9,8 +9,16 @@
 //! illegal access, visible weapons, bodies, unconscious people, and
 //! gunshots; suspicion grows over time and decays when nothing is wrong.
 //! Blood and missing-target detection are deliberately deferred.
+//!
+//! This module owns every mood edge. The state machine in [`update`]
+//! drives escalation from what NPCs perceive; everything else in the
+//! simulation that changes a mood — the npc-controller ending an
+//! investigation, the heat tiers hardening the venue, the fire alarm
+//! scattering the crowd — requests the transition through the functions
+//! at the bottom of this file rather than assigning `AiState` fields.
 
 use crate::access::verdict_at;
+use crate::actions::ActionIntent;
 use crate::data::{GameData, Lighting, Role};
 use crate::geom::{Pos, in_cone};
 use crate::map::line_of_sight;
@@ -458,4 +466,90 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
     }
 
     messages
+}
+
+/// Why an investigating NPC is standing down. The cause decides how much
+/// of the trail (focus, suspicion) clears with the mood.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StandDown {
+    /// No focus left to check: back to routine, memory untouched.
+    NothingToCheck,
+    /// Lingered at the spot and found nothing: the whole trail clears.
+    Concluded,
+    /// The spot cannot be reached: give up on it, but stay uneasy.
+    Unreachable,
+}
+
+/// De-escalates an NPC back to relaxed. Requested by the npc-controller
+/// when an investigation ends; the mood edge itself lives here.
+pub fn stand_down(world: &mut World, id: ActorId, cause: StandDown) {
+    let Some(ai) = world.actor_mut(id).ai.as_mut() else {
+        return;
+    };
+    ai.mood = Mood::Relaxed;
+    match cause {
+        StandDown::NothingToCheck => {}
+        StandDown::Concluded => {
+            ai.focus = None;
+            ai.suspicion = 0;
+        }
+        StandDown::Unreachable => {
+            ai.focus = None;
+        }
+    }
+}
+
+/// The heat-tier response: the guard's suspicion floor rises to wary,
+/// and a relaxed guard becomes suspicious. Requested by the turn driver
+/// when mission heat crosses tier one.
+pub fn raise_guard_wariness(world: &mut World, data: &GameData, id: ActorId) {
+    if let Some(ai) = world.actor_mut(id).ai.as_mut() {
+        ai.suspicion = ai.suspicion.max(data.tuning.suspicion_suspicious_at);
+        if ai.mood == Mood::Relaxed {
+            ai.mood = Mood::Suspicious;
+        }
+    }
+}
+
+/// The fire-alarm response: watchful guards go to look at the alarm
+/// point, everyone else flees. Requested by the alarm machine's effect.
+pub fn evacuate(world: &mut World, alarm_pos: Pos) {
+    let ids: Vec<ActorId> = world
+        .actors
+        .iter()
+        .filter(|a| !a.is_player() && a.alive() && !a.departed && a.ai.is_some())
+        .map(|a| a.id)
+        .collect();
+    for npc in ids {
+        let is_guard = world.actor(npc).role == Some(Role::Guard);
+        let ai = world.actor_mut(npc).ai.as_mut().unwrap();
+        if is_guard {
+            if matches!(ai.mood, Mood::Relaxed | Mood::Suspicious) {
+                ai.mood = Mood::Investigating;
+                ai.focus = Some(alarm_pos);
+            }
+        } else {
+            ai.mood = Mood::Fleeing;
+            ai.focus = Some(alarm_pos);
+        }
+    }
+}
+
+/// Scenario staging: resets an NPC's perception state to baseline calm.
+/// For tests that need a quiet room before playing real commands.
+pub fn calm(world: &mut World, id: ActorId) {
+    if let Some(ai) = world.actor_mut(id).ai.as_mut() {
+        ai.mood = Mood::Relaxed;
+        ai.suspicion = 0;
+        ai.focus = None;
+    }
+}
+
+/// Whether a prepared intent reads as visible tampering to onlookers —
+/// the player spending turns picking a lock or rigging a machine.
+pub fn is_visible_tampering(intent: &ActionIntent) -> bool {
+    matches!(
+        intent,
+        ActionIntent::PickLock(_) | ActionIntent::Interact(_)
+    )
 }

@@ -15,6 +15,7 @@ use crate::actions::{ActionIntent, PreparedAction, intent_duration};
 use crate::data::GameData;
 use crate::geom::{Dir4, Pos};
 use crate::path::first_step_towards;
+use crate::perception::{StandDown, stand_down};
 use crate::world::{ActorId, DetailRole, Hands, Mood, Protection, World};
 
 /// Prepares one action per eligible NPC for the upcoming turn.
@@ -357,8 +358,7 @@ fn investigate_intent(world: &mut World, data: &GameData, id: ActorId) -> Action
         match ai.focus {
             None => {
                 // Nothing left to check.
-                let ai = world.actor_mut(id).ai.as_mut().unwrap();
-                ai.mood = Mood::Relaxed;
+                stand_down(world, id, StandDown::NothingToCheck);
                 return ActionIntent::Wait;
             }
             Some(focus) => (focus, actor.pos == focus || actor.pos.is_adjacent(focus)),
@@ -374,10 +374,7 @@ fn investigate_intent(world: &mut World, data: &GameData, id: ActorId) -> Action
             ai.wait_remaining == 0
         };
         if linger_done {
-            let ai = world.actor_mut(id).ai.as_mut().unwrap();
-            ai.mood = Mood::Relaxed;
-            ai.focus = None;
-            ai.suspicion = 0;
+            stand_down(world, id, StandDown::Concluded);
             return ActionIntent::Wait;
         }
         // Look around while lingering: rotate the facing.
@@ -387,9 +384,7 @@ fn investigate_intent(world: &mut World, data: &GameData, id: ActorId) -> Action
     match first_step_towards(world, data, id, focus) {
         Some(dir) => ActionIntent::Step(dir),
         None => {
-            let ai = world.actor_mut(id).ai.as_mut().unwrap();
-            ai.mood = Mood::Relaxed;
-            ai.focus = None;
+            stand_down(world, id, StandDown::Unreachable);
             ActionIntent::Wait
         }
     }

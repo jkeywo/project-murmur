@@ -16,7 +16,7 @@ use murmur_core::generator::generate;
 use murmur_core::geom::{Dir4, Pos};
 use murmur_core::map::TileKind;
 use murmur_core::turn::TurnDriver;
-use murmur_core::world::{ActorId, Mood, World};
+use murmur_core::world::{ActorId, World};
 
 pub fn data() -> GameData {
     GameData::embedded().unwrap()
@@ -48,7 +48,9 @@ pub fn setup_quiet(seed: u64) -> (GameData, TurnDriver) {
 /// Strips every NPC of routine, mood, suspicion, focus, and standing
 /// assignment, so nobody interferes with staged perception tests. A
 /// bodyguard keeping its detail would walk off towards its principal
-/// instead of standing where the scenario put it.
+/// instead of standing where the scenario put it. Mood goes through the
+/// perception-model's own staging edge; routine and detail are not
+/// perception state and are cleared directly.
 pub fn quiet_all_npcs(world: &mut World) {
     let ids: Vec<ActorId> = world
         .actors
@@ -59,11 +61,9 @@ pub fn quiet_all_npcs(world: &mut World) {
     for id in ids {
         if let Some(ai) = world.actor_mut(id).ai.as_mut() {
             ai.routine.clear();
-            ai.mood = Mood::Relaxed;
-            ai.suspicion = 0;
-            ai.focus = None;
             ai.detail = None;
         }
+        murmur_core::perception::calm(world, id);
     }
 }
 

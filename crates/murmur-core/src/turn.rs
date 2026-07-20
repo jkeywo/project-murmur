@@ -127,14 +127,11 @@ impl TurnDriver {
 
     fn step(&mut self, data: &GameData) -> TurnReport {
         // Visible tampering: the player spending this turn picking a lock.
-        self.world.player_tampering = self.store.actions.iter().any(|p| {
-            p.actor == self.world.player
-                && matches!(
-                    p.intent,
-                    crate::actions::ActionIntent::PickLock(_)
-                        | crate::actions::ActionIntent::Interact(_)
-                )
-        });
+        // What counts as tampering is the perception-model's call.
+        self.world.player_tampering =
+            self.store.actions.iter().any(|p| {
+                p.actor == self.world.player && perception::is_visible_tampering(&p.intent)
+            });
         let events = resolve_turn(&mut self.world, data, &mut self.store.actions);
         let mut perception_messages = if self.world.outcome.is_none() {
             perception::update(&mut self.world, data)
@@ -185,12 +182,7 @@ fn apply_heat_tiers(world: &mut World, data: &GameData, messages: &mut Vec<Strin
                     .map(|a| a.id)
                     .collect();
                 for id in guard_ids {
-                    if let Some(ai) = world.actor_mut(id).ai.as_mut() {
-                        ai.suspicion = ai.suspicion.max(data.tuning.suspicion_suspicious_at);
-                        if ai.mood == crate::world::Mood::Relaxed {
-                            ai.mood = crate::world::Mood::Suspicious;
-                        }
-                    }
+                    perception::raise_guard_wariness(world, data, id);
                 }
                 messages.push(crate::tr!("log.heat.word_spreads").to_string());
             }
@@ -311,10 +303,8 @@ mod tests {
             if let Some(ai) = world.actor_mut(id).ai.as_mut() {
                 ai.routine.clear();
                 ai.schedule = None;
-                ai.mood = crate::world::Mood::Relaxed;
-                ai.suspicion = 0;
-                ai.focus = None;
             }
+            perception::calm(&mut world, id);
         }
         let driver = TurnDriver::new(world, &data);
         (data, driver)
