@@ -16,7 +16,7 @@ use murmur_core::world::{ActorId, World};
 
 /// The player's current field of view, widened so that every
 /// sight-blocking tile bordering a visible open tile is lit too.
-pub(crate) fn visible_tiles(world: &World, data: &GameData) -> Vec<Pos> {
+pub fn visible_tiles(world: &World, data: &GameData) -> Vec<Pos> {
     let player = world.player_actor();
     let base = tiles_visible_from(
         player.pos,
@@ -47,7 +47,7 @@ pub(crate) fn visible_tiles(world: &World, data: &GameData) -> Vec<Pos> {
 /// Living NPCs the player can currently see, nearest first. The shooting
 /// UI targets from this list and the threat panel reads it, so the two
 /// cannot disagree about who is visible.
-pub(crate) fn visible_actors(world: &World, data: &GameData) -> Vec<ActorId> {
+pub fn visible_actors(world: &World, data: &GameData) -> Vec<ActorId> {
     let player = world.player_actor();
     let mut ids: Vec<(i16, ActorId)> = world
         .actors

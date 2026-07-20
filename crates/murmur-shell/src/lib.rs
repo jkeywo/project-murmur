@@ -14,8 +14,8 @@
 //! dies and the campaign ends at a tally. The campaign autosaves through
 //! the injected [`CampaignStore`] after every hub-level change.
 
-mod availability;
-mod fov;
+pub mod availability;
+pub mod fov;
 mod inspect;
 pub mod keymap;
 pub mod mission;

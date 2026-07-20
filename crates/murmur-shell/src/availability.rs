@@ -16,7 +16,7 @@ use murmur_core::world::{FurnitureKind, Hands, World};
 
 /// The reason a targeted action cannot be attempted right now, or `None`
 /// when it is available (or is a non-targeted action).
-pub(crate) fn action_block(world: &World, data: &GameData, key: char) -> Option<&'static str> {
+pub fn action_block(world: &World, data: &GameData, key: char) -> Option<&'static str> {
     let player = world.player_actor();
     let here = player.pos;
     // Own tile plus the four orthogonal neighbours — the reach of
