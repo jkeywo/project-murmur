@@ -167,11 +167,7 @@ pub(crate) fn reachable_tiles(
                 }
                 // Room interiors demand zone permission from some owned
                 // disguise.
-                let Some(room) = layout
-                    .rooms
-                    .iter()
-                    .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
-                else {
+                let Some(room) = layout.room_at(pos) else {
                     return true;
                 };
                 (staff_pass && room.zone == crate::data::Zone::Staff)
@@ -252,9 +248,7 @@ pub(crate) struct ClosureOutcome {
 
 fn room_name_at(layout: &Layout, pos: Pos) -> String {
     layout
-        .rooms
-        .iter()
-        .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
+        .room_at(pos)
         .map(|r| r.name.clone())
         .unwrap_or_else(|| crate::tr!("room.corridor.name").to_string())
 }

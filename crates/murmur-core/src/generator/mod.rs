@@ -156,10 +156,7 @@ fn build_facts(
     let mut target_locations = Vec::new();
     if let Some(ai) = &target.ai {
         for step in &ai.routine {
-            if let Some(room) = layout
-                .rooms
-                .iter()
-                .find(|r| r.floor == step.pos.floor && r.bounds.contains(step.pos.x, step.pos.y))
+            if let Some(room) = layout.room_at(step.pos)
                 && !target_locations.contains(&room.name)
             {
                 target_locations.push(room.name.clone());
@@ -580,12 +577,7 @@ mod tests {
                     .unwrap();
                 let alone_rooms: Vec<&str> = schedule
                     .alone_beats()
-                    .filter_map(|b| {
-                        world
-                            .rooms
-                            .iter()
-                            .find(|r| r.floor == b.pos.floor && r.bounds.contains(b.pos.x, b.pos.y))
-                    })
+                    .filter_map(|b| world.room_at(b.pos))
                     .map(|r| r.name.as_str())
                     .collect();
                 for proof in &world.routes.proofs {

@@ -553,9 +553,7 @@ impl World {
     }
 
     pub fn room_at(&self, pos: Pos) -> Option<&Room> {
-        self.rooms
-            .iter()
-            .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
+        room_containing(&self.rooms, pos)
     }
 
     /// The access zone governing a tile. Room interiors carry their room's
@@ -623,4 +621,13 @@ impl World {
         self.carried_items(actor)
             .any(|i| data.item(&i.spec).map(&predicate).unwrap_or(false))
     }
+}
+
+/// The room containing `pos`, if any — the one shared query for any room
+/// set, whether a finished [`World`] or a mid-generation layout. Rooms
+/// never overlap, so the first hit is the only hit.
+pub fn room_containing(rooms: &[Room], pos: Pos) -> Option<&Room> {
+    rooms
+        .iter()
+        .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))
 }

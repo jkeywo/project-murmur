@@ -142,9 +142,7 @@ impl Constraint {
                     .copied()
                     .filter(|tile| {
                         layout
-                            .rooms
-                            .iter()
-                            .find(|r| r.floor == tile.floor && r.bounds.contains(tile.x, tile.y))
+                            .room_at(*tile)
                             .is_some_and(|r| &r.template == room_template)
                     })
                     .collect();

@@ -24,6 +24,14 @@ pub struct Layout {
     pub extraction_tiles: Vec<Pos>,
 }
 
+impl Layout {
+    /// The room containing `pos`, if any: the same deep query the
+    /// finished world answers with `World::room_at`.
+    pub fn room_at(&self, pos: Pos) -> Option<&Room> {
+        crate::world::room_containing(&self.rooms, pos)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LayoutError(pub String);
 

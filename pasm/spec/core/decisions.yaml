@@ -943,3 +943,19 @@ entities:
       paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/ai.rs, crates/murmur-core/src/turn.rs, crates/murmur-core/src/actions/interact.rs]
       symbols: [stand_down, raise_guard_wariness, evacuate, calm, is_visible_tampering]
       tests: [crates/murmur-core/tests/gameplay.rs, crates/murmur-core/tests/heat.rs]
+
+  - decision: generator-shared-room-query
+    core:
+      status: implemented
+      confidence: confirmed
+      title: One Room Query Serves the World and the Generator
+      summary: World::room_at was a deep accessor, but the generation phases operate on Layout, which had no equivalent - so the identical rooms-scan was hand-inlined eleven times across facts-building, population, the proof, the planner, and the constraint filters. A free room_containing over any room slice now backs both World::room_at and a new Layout::room_at, and every inline scan is a method call. The flood-fill consolidation surveyed alongside was rejected on inspection - the gradient test's door-counting BFS is deliberately access-free and furniture-free (it measures door distance, not permission reachability) and even differs on stair-tile membership, so a shared engine would either change semantics or grow a parameter surface rivalling the two bodies it replaced. Four walkers with four meanings stay four walkers.
+      rationale:
+        - A bug in which room governs a tile now has one home on both sides of the world-assembly line.
+        - Rejecting the flood-fill merge is the deletion test applied honestly - the duplication was in the traversal skeleton, not in the semantics, and sharing skeletons is how shallow config-heavy interfaces get built.
+      references: [room-graph-and-metadata, generated-reachability-proof, gradient-is-checked-as-tree-and-as-geometry]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/world.rs, crates/murmur-core/src/generator/layout.rs, crates/murmur-core/src/generator/proof.rs, crates/murmur-core/src/generator/populate.rs, crates/murmur-core/src/generator/mod.rs, crates/murmur-core/src/planner.rs, crates/murmur-core/src/contract.rs]
+      symbols: [room_containing, room_at]
+      tests: [crates/murmur-core/src/generator/mod.rs]

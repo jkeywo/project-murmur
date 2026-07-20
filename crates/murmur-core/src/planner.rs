@@ -175,10 +175,7 @@ pub fn prove_route(
             .iter()
             .filter(|pos| outcome.seen.contains(**pos))
             .find_map(|pos| {
-                let room = layout
-                    .rooms
-                    .iter()
-                    .find(|r| r.floor == pos.floor && r.bounds.contains(pos.x, pos.y))?;
+                let room = layout.room_at(*pos)?;
                 match &filters.kill_rooms {
                     Some(allowed) if !allowed.contains(&room.name) => None,
                     _ => Some((room.name.clone(), usable[0].clone())),
@@ -204,10 +201,7 @@ pub fn prove_route(
         {
             return None;
         }
-        let room = layout
-            .rooms
-            .iter()
-            .find(|r| r.floor == drop.floor && r.bounds.contains(drop.x, drop.y))?;
+        let room = layout.room_at(drop)?;
         match &filters.kill_rooms {
             Some(allowed) if !allowed.contains(&room.name) => None,
             _ => Some((room.name.clone(), "rigged accident".to_string())),
@@ -232,9 +226,7 @@ pub fn prove_route(
         .find(|tile| outcome.seen.contains(**tile))
         .ok_or_else(|| format!("no reachable extraction for a {} route", class.name()))?;
     let exit_room = layout
-        .rooms
-        .iter()
-        .find(|r| r.floor == exit.floor && r.bounds.contains(exit.x, exit.y))
+        .room_at(*exit)
         .map(|r| r.name.clone())
         .unwrap_or_else(|| "the street".to_string());
 

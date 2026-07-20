@@ -202,11 +202,7 @@ pub fn populate(
         // through. This is the only key granted by need rather than by
         // role, and it makes the target's key worth lifting.
         for beat in &schedule.beats {
-            for room in layout
-                .rooms
-                .iter()
-                .filter(|r| r.floor == beat.pos.floor && r.bounds.contains(beat.pos.x, beat.pos.y))
-            {
+            if let Some(room) = layout.room_at(beat.pos) {
                 for door in &room.doors {
                     if let Some(key) = &layout.doors[door.0 as usize].locked_by
                         && !target_keys.contains(key)
