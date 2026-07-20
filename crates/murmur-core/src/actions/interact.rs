@@ -105,9 +105,10 @@ pub(super) fn resolve_throw(
         .carried_items(actor)
         .find(|i| data.item(&i.spec).is_some_and(|s| s.noisemaker) && i.charges > 0)
         .map(|i| i.id);
+    let cheats_endless = world.cheats.endless_ammo;
     match charge {
         Some(id) => {
-            if let Some(item) = world.items.iter_mut().find(|i| i.id == id) {
+            if !cheats_endless && let Some(item) = world.items.iter_mut().find(|i| i.id == id) {
                 item.charges -= 1;
             }
             world.incidents.push(crate::world::Incident {

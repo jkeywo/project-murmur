@@ -10,9 +10,9 @@
 //! resumes it on exit, so the player is never left in an invisible paused
 //! state.
 
-use murmur_core::actions::{ActionResult, Command};
+use murmur_core::actions::{ActionResult, Cheat, Command};
 use murmur_core::data::GameData;
-use murmur_core::geom::{Dir4, Pos};
+use murmur_core::geom::{Dir4, FloorId, Pos};
 use murmur_core::map::TileKind;
 use murmur_core::path::first_step_towards;
 use murmur_core::turn::{TurnDriver, TurnReport};
@@ -74,6 +74,15 @@ pub enum InputMode {
     },
     /// The key list, overlaid on the map. Any key dismisses it.
     Help,
+    /// The contract, overlaid on the map. Any key dismisses it. Reading
+    /// the job again is not a decision, so it costs nothing and asks
+    /// nothing.
+    Contract,
+    /// The debug switches. Number keys flip them; anything else leaves.
+    /// A panel rather than four bindings in the main keymap, because
+    /// cheats should be reachable without being one fat-finger away
+    /// during a real run.
+    Cheats,
     /// A yes/no question guarding something that cannot be undone.
     Confirm {
         prompt: &'static str,
@@ -198,6 +207,11 @@ pub struct Mission {
     /// Hold-to-wait: the shell submits Wait turns on the player's behalf
     /// until something worth reacting to happens or any key is pressed.
     fast_forward: bool,
+    /// The storey the map is drawn for. Normally the player's, but the
+    /// player can page through the building to plan a route; it snaps
+    /// back the moment they change floor themselves, because a view that
+    /// silently stops following you is a way to lose your own character.
+    viewed_floor: FloorId,
 }
 
 impl Mission {
@@ -220,7 +234,9 @@ impl Mission {
             inspected_slot: None,
             explored,
             frame: 0,
+            viewed_floor: 0,
         };
+        mission.viewed_floor = mission.world().player_actor().pos.floor;
         mission.update_explored(data);
         mission
     }
@@ -247,6 +263,16 @@ impl Mission {
 
     pub fn ui(&self) -> &UiLayout {
         &self.ui
+    }
+
+    /// The storey the map is currently drawn for.
+    pub fn viewed_floor(&self) -> FloorId {
+        self.viewed_floor
+    }
+
+    /// Whether the view is showing a storey the player is not standing on.
+    pub fn viewing_elsewhere(&self) -> bool {
+        self.viewed_floor != self.world().player_actor().pos.floor
     }
 
     pub fn hover(&self) -> Option<Pos> {
@@ -323,7 +349,8 @@ impl Mission {
                 let (candidates, index) = (candidates.clone(), *index);
                 self.handle_target_select(candidates, index, input);
             }
-            InputMode::Help => self.handle_help(input),
+            InputMode::Help | InputMode::Contract => self.handle_help(input),
+            InputMode::Cheats => self.handle_cheats(input),
             InputMode::Confirm { on_yes, .. } => {
                 let on_yes = *on_yes;
                 self.handle_confirm(on_yes, input);
@@ -336,6 +363,44 @@ impl Mission {
     fn handle_help(&mut self, _input: ShellInput) {
         self.mode = InputMode::Normal;
         self.queue.resume();
+    }
+
+    /// The debug panel: a number flips that switch and keeps the panel
+    /// up, anything else closes it. Flipping goes through the queue as an
+    /// ordinary command, so the accepted-command record sees it and a
+    /// replay of a cheated run reproduces the cheating too.
+    fn handle_cheats(&mut self, input: ShellInput) {
+        if let ShellInput::Char(c) = input
+            && let Some(index) = c.to_digit(10)
+            && index >= 1
+            && let Some(which) = Cheat::ALL.get(index as usize - 1)
+        {
+            self.enqueue(Command::Cheat(*which));
+            return;
+        }
+        self.mode = InputMode::Normal;
+    }
+
+    /// Pages the drawn storey without moving anybody. Clamped rather than
+    /// wrapped: paging past the roof should stop, not teleport the view to
+    /// the basement.
+    fn change_viewed_floor(&mut self, delta: i16) {
+        let top = self.world().map.floor_count().saturating_sub(1);
+        let next = (i16::from(self.viewed_floor) + delta).clamp(0, i16::from(top));
+        let next = next as FloorId;
+        if next == self.viewed_floor {
+            return;
+        }
+        self.viewed_floor = next;
+        let here = self.world().player_actor().pos.floor;
+        self.push_log_kind(
+            if next == here {
+                trf!("mission.notice.floor_here", floor = (next + 1).to_string())
+            } else {
+                trf!("mission.notice.floor_view", floor = (next + 1).to_string())
+            },
+            LogKind::Notice,
+        );
     }
 
     /// Answering the prompt either way leaves the mode and resumes, so a
@@ -410,7 +475,8 @@ impl Mission {
             }
             // The overlay covers the map, so a click on it is a click on
             // the overlay: dismiss, exactly as any key would.
-            InputMode::Help => self.handle_help(ShellInput::Esc),
+            InputMode::Help | InputMode::Contract => self.handle_help(ShellInput::Esc),
+            InputMode::Cheats => self.handle_cheats(ShellInput::Esc),
             // A click is plainly not a "yes", so it answers no. Both
             // answers leave the mode, so the prompt is never a trap.
             InputMode::Confirm { on_yes, .. } => {
@@ -467,6 +533,20 @@ impl Mission {
             ShellInput::Left => self.enqueue(Command::Move(Dir4::West)),
             ShellInput::Right => self.enqueue(Command::Move(Dir4::East)),
             ShellInput::Char('.') | ShellInput::Char(' ') => self.enqueue(Command::Wait),
+            ShellInput::Char('j') => {
+                self.mode = InputMode::Contract;
+                self.queue.pause();
+            }
+            ShellInput::Char('C') => {
+                // Deliberately does not pause, unlike the other overlays:
+                // a switch *is* a queued command, and a paused queue can
+                // never run the thing the panel exists to do.
+                self.mode = InputMode::Cheats;
+            }
+            // Roguelike convention, and `.` is already Wait so the
+            // unshifted pair is not available.
+            ShellInput::Char('<') => self.change_viewed_floor(1),
+            ShellInput::Char('>') => self.change_viewed_floor(-1),
             ShellInput::Char('z') => {
                 self.fast_forward = true;
                 self.push_log_kind(
@@ -823,6 +903,15 @@ impl Mission {
     }
 
     fn absorb(&mut self, report: TurnReport) {
+        // The view follows the player. Paging around the building is for
+        // planning; the moment the player actually changes storey the map
+        // must show where they are, or a stair step silently leaves them
+        // off-screen with the camera on another floor.
+        let here = self.world().player_actor().pos.floor;
+        if here != self.viewed_floor && report.events.player_result.is_some() {
+            self.viewed_floor = here;
+        }
+
         // A breach is the one event message that changes the run's payout,
         // so it reads as an alarm. The state check is the real guard; the
         // prefix only picks the breach line out of that turn's messages,

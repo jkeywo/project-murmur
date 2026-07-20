@@ -39,7 +39,7 @@
 
     relaxed_cadence: 2,          // [spec] relaxed NPCs act on alternating turns
     investigate_linger: 4,
-    player_vision_range: 11,
+    player_vision_range: 14,
 
     durations: (
         step: 1,

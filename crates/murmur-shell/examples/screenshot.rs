@@ -66,6 +66,31 @@ fn main() {
     shell.handle_input(ShellInput::Char('?'));
     print_frame(&mut terminal, &mut shell, "help");
     shell.handle_input(ShellInput::Esc); // dismiss help
+
+    // Re-reading the job, and paging the view up a storey.
+    shell.handle_input(ShellInput::Char('j'));
+    print_frame(&mut terminal, &mut shell, "contract recalled");
+    shell.handle_input(ShellInput::Esc);
+    shell.handle_input(ShellInput::Char('<'));
+    print_frame(&mut terminal, &mut shell, "viewing the floor above");
+    shell.handle_input(ShellInput::Char('>'));
+
+    // The debug switches, and the map with sight turned off.
+    shell.handle_input(ShellInput::Char('C'));
+    print_frame(&mut terminal, &mut shell, "cheat panel");
+    shell.handle_input(ShellInput::Char('1')); // reveal the map
+    // The toggle is an ordinary queued command, so it needs a turn to
+    // resolve before the panel can show it on.
+    for _ in 0..4 {
+        shell.tick();
+    }
+    print_frame(&mut terminal, &mut shell, "cheat panel with one on");
+    shell.handle_input(ShellInput::Esc);
+    for _ in 0..4 {
+        shell.tick();
+    }
+    print_frame(&mut terminal, &mut shell, "map revealed");
+
     shell.handle_input(ShellInput::Char('Q'));
     print_frame(&mut terminal, &mut shell, "abandon confirm");
 }

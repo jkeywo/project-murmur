@@ -10,7 +10,7 @@
 //! patch furniture in after the fact.
 
 use crate::data::{GameData, RoomTemplate, WaypointKind};
-use crate::geom::Pos;
+use crate::geom::{Dir4, Pos};
 use crate::map::{DoorState, GameMap, TileKind};
 use crate::rng::Pcg32;
 use crate::world::{Furniture, FurnitureId, FurnitureKind, Room, Waypoint};
@@ -84,6 +84,12 @@ pub(crate) fn finish_layout(
 
 /// The interior tile on whichever side of the room lies closest to the
 /// building's outer wall — the side the street is on.
+///
+/// Never the tile in front of a doorway. The exit marker is drawn over
+/// whatever tile it sits on, so an exit on the room's threshold reads as
+/// a blocked entrance — and in a room with one door that is the only way
+/// in. Ties are broken towards the street first, then by position, so
+/// the choice stays a pure function of the geometry.
 fn street_side_tile(room: &Room, map: &GameMap) -> Pos {
     let b = room.bounds;
     let sides = [
@@ -97,10 +103,28 @@ fn street_side_tile(room: &Room, map: &GameMap) -> Pos {
         let dy = p.y.min(map.height() as i16 - 1 - p.y);
         dx.min(dy)
     };
+    let beside_a_door = |p: &Pos| {
+        Dir4::ALL
+            .into_iter()
+            .any(|d| matches!(map.tile(p.step(d)), TileKind::Door(_)))
+    };
+    // The four sides first; if every one of them fronts a door, widen to
+    // the whole room rather than give up and block a threshold.
     sides
         .into_iter()
+        .filter(|p| !beside_a_door(p))
+        .chain(
+            interior_tiles(room)
+                .into_iter()
+                .filter(|p| !beside_a_door(p)),
+        )
         .min_by_key(|p| (edge_gap(p), p.y, p.x))
-        .expect("four sides")
+        .unwrap_or_else(|| {
+            sides
+                .into_iter()
+                .min_by_key(|p| (edge_gap(p), p.y, p.x))
+                .expect("four sides")
+        })
 }
 
 fn template_index_of(data: &GameData, id: &str) -> usize {

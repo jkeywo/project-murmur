@@ -412,6 +412,41 @@ pub struct MissionFacts {
     pub opportunities: Vec<String>,
 }
 
+/// Debug switches, off by default.
+///
+/// Cheats are toggled through [`crate::actions::Command::Cheat`] like any
+/// other player action, so they land in the accepted-command record and a
+/// replay reproduces a cheated run exactly. That is the whole reason they
+/// are commands rather than a side channel on the shell: a switch the
+/// record cannot see would silently break the determinism guarantee the
+/// project rests on, and it would break it only for the runs a developer
+/// was most likely to be investigating.
+///
+/// Flipping one costs a turn. That is a real cost, and it is the price of
+/// having no special case anywhere in the turn pipeline.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cheats {
+    /// Show the whole map regardless of what the player can see.
+    pub reveal_map: bool,
+    /// NPCs perceive nothing.
+    pub blind_npcs: bool,
+    /// The player cannot be harmed or arrested.
+    pub invulnerable: bool,
+    /// Weapons never consume charges.
+    pub endless_ammo: bool,
+    /// Sticky: set the first time any cheat is switched on, and never
+    /// cleared. A run that was ever cheated stays marked as one, so a
+    /// debrief can never quietly present it as a clean result.
+    pub ever_used: bool,
+}
+
+impl Cheats {
+    /// Whether any switch is currently on.
+    pub fn any_active(self) -> bool {
+        self.reveal_map || self.blind_npcs || self.invulnerable || self.endless_ammo
+    }
+}
+
 /// The complete authoritative simulation state.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct World {
@@ -458,6 +493,10 @@ pub struct World {
     /// mission continues but the contract resolves unclean.
     pub constraint_breach: Option<String>,
     pub outcome: Option<MissionOutcome>,
+    /// Debug switches. `#[serde(default)]` so saves and fingerprints from
+    /// before cheats existed still load.
+    #[serde(default)]
+    pub cheats: Cheats,
     /// Tie-breaker randomness for simultaneous resolution. Command
     /// rejection never touches it.
     pub resolution_rng: Pcg32,

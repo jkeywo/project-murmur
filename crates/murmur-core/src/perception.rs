@@ -33,6 +33,12 @@ pub fn npc_sees(
     target_pos: Pos,
     target_crouched: bool,
 ) -> bool {
+    // One gate for every sighting: the alert propagation, the threat
+    // panel and the NPC gaze overlay all resolve through here, so blinding
+    // NPCs in one place blinds them consistently everywhere.
+    if world.cheats.blind_npcs {
+        return false;
+    }
     let viewer_ref = world.actor(viewer);
     let Some(facing) = viewer_ref.facing else {
         return false;

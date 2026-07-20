@@ -9,6 +9,7 @@
 
 use std::collections::HashSet;
 
+use murmur_core::actions::Cheat;
 use murmur_core::data::{GameData, Zone};
 use murmur_core::geom::Pos;
 use murmur_core::map::TileKind;
@@ -48,6 +49,12 @@ pub fn draw_mission(frame: &mut Frame, data: &GameData, mission: &Mission) -> Ui
         // without scrolling on the shortest terminal we support, and
         // nothing behind it is worth reading while it is up.
         draw_help(frame, frame.area());
+    }
+    if *mission.mode() == InputMode::Contract {
+        draw_contract(frame, data, mission, frame.area());
+    }
+    if *mission.mode() == InputMode::Cheats {
+        draw_cheats(frame, mission, &mut ui);
     }
     ui
 }
@@ -102,6 +109,171 @@ fn draw_help(frame: &mut Frame, area: Rect) {
         ),
         area,
     );
+}
+
+/// The debug switch panel. Small and centred: it is a developer tool, not
+/// a screen, and it should not hide the mission behind it.
+fn draw_cheats(frame: &mut Frame, mission: &Mission, ui: &mut UiLayout) {
+    let cheats = mission.world().cheats;
+    let area = centred(frame.area(), 44, Cheat::ALL.len() as u16 + 4);
+    let mut lines: Vec<Line> = vec![Line::styled(
+        tr!("ui.cheats.hint"),
+        Style::default().fg(Color::DarkGray),
+    )];
+    for (index, which) in Cheat::ALL.iter().enumerate() {
+        let on = which.is_on(cheats);
+        let row = area.y + 2 + index as u16;
+        let key = char::from_digit(index as u32 + 1, 10).unwrap_or('?');
+        ui.rows.push(
+            row,
+            area.x + 1,
+            area.x + area.width.saturating_sub(2),
+            crate::ShellInput::Char(key),
+        );
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!(" {key}  "),
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("{:<26}", which.label()),
+                if on {
+                    Style::default().fg(Color::LightGreen)
+                } else {
+                    Style::default().fg(Color::Gray)
+                },
+            ),
+            Span::styled(
+                if on {
+                    tr!("ui.cheats.on")
+                } else {
+                    tr!("ui.cheats.off")
+                },
+                if on {
+                    Style::default()
+                        .fg(Color::LightGreen)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                },
+            ),
+        ]));
+    }
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::LightMagenta))
+                .title(tr!("ui.cheats.title")),
+        ),
+        area,
+    );
+}
+
+/// A centred box of the given size, clamped to the frame.
+fn centred(area: Rect, width: u16, height: u16) -> Rect {
+    let w = width.min(area.width);
+    let h = height.min(area.height);
+    Rect {
+        x: area.x + (area.width.saturating_sub(w)) / 2,
+        y: area.y + (area.height.saturating_sub(h)) / 2,
+        width: w,
+        height: h,
+    }
+}
+
+/// The contract, re-read mid-mission.
+///
+/// Built from the world's own facts rather than the campaign's offer, so
+/// the mission never needs to carry a copy of the contract board around
+/// with it. What it cannot show — the payout — is a hub number, and the
+/// sidebar already carries the one line that changes during play (whether
+/// the condition still holds).
+fn draw_contract(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect) {
+    let world = mission.world();
+    let facts = &world.facts;
+    let width = usize::from(area.width.saturating_sub(4)).max(20);
+    let heading = Style::default().add_modifier(Modifier::UNDERLINED);
+    let mut lines: Vec<Line> = Vec::new();
+
+    lines.push(Line::styled(
+        trf!("ui.contract.target", name = facts.target_name),
+        Style::default()
+            .fg(Color::LightYellow)
+            .add_modifier(Modifier::BOLD),
+    ));
+    push_wrapped(
+        &mut lines,
+        &trf!("ui.contract.reason", hook = facts.target_reason),
+        width,
+        Style::default().fg(Color::Gray),
+    );
+
+    lines.push(Line::styled(tr!("ui.contract.condition"), heading));
+    let (condition, colour) = match (&world.constraint, &world.constraint_breach) {
+        (None, _) => (tr!("ui.contract.condition.none").to_string(), Color::Gray),
+        (Some(_), Some(reason)) => (
+            trf!("ui.contract.condition.breached", reason = reason),
+            Color::LightRed,
+        ),
+        (Some(c), None) => (c.describe(data, &world.venue), Color::LightGreen),
+    };
+    push_wrapped(&mut lines, &condition, width, Style::default().fg(colour));
+
+    lines.push(Line::styled(tr!("ui.contract.movements"), heading));
+    let locations = if facts.target_locations.is_empty() {
+        tr!("ui.contract.movements.unknown").to_string()
+    } else {
+        facts.target_locations.join(", ")
+    };
+    push_wrapped(&mut lines, &locations, width, Style::default());
+
+    lines.push(Line::styled(tr!("ui.contract.exits"), heading));
+    push_wrapped(
+        &mut lines,
+        &facts.extraction_exits.join(", "),
+        width,
+        Style::default(),
+    );
+
+    if !facts.opportunities.is_empty() {
+        lines.push(Line::styled(tr!("ui.contract.opportunities"), heading));
+        for hint in &facts.opportunities {
+            push_wrapped(&mut lines, hint, width, Style::default().fg(Color::Gray));
+        }
+    }
+
+    frame.render_widget(Clear, area);
+    frame.render_widget(
+        Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::LightYellow))
+                .title(tr!("ui.contract.title")),
+        ),
+        area,
+    );
+}
+
+/// Wraps `text` to `width` and appends it as styled lines.
+fn push_wrapped(lines: &mut Vec<Line<'static>>, text: &str, width: usize, style: Style) {
+    let mut current = String::new();
+    for word in text.split_whitespace() {
+        if !current.is_empty() && current.chars().count() + 1 + word.chars().count() > width {
+            lines.push(Line::styled(std::mem::take(&mut current), style));
+        }
+        if !current.is_empty() {
+            current.push(' ');
+        }
+        current.push_str(word);
+    }
+    if !current.is_empty() {
+        lines.push(Line::styled(current, style));
+    }
 }
 
 fn mood_color(mood: Mood) -> Color {
@@ -279,6 +451,13 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
         InputMode::TargetSelect { candidates, index } => world.actor(candidates[*index]).pos,
         _ => world.player_actor().pos,
     };
+    // Paging the view to another storey keeps the same column and row:
+    // what a player wants from the other floor is the part of it directly
+    // above or below them. Sight is still computed from where the player
+    // actually stands, so a paged floor shows remembered terrain and no
+    // live actors — which is exactly what knowing the building, but not
+    // being in that part of it, should look like.
+    let focus = Pos::new(mission.viewed_floor(), focus.x, focus.y);
     let visible: HashSet<Pos> = crate::fov::visible_tiles(world, data).into_iter().collect();
 
     // Inspecting a visible NPC overlays every tile they can currently see.
@@ -344,9 +523,21 @@ fn draw_map(frame: &mut Frame, data: &GameData, mission: &Mission, area: Rect, u
         (_, 2) => tr!("ui.mission.panel.map.upper").to_string(),
         (n, _) => trf!("ui.mission.panel.map.numbered", n = n),
     };
+    // Say so when the map is not showing where the player is: a view that
+    // silently stopped following you is how you lose your own character.
+    let title = if mission.viewing_elsewhere() {
+        format!(" {floor_name} {} ", tr!("ui.mission.panel.map.viewing"))
+    } else {
+        format!(" {floor_name} ")
+    };
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(format!(" {floor_name} "));
+        .border_style(if mission.viewing_elsewhere() {
+            Style::default().fg(Color::LightMagenta)
+        } else {
+            Style::default()
+        })
+        .title(title);
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
@@ -554,6 +745,23 @@ fn draw_sidebar(
     };
     lines.push(Line::styled(intel, Style::default().fg(intel_color)));
 
+    // A run that was ever cheated says so, permanently. The sticky flag is
+    // what makes this honest: switching everything back off does not undo
+    // having had them on.
+    if world.cheats.ever_used {
+        let active = world.cheats.any_active();
+        lines.push(Line::styled(
+            if active {
+                tr!("ui.mission.cheats.active")
+            } else {
+                tr!("ui.mission.cheats.was_used")
+            },
+            Style::default()
+                .fg(Color::LightMagenta)
+                .add_modifier(Modifier::BOLD),
+        ));
+    }
+
     // The contract's mandatory constraint, and whether it still holds.
     if let Some(constraint) = &world.constraint {
         if world.constraint_breach.is_some() {
@@ -735,6 +943,36 @@ fn draw_sidebar(
         trf!("ui.mission.footer.speed", speed = mission.speed().label()),
         Style::default().fg(Color::DarkGray),
     ));
+
+    // Reading the job and looking at another storey are things a player
+    // reaches for mid-mission, so they get clicky footer entries rather
+    // than living only in the help overlay.
+    let footer_row = area.y + 1 + lines.len() as u16;
+    let mut footer: Vec<Span> = Vec::new();
+    let mut column = area.x + 1;
+    for (key, label) in [
+        ('j', tr!("keymap.control.contract.short")),
+        ('<', tr!("keymap.control.floor.short")),
+    ] {
+        let text = format!("{key} {label}");
+        let width = text.chars().count() as u16;
+        ui.rows.push(
+            footer_row,
+            column,
+            column + width - 1,
+            crate::ShellInput::Char(key),
+        );
+        footer.push(Span::styled(
+            format!("{key} "),
+            Style::default().fg(Color::LightCyan),
+        ));
+        footer.push(Span::styled(
+            format!("{label}  "),
+            Style::default().fg(Color::DarkGray),
+        ));
+        column += width + 2;
+    }
+    lines.push(Line::from(footer));
 
     let block = Block::default()
         .borders(Borders::ALL)

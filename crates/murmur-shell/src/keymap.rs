@@ -208,6 +208,21 @@ pub const CONTROLS: &[(&str, &str, &str)] = &[
         "keymap.control.fast_forward.help",
     ),
     (
+        "< >",
+        "keymap.control.floor.short",
+        "keymap.control.floor.help",
+    ),
+    (
+        "j",
+        "keymap.control.contract.short",
+        "keymap.control.contract.help",
+    ),
+    (
+        "C",
+        "keymap.control.cheats.short",
+        "keymap.control.cheats.help",
+    ),
+    (
         "Esc",
         "keymap.control.cancel.short",
         "keymap.control.cancel.help",

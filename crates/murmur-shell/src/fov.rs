@@ -17,6 +17,15 @@ use murmur_core::world::{ActorId, World};
 /// The player's current field of view, widened so that every
 /// sight-blocking tile bordering a visible open tile is lit too.
 pub fn visible_tiles(world: &World, data: &GameData) -> Vec<Pos> {
+    // Revealed: every tile on every storey counts as seen, which also
+    // draws the actors standing on them — that is the point of turning
+    // sight off. `visible_actors` is deliberately left alone, so the
+    // shoot list still only offers people the player can really see.
+    if world.cheats.reveal_map {
+        return (0..world.map.floor_count())
+            .flat_map(|floor| world.map.floor_positions(floor))
+            .collect();
+    }
     let player = world.player_actor();
     let base = tiles_visible_from(
         player.pos,

@@ -29,7 +29,11 @@ that cannot be submitted is rejected without time passing and cancels the
 queued remainder; a valid action can still fail during simultaneous
 resolution, and that turn stands. The mouse works everywhere: hover
 inspects any tile (hovering a person shows exactly what they can see),
-and clicking a sidebar action equals pressing its key. Hold `z` to wait
+and clicking a sidebar action equals pressing its key. `j` re-reads the
+contract, `<` and `>` page the map through the building's storeys, and
+`C` opens the developer switches (reveal the map, blind the NPCs,
+invulnerability, endless ammo) — those are commands like any other, so
+they cost a turn, mark the run, and replay exactly. Hold `z` to wait
 until something changes — a message, damage, or the target's protection
 flipping, which the sidebar tracks as standing intel. NPCs run generated
 routines on a relaxed cadence, see through facing cones, grow suspicious

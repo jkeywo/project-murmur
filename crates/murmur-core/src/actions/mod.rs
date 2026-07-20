@@ -35,6 +35,45 @@ use crate::geom::{Dir4, Pos};
 use crate::map::{DoorId, TileKind};
 use crate::world::{ActorId, BodyCondition, FurnitureId, Hands, ItemId, MissionOutcome, World};
 
+/// Which debug switch a [`Command::Cheat`] flips.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Cheat {
+    RevealMap,
+    BlindNpcs,
+    Invulnerable,
+    EndlessAmmo,
+}
+
+impl Cheat {
+    /// Every switch, in the order the panel lists them.
+    pub const ALL: [Cheat; 4] = [
+        Cheat::RevealMap,
+        Cheat::BlindNpcs,
+        Cheat::Invulnerable,
+        Cheat::EndlessAmmo,
+    ];
+
+    /// How the switch reads on the panel.
+    pub fn label(self) -> &'static str {
+        match self {
+            Cheat::RevealMap => crate::tr!("cheat.reveal_map"),
+            Cheat::BlindNpcs => crate::tr!("cheat.blind_npcs"),
+            Cheat::Invulnerable => crate::tr!("cheat.invulnerable"),
+            Cheat::EndlessAmmo => crate::tr!("cheat.endless_ammo"),
+        }
+    }
+
+    /// Whether this switch is currently on.
+    pub fn is_on(self, cheats: crate::world::Cheats) -> bool {
+        match self {
+            Cheat::RevealMap => cheats.reveal_map,
+            Cheat::BlindNpcs => cheats.blind_npcs,
+            Cheat::Invulnerable => cheats.invulnerable,
+            Cheat::EndlessAmmo => cheats.endless_ammo,
+        }
+    }
+}
+
 /// A queued player intention. Targets are stable domain IDs captured when
 /// the command was written, validated against the live world only when the
 /// command reaches the queue head.
@@ -62,6 +101,9 @@ pub enum Command {
     ThrowNoisemaker(Pos),
     /// Use an adjacent opportunity machine.
     Interact(FurnitureId),
+    /// Flip a debug switch. A command like any other, so the record sees
+    /// it and replay reproduces it.
+    Cheat(Cheat),
 }
 
 /// Where a disguise change sources its clothes.
@@ -75,6 +117,8 @@ pub enum DisguiseSource {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ActionIntent {
     Wait,
+    /// Flip a debug switch.
+    Cheat(Cheat),
     Step(Dir4),
     ToggleCrouch,
     OpenDoor(DoorId),
@@ -214,7 +258,10 @@ pub fn intent_duration(
                 durations.step
             }
         }
-        ActionIntent::Wait | ActionIntent::ToggleCrouch | ActionIntent::TurnFacing(_) => 1,
+        ActionIntent::Wait
+        | ActionIntent::Cheat(_)
+        | ActionIntent::ToggleCrouch
+        | ActionIntent::TurnFacing(_) => 1,
         ActionIntent::OpenDoor(_) | ActionIntent::CloseDoor(_) => durations.door,
         ActionIntent::Garrote(_) => durations.garrote,
         ActionIntent::Shoot(_) => durations.shoot,
@@ -254,6 +301,7 @@ pub fn translate(
     }
     match *command {
         Command::Wait => Ok(ActionIntent::Wait),
+        Command::Cheat(which) => Ok(ActionIntent::Cheat(which)),
         Command::ToggleCrouch => Ok(ActionIntent::ToggleCrouch),
         Command::Move(dir) => movement::validate_move(world, data, dir),
         Command::OpenDoor(id) => doors::validate_open(world, data, id),
@@ -337,6 +385,23 @@ pub fn resolve_turn(
     for action in &applying {
         match action.intent {
             ActionIntent::Wait => record(world, &mut events, action.actor, ActionResult::Completed),
+            ActionIntent::Cheat(which) => {
+                let on = !which.is_on(world.cheats);
+                match which {
+                    Cheat::RevealMap => world.cheats.reveal_map = on,
+                    Cheat::BlindNpcs => world.cheats.blind_npcs = on,
+                    Cheat::Invulnerable => world.cheats.invulnerable = on,
+                    Cheat::EndlessAmmo => world.cheats.endless_ammo = on,
+                }
+                if on {
+                    world.cheats.ever_used = true;
+                }
+                events.messages.push(crate::loc::fmt(
+                    if on { "log.cheat_on" } else { "log.cheat_off" },
+                    &[("switch", which.label())],
+                ));
+                record(world, &mut events, action.actor, ActionResult::Completed);
+            }
             ActionIntent::ToggleCrouch => {
                 let actor = world.actor_mut(action.actor);
                 actor.crouched = !actor.crouched;
@@ -452,6 +517,17 @@ pub fn resolve_turn(
 fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
     if world.outcome.is_some() {
         return;
+    }
+    let player = world.player_actor();
+    if world.cheats.invulnerable && player.condition != BodyCondition::Healthy {
+        // Put them back on their feet rather than merely skipping the
+        // outcome: a dead-but-not-dead player would keep failing every
+        // action for the rest of the mission.
+        let id = world.player;
+        let max_hp = world.actor(id).hp.max(1);
+        let player = world.actor_mut(id);
+        player.condition = BodyCondition::Healthy;
+        player.hp = max_hp;
     }
     let player = world.player_actor();
     if player.condition == BodyCondition::Dead {

@@ -139,6 +139,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         constraint: config.constraint.clone(),
         constraint_breach: None,
         outcome: None,
+        cheats: crate::world::Cheats::default(),
         resolution_rng: Pcg32::for_stream(seed, Stream::Resolution),
     })
 }
@@ -598,6 +599,35 @@ mod tests {
     }
 
     /// Every door must connect two walkable tiles across it — no door
+    /// An exit marker is drawn over whatever tile it sits on, so an exit
+    /// on a room's threshold reads as a blocked doorway — and in a room
+    /// with one door that is the only way in. Playtest found one; this
+    /// keeps the geometry honest across every venue.
+    #[test]
+    fn no_exit_marker_stands_in_a_doorway() {
+        let data = data();
+        for venue in venues(&data) {
+            let venue = venue.as_str();
+            for seed in 0..40u64 {
+                let world =
+                    generate(&data, &crate::contract::MissionConfig::new(seed, venue)).unwrap();
+                for tile in &world.extraction_tiles {
+                    assert!(
+                        !matches!(world.map.tile(*tile), TileKind::Door(_)),
+                        "{venue} seed {seed}: an exit sits on the door at {tile:?}"
+                    );
+                    for dir in crate::geom::Dir4::ALL {
+                        assert!(
+                            !matches!(world.map.tile(tile.step(dir)), TileKind::Door(_)),
+                            "{venue} seed {seed}: the exit at {tile:?} blocks the doorway                              at {:?}",
+                            tile.step(dir)
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn generates_valid_worlds_across_many_seeds() {
         let data = data();

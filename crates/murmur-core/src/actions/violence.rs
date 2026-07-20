@@ -136,7 +136,8 @@ pub(super) fn resolve_shoot(
     let shooter_pos = world.actor(actor).pos;
     let target_pos = world.actor(target).pos;
     let (weapon_id, _) = carried_firearm(world, data, actor).expect("checked by shoot_core");
-    if let Some(item) = world.items.iter_mut().find(|i| i.id == weapon_id) {
+    let cheats_endless = world.cheats.endless_ammo;
+    if !cheats_endless && let Some(item) = world.items.iter_mut().find(|i| i.id == weapon_id) {
         item.charges -= 1;
     }
     if actor == world.player

@@ -1007,3 +1007,34 @@ entities:
       paths: [crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/lib.rs]
       symbols: [default_loadout, from_world, ContractResult]
       tests: [crates/murmur-campaign/src/lib.rs, crates/murmur-shell/src/lib.rs]
+
+  - decision: cheats-are-commands
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Debug Switches Are Commands, Not A Side Channel
+      summary: The four playtest cheats - reveal the map, blind the NPCs, invulnerability, endless ammo - are toggled through Command::Cheat like any other player action, so they land in the accepted-command record and a replay of a cheated run reproduces the cheating exactly. A switch flipped outside the command stream would have broken the determinism guarantee the whole project rests on, and it would have broken it only for the runs a developer was most likely to be investigating. Flipping one therefore costs a turn, which is the honest price of having no special case anywhere in the turn pipeline. A sticky ever-used flag marks the run permanently, so switching everything back off cannot present a cheated result as a clean one, and the sidebar says so while it is true.
+      rationale:
+        - The alternative - cheat state on the shell - keeps the simulation clean but silently desynchronises replay, which is worse than a visible cost.
+        - Reveal-map is the one switch the shell can serve alone, since player sight is presentation; it still routes through the same command so all four behave identically.
+        - The cheat panel deliberately does not pause the queue, unlike every other overlay. A switch is a queued command and a paused queue can never run the thing the panel exists to do.
+      references: [deterministic-rng-and-integer-math]
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions/mod.rs, crates/murmur-core/src/world.rs, crates/murmur-core/src/perception.rs, crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs]
+      symbols: [Cheat, Cheats]
+      tests: [crates/murmur-core/tests/cheats.rs]
+
+  - decision: the-map-view-follows-the-player
+    core:
+      status: implemented
+      confidence: confirmed
+      title: The Map View Can Be Paged, But Always Comes Back
+      summary: Venues stand two to four storeys but the map only ever drew the one the player was on, which left the upper floors unreadable while planning. The view can now be paged with the roguelike up and down keys, keeping the same column and row - what a player wants from another floor is the part directly above or below them. Sight is still computed from where the player actually stands, so a paged storey shows remembered terrain and no live actors, which is what knowing a building but not being in that part of it should look like. The view snaps back the moment the player changes floor themselves, and says plainly in its title and border when it is showing somewhere else.
+      rationale:
+        - A view that silently stops following the player is how someone loses their own character, so following is the default and paging is the exception that announces itself.
+        - Reusing the exploration memory rather than adding a second reveal rule means a paged floor can never show more than the player has earned.
+      references: []
+    implementation:
+      status: declared
+      paths: [crates/murmur-shell/src/mission.rs, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/keymap.rs]
