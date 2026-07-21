@@ -105,7 +105,7 @@ fn draw_help(frame: &mut Frame, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::LightMagenta))
-                .title(tr!("ui.mission.help.title")),
+                .title(format!(" {} ", tr!("ui.mission.help.title"))),
         ),
         area,
     );
@@ -168,7 +168,7 @@ fn draw_cheats(frame: &mut Frame, mission: &Mission, ui: &mut UiLayout) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::LightMagenta))
-                .title(tr!("ui.cheats.title")),
+                .title(format!(" {} ", tr!("ui.cheats.title"))),
         ),
         area,
     );
@@ -253,7 +253,7 @@ fn draw_contract(frame: &mut Frame, data: &GameData, mission: &Mission, area: Re
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::LightYellow))
-                .title(tr!("ui.contract.title")),
+                .title(format!(" {} ", tr!("ui.contract.title"))),
         ),
         area,
     );
@@ -646,12 +646,12 @@ fn draw_sidebar(
             data.tuning.player_max_hp.saturating_sub(player.hp),
         ));
     lines.push(Line::from(vec![
-        Span::raw(tr!("ui.mission.health")),
+        Span::raw(format!("{} ", tr!("ui.mission.health"))),
         Span::styled(hearts, Style::default().fg(Color::LightRed)),
         Span::raw(if player.crouched {
-            tr!("ui.mission.crouched")
+            format!("   {}", tr!("ui.mission.crouched"))
         } else {
-            ""
+            String::new()
         }),
     ]));
 
@@ -661,7 +661,7 @@ fn draw_sidebar(
         .map(|d| d.name.clone())
         .unwrap_or_else(|| player.worn_disguise.clone());
     lines.push(Line::from(vec![
-        Span::raw(tr!("ui.mission.wearing")),
+        Span::raw(format!("{} ", tr!("ui.mission.wearing"))),
         Span::styled(
             disguise_name,
             Style::default()
@@ -809,12 +809,15 @@ fn draw_sidebar(
         .collect();
     for slot in 0..murmur_core::actions::INVENTORY_SLOTS {
         match carried.get(slot) {
-            Some(name) => lines.push(Line::from(murmur_core::loc::fmt(
-                "ui.mission.inventory.slot",
-                &[("n", &(slot + 1).to_string()), ("name", name)],
+            Some(name) => lines.push(Line::from(format!(
+                " {}",
+                murmur_core::loc::fmt(
+                    "ui.mission.inventory.slot",
+                    &[("n", &(slot + 1).to_string()), ("name", name)],
+                )
             ))),
             None => lines.push(Line::styled(
-                trf!("ui.mission.inventory.empty", n = slot + 1),
+                format!(" {}", trf!("ui.mission.inventory.empty", n = slot + 1)),
                 Style::default().fg(Color::DarkGray),
             )),
         }
@@ -832,7 +835,7 @@ fn draw_sidebar(
     let seen = crate::fov::visible_actors(world, data);
     if seen.is_empty() {
         lines.push(Line::styled(
-            tr!("ui.mission.insight.nobody"),
+            format!(" {}", tr!("ui.mission.insight.nobody")),
             Style::default().fg(Color::DarkGray),
         ));
     }
@@ -848,20 +851,26 @@ fn draw_sidebar(
             style = style.add_modifier(Modifier::BOLD);
         }
         lines.push(Line::styled(
-            murmur_core::loc::fmt(
-                "ui.mission.insight.actor",
-                &[
-                    ("name", &actor.name),
-                    ("range", &range),
-                    ("mood", mood.label()),
-                ],
+            format!(
+                " {}",
+                murmur_core::loc::fmt(
+                    "ui.mission.insight.actor",
+                    &[
+                        ("name", &actor.name),
+                        ("range", &range),
+                        ("mood", mood.label()),
+                    ],
+                )
             ),
             style,
         ));
     }
     if seen.len() > 4 {
         lines.push(Line::styled(
-            trf!("ui.mission.insight.more", count = seen.len() - 4),
+            format!(
+                " {}",
+                trf!("ui.mission.insight.more", count = seen.len() - 4)
+            ),
             Style::default().fg(Color::DarkGray),
         ));
     }

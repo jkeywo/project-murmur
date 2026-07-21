@@ -660,7 +660,8 @@ entities:
       rationale:
         - A status column with runtime wrapping was considered; baking the brackets in keeps the file self-describing and means no tooling has to know about a marking convention to render the text correctly.
         - The nesting is loud, which is the point - it disappears exactly as fast as real copy lands.
-      references: [text-lives-in-a-csv-catalogue]
+        - Single-word values were later unbracketed in bulk, a hundred and twenty-four of them. A one-word label like inventory or agent has nothing a writer could improve, so it was already final prose and the marking only added noise; the convention now reads as marking sentences an agent drafted rather than every string in the file.
+      references: [text-lives-in-a-csv-catalogue, layout-belongs-to-the-code-not-the-catalogue]
     implementation:
       status: declared
       paths: [data/loc/strings.csv]
@@ -1106,3 +1107,19 @@ entities:
       - kind: test
         reference: crates/murmur-core/examples/loss_attribution.rs
         summary: Categorises every non-won mission by what the bot was doing before it lost; the getaway split is what identified the fix and would catch a regression into the old behaviour.
+
+  - decision: layout-belongs-to-the-code-not-the-catalogue
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Padding And Line Breaks Belong To The Layout, Not The Text
+      summary: Fourteen catalogue values carried their own whitespace - a sidebar label ending in a space before its value, list rows indented by one column, panel titles padded away from their border - and four families split one sentence across numbered entries so the shell could print them as separate lines. Both are layout decisions that had leaked into the data. The padding moved into the format strings that lay each line out, and the split sentences became single entries the shell word-wraps at build time with the wrapping helper it already had. A translator now receives a sentence rather than three fragments, and cannot break a panel by writing a longer one.
+      rationale:
+        - Where a line breaks depends on the panel's width, which the catalogue cannot know. A translation into a language with longer words would have had to re-split the fragments by hand and would still have been wrong at a different terminal size.
+        - Indentation is the shape of a list, not part of any row's text, so it belongs with the code that decides there is a list at all.
+        - One family was deliberately left split. The four start-screen rules are a list of four separate statements rather than one paragraph, so each stays its own entry and stays independently translatable; merging them would have turned something scannable into prose.
+        - The pass also exposed an unbalanced bracket in a hub row, left behind by an earlier partial edit and invisible until the padding was stripped around it.
+      references: [agent-text-is-bracketed-placeholder, text-lives-in-a-csv-catalogue]
+    implementation:
+      status: declared
+      paths: [data/loc/strings.csv, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/screens.rs]

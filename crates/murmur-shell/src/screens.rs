@@ -111,16 +111,23 @@ fn render_footer(
 pub fn draw_confirm_new_campaign(frame: &mut Frame) -> ScreenLayout {
     let mut layout = ScreenLayout::default();
     let area = centered(frame.area(), 54, 11);
-    let lines = vec![
+    let width = usize::from(area.width.saturating_sub(2));
+    let mut lines = vec![
         Line::styled(
             tr!("ui.confirm_new.title"),
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw(tr!("ui.confirm_new.body.1")),
-        Line::raw(tr!("ui.confirm_new.body.2")),
-        Line::raw(tr!("ui.confirm_new.body.3")),
     ];
+    // One block of prose, wrapped here rather than split across numbered
+    // catalogue entries: where the line breaks fall is the panel's business,
+    // and a translator should get a sentence rather than three fragments.
+    push_wrapped(
+        &mut lines,
+        tr!("ui.confirm_new.body").to_string(),
+        Style::default(),
+        width,
+    );
     let prompts = vec![
         (
             ShellInput::Char('y'),
@@ -185,6 +192,9 @@ fn keymap_summary(width: usize) -> Vec<String> {
 pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
     let mut layout = ScreenLayout::default();
     let area = centered(frame.area(), 66, 30);
+    // Four columns rather than two: prose that runs flush to both borders
+    // reads as cramped next to the centred lines around it.
+    let width = usize::from(area.width.saturating_sub(4));
     let mut lines = vec![
         Line::styled(
             tr!("ui.start.title"),
@@ -193,8 +203,17 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
                 .add_modifier(Modifier::BOLD),
         ),
         Line::raw(""),
-        Line::raw(tr!("ui.start.pitch.1")),
-        Line::raw(tr!("ui.start.pitch.2")),
+    ];
+    // The premise is one sentence, wrapped to the panel. The four rules
+    // below stay four entries: they are a list, not a paragraph, and each
+    // reads on its own line.
+    push_wrapped(
+        &mut lines,
+        tr!("ui.start.pitch").to_string(),
+        Style::default(),
+        width,
+    );
+    lines.extend([
         Line::raw(""),
         Line::raw(tr!("ui.start.rules.1")),
         Line::raw(tr!("ui.start.rules.2")),
@@ -205,7 +224,7 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
             tr!("ui.start.keys_heading"),
             Style::default().add_modifier(Modifier::UNDERLINED),
         ),
-    ];
+    ]);
     // Built from the keymap table rather than written out again, so this
     // list cannot drift from what the keys actually do. Press ? in a
     // mission for the same bindings with full descriptions.
@@ -214,10 +233,13 @@ pub fn draw_start(frame: &mut Frame, has_save: bool) -> ScreenLayout {
         Line::raw(""),
         Line::raw(tr!("ui.start.help_hint")),
         Line::raw(""),
-        Line::raw(tr!("ui.start.mouse.1")),
-        Line::raw(tr!("ui.start.mouse.2")),
-        Line::raw(tr!("ui.start.mouse.3")),
     ]);
+    push_wrapped(
+        &mut lines,
+        tr!("ui.start.mouse").to_string(),
+        Style::default(),
+        width,
+    );
     let green = Style::default().fg(Color::LightGreen);
     let mut prompts = vec![(
         ShellInput::Enter,
@@ -380,15 +402,18 @@ pub fn draw_hub(
                 Style::default().add_modifier(Modifier::BOLD),
             );
             lines.push(Line::styled(
-                trf!("ui.hub.offer.hook", hook = offer.hook),
+                format!("    {}", trf!("ui.hub.offer.hook", hook = offer.hook)),
                 Style::default().fg(Color::Gray),
             ));
             // The board stays compact with the chip; the full condition
             // is spelled out on the briefing before you commit.
             lines.push(Line::styled(
-                trf!(
-                    "ui.hub.offer.condition",
-                    condition = offer.constraint.short(data, &offer.venue)
+                format!(
+                    "    {}",
+                    trf!(
+                        "ui.hub.offer.condition",
+                        condition = offer.constraint.short(data, &offer.venue)
+                    )
                 ),
                 Style::default().fg(Color::LightCyan),
             ));
