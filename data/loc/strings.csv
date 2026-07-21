@@ -1,24 +1,24 @@
 id,context,english
-# ---------------------------------------------------------------------------
-# Project Murmur string table. Three columns: a stable id
-# the string appears and what fills its slots
-#
-# Every line below is placeholder text written by an agent
-# wrapped in [square brackets]. When a writer replaces one with real prose
-# they drop the brackets in the same edit; anything bracketed on screen has
-# not been through a writer yet.
-#
-# {named} slots are filled at runtime. The context column names every slot a
-# string takes. Rows whose id is blank or starts with # are ignored.
-# ---------------------------------------------------------------------------
-
-# --- start screen ----------------------------------------------------------
+# ---------------------------------------------------------------------------,,
+# Project Murmur string table. Three columns: a stable id,,
+# the string appears and what fills its slots,,
+#,,
+# Every line below is placeholder text written by an agent,,
+# wrapped in [square brackets]. When a writer replaces one with real prose,,
+# they drop the brackets in the same edit; anything bracketed on screen has,,
+# not been through a writer yet.,,
+#,,
+# {named} slots are filled at runtime. The context column names every slot a,,
+# string takes. Rows whose id is blank or starts with # are ignored.,,
+# ---------------------------------------------------------------------------,,
+,,
+# --- start screen ----------------------------------------------------------,,
 ui.start.title,Game title on the start screen. Spaced out for display.,P R O J E C T   M U R M U R
 ui.start.pitch,Start screen: the premise.,"A social-stealth contract campaign. Take a job, slip in, eliminate the target and walk out unremarked."
-ui.start.rules.1,Start screen rule summary: the disguise system.,[Blend in: your clothes decide where you belong.]
-ui.start.rules.2,Start screen rule summary: what guards react to.,"[Guards notice trespass, weapons, bodies, and worse.]"
-ui.start.rules.3,Start screen rule summary: contract conditions.,"[Contracts carry one hard condition; break it, no pay.]"
-ui.start.rules.4,Start screen rule summary: the cost of failure.,[Arrest costs your kit and a fine. Death ends everything.]
+ui.start.rules.1,Start screen rule summary: the disguise system., - Blend in: use disguises to enter private areas.
+ui.start.rules.2,Start screen rule summary: what guards react to.,"- Guards notice trespass, weapons and bodies."
+ui.start.rules.3,Start screen rule summary: contract conditions.,"- Each contracts carry a condition: break it, no pay."
+ui.start.rules.4,Start screen rule summary: the cost of failure.,- Arrest costs your inventory and a fine. Death ends everything.
 ui.start.keys_heading,Underlined heading above the compact key list.,keys
 ui.start.help_hint,Start screen: points at the in-mission help overlay.,Press ? during a mission for the full list.
 ui.start.mouse,Start screen: the mouse hint.,"Mouse support: hover to inspect, click a tile to walk there, and click any prompt or action instead of pressing its key."
@@ -26,14 +26,14 @@ ui.start.prompt.continue,Start screen prompt when a saved campaign exists.,Enter
 ui.start.prompt.begin,Start screen prompt when there is no save.,Enter: begin your campaign
 ui.start.prompt.new,Start screen prompt to discard the save and start over.,n: start over
 ui.start.prompt.quit,Start screen prompt to leave the program.,q: quit
-
-# --- start over confirmation ----------------------------------------------
+,,
+# --- start over confirmation ----------------------------------------------,,
 ui.confirm_new.title,Heading of the dialog guarding a destructive restart.,Start over?
 ui.confirm_new.body,Restart warning: what a new campaign discards.,"This discards your saved campaign — the money, the kit and everyone you have already dealt with. There is only one save, and no way to revert this."
 ui.confirm_new.prompt.yes,Restart dialog: confirm and destroy the save.,"y: yes, start over"
 ui.confirm_new.prompt.no,Restart dialog: any other key keeps the campaign.,any other key: keep my campaign
-
-# --- the hub (contract board
+,,
+# --- the hub (contract board,,
 ui.hub.title,Heading of the campaign hub screen.,THE SYNDICATE DESK
 ui.hub.wallet,"Hub status line. {cash} is a money amount, {contracts} a count.",cash {cash}   contracts done {contracts}
 ui.hub.district_heat,"One district's heat, joined into a row. {district} name, {heat} 0-5.",{district}: heat {heat}
@@ -45,7 +45,7 @@ ui.hub.offer.line,"One contract row. {venue}, {district}, {payout} money, {heat}
 ui.hub.offer.hook,Why the target is marked. {hook} is a briefing reason clause.,the target {hook}
 ui.hub.offer.condition,"The contract's hard condition, abbreviated. {condition} is the short form.",condition: {condition}
 ui.hub.offer.pass,Hub row: decline the whole board and roll a new one.,let this board pass
-ui.hub.stash.title,Heading above the player's owned equipment.,YOUR STASH]
+ui.hub.stash.title,Heading above the player's owned equipment.,YOUR STASH
 ui.hub.stash.empty,Shown in place of the stash list when nothing is owned.,nothing but your hands
 ui.hub.fence.title,Heading above the equipment shop.,THE FENCE (click or key to buy)
 ui.hub.fence.owned,A shop row for an item already owned. {name} is the item name.,{name} – owned
@@ -56,8 +56,8 @@ ui.hub.msg.contract_passed,Hub message after walking away from a briefing.,you l
 ui.hub.msg.board_refreshed,Hub message after declining the board.,wait for a fresh board
 ui.hub.msg.bought,Hub message after a purchase. {item} is the item name.,bought: {item}
 ui.hub.msg.generation_failed,Hub message when mission generation gave up. Should be near-impossible.,the contract fell through; return to the board
-
-# --- the briefing ----------------------------------------------------------
+,,
+# --- the briefing ----------------------------------------------------------,,
 ui.briefing.title,Heading of the pre-mission briefing.,MISSION BRIEFING
 ui.briefing.subtitle,"Briefing byline. {seed} is the mission seed, {venue} and {district} the job.",[contract {seed} - {venue} in {district}]
 ui.briefing.target,{name} is the generated target's full name.,[Target: {name}]
@@ -78,48 +78,48 @@ ui.briefing.loadout.none,Replaces the loadout line when nothing was taken.,[You 
 ui.briefing.entry,Briefing closer: the player always starts as a guest in civilian dress.,[You enter as a guest in civilian clothes.]
 ui.briefing.prompt.go,Briefing prompt: begin the mission.,[Enter: go in]
 ui.briefing.prompt.pass,Briefing prompt: decline and return to the hub.,[Esc: let the contract pass]
-
-# --- the debrief -----------------------------------------------------------
-ui.debrief.headline.completed,Debrief headline: target dead and the condition held.,[CONTRACT COMPLETED]
-ui.debrief.headline.breached,Debrief headline: extracted but the condition was broken.,[CONTRACT BREACHED]
-ui.debrief.headline.target_escaped,Debrief headline: the target got out alive.,[TARGET ESCAPED]
+,,
+# --- the debrief -----------------------------------------------------------,,
+ui.debrief.headline.completed,Debrief headline: target dead and the condition held.,CONTRACT COMPLETED
+ui.debrief.headline.breached,Debrief headline: extracted but the condition was broken.,CONTRACT BREACHED
+ui.debrief.headline.target_escaped,Debrief headline: the target got out alive.,TARGET ESCAPED]
 ui.debrief.headline.arrested,Debrief headline: the player was arrested.,ARRESTED
-ui.debrief.headline.killed,Debrief headline: the player died. Ends the campaign.,[KILLED IN ACTION]
-ui.debrief.headline.abandoned,Debrief headline: the player walked out of the run.,[CONTRACT ABANDONED]
-ui.debrief.result,How the contract ended. {result} is a result phrase.,[the contract {result}]
-ui.debrief.payout,{payout} is the money actually paid.,[payout: {payout}]
-ui.debrief.breach,Why the contract was voided. {reason} names the broken condition.,[breached: {reason}]
-ui.debrief.fine,{fine} is money deducted after an arrest.,[fine paid: {fine}]
-ui.debrief.confiscated,{items} is a comma-joined list of gear lost to an arrest.,[confiscated: {items}]
-ui.debrief.heat_rose,Shown when the job raised the district's heat.,[the district runs hotter now]
-ui.debrief.cash,{cash} is the campaign wallet after settling up.,[cash: {cash}]
-ui.debrief.footer,"Run statistics. {turns} is a turn count, {seed} the mission seed.",[{turns} turns   seed {seed}]
-ui.debrief.prompt.back,Debrief prompt: return to the hub.,[Enter: back to the desk]
-
-# --- campaign over ---------------------------------------------------------
-ui.campaign_over.title,Heading shown when the operative dies and the run ends.,[THE CAMPAIGN ENDS HERE]
-ui.campaign_over.tally,"{taken} contracts accepted, {killed} targets eliminated.","[{taken} contracts taken, {killed} targets eliminated]"
-ui.campaign_over.earned,{earned} is total money earned across the run.,[{earned} earned across the run]
-ui.campaign_over.record,"One past contract. {venue}, {district}, {result} phrase.",[{venue} in {district}: {result}]
-ui.campaign_over.prompt.again,Campaign-over prompt: begin a fresh campaign.,[Enter: a new operative takes the desk]
-ui.campaign_over.prompt.quit,Campaign-over prompt: leave the program.,[q: quit]
-
-# --- contract results ------------------------------------------------------
-result.completed,Contract outcome phrase: clean success.,[completed cleanly]
-result.completed_unclean,Contract outcome phrase: target dead but the condition broke.,"[completed, contract breached]"
+ui.debrief.headline.killed,Debrief headline: the player died. Ends the campaign.,KILLED IN ACTION
+ui.debrief.headline.abandoned,Debrief headline: the player walked out of the run.,CONTRACT ABANDONED
+ui.debrief.result,How the contract ended. {result} is a result phrase.,the contract {result}
+ui.debrief.payout,{payout} is the money actually paid.,payout: {payout}]
+ui.debrief.breach,Why the contract was voided. {reason} names the broken condition.,breached: {reason}
+ui.debrief.fine,{fine} is money deducted after an arrest.,fine paid: {fine}]
+ui.debrief.confiscated,{items} is a comma-joined list of gear lost to an arrest.,confiscated: {items}]
+ui.debrief.heat_rose,Shown when the job raised the district's heat.,the district is hotter now
+ui.debrief.cash,{cash} is the campaign wallet after settling up.,cash: {cash}
+ui.debrief.footer,"Run statistics. {turns} is a turn count, {seed} the mission seed.",{turns} turns   seed {seed}
+ui.debrief.prompt.back,Debrief prompt: return to the hub.,Enter: back to the desk
+,,
+# --- campaign over ---------------------------------------------------------,,
+ui.campaign_over.title,Heading shown when the operative dies and the run ends.,THE CAMPAIGN ENDS HERE
+ui.campaign_over.tally,"{taken} contracts accepted, {killed} targets eliminated.","{taken} contracts taken, {killed} targets eliminated"
+ui.campaign_over.earned,{earned} is total money earned across the run.,{earned} earned across the run
+ui.campaign_over.record,"One past contract. {venue}, {district}, {result} phrase.",{venue} in {district}: {result}
+ui.campaign_over.prompt.again,Campaign-over prompt: begin a fresh campaign.,[Enter: a new operative arrives…
+ui.campaign_over.prompt.quit,Campaign-over prompt: leave the program.,q: quit
+,,
+# --- contract results ------------------------------------------------------,,
+result.completed,Contract outcome phrase: clean success.,completed cleanly
+result.completed_unclean,Contract outcome phrase: target dead but the condition broke.,"completed, contract breached"
 result.abandoned,Contract outcome phrase: the player walked away mid-run.,abandoned
-result.target_escaped,Contract outcome phrase: the target survived and left.,[the target escaped]
-result.arrested,Contract outcome phrase: the player was arrested.,[ended in arrest]
-result.killed,Contract outcome phrase: the player died.,[ended in death]
-
-# --- campaign errors -------------------------------------------------------
+result.target_escaped,Contract outcome phrase: the target survived and left.,the target escaped
+result.arrested,Contract outcome phrase: the player was arrested.,ended in arrest
+result.killed,Contract outcome phrase: the player died.,ended in death]
+,,
+# --- campaign errors -------------------------------------------------------,,
 campaign.err.over,Refusal when acting on a finished campaign.,[the campaign is over]
 campaign.err.loadout_full,Refusal when more than three items are chosen.,[a loadout carries at most three items]
 campaign.err.not_owned,Refusal when taking an unowned item. {item} is the item id.,[you do not own '{item}']
 campaign.err.already_owned,Shop refusal: the item is already in the stash.,[already owned]
 campaign.err.no_cash,Shop refusal: not enough money.,[not enough cash]
-
-# --- mission sidebar -------------------------------------------------------
+,,
+# --- mission sidebar -------------------------------------------------------,,
 ui.mission.panel.map.ground,Title of the map panel on the ground storey.,[ground floor]
 ui.mission.panel.map.upper,Title of the map panel on the upper storey.,[upper floor]
 ui.mission.panel.map.numbered,Map panel title above two storeys. {n} is the storey number.,[floor {n}]
@@ -168,8 +168,8 @@ ui.mission.target.down,Sidebar intel line after the kill.,[target down]
 ui.mission.panel.map.viewing,Map title suffix while the view is on a storey the player is not standing on.,[- viewing]
 ui.mission.cheats.active,Sidebar marker while any debug switch is on.,[** cheats active **]
 ui.mission.cheats.was_used,Sidebar marker after every switch is off again; the run stays marked.,[** this run used cheats **]
-
-# --- the contract overlay --------------------------------------------------
+,,
+# --- the contract overlay --------------------------------------------------,,
 ui.contract.title,Title bar of the contract overlay; also says how to leave it.,[the contract - any key returns to the mission]
 ui.contract.target,Contract overlay: who the job is. {name} is the target.,[the mark: {name}]
 ui.contract.reason,Contract overlay: why the syndicate wants them gone. {hook} is the reason.,{hook}
@@ -180,8 +180,8 @@ ui.contract.movements,Contract overlay heading above the rooms the target is kno
 ui.contract.movements.unknown,Contract overlay text when the target's movements were not briefed.,[not briefed]
 ui.contract.exits,Contract overlay heading above the extraction points.,[ways out]
 ui.contract.opportunities,Contract overlay heading above the discovered opportunity hints.,[what you have noticed]
-
-# --- the cheat panel -------------------------------------------------------
+,,
+# --- the cheat panel -------------------------------------------------------,,
 ui.cheats.title,Title bar of the debug switch panel.,[cheats - a number toggles; any other key leaves]
 ui.cheats.hint,Line above the debug switches explaining the cost of using them.,[each flip takes a turn and marks the run]
 ui.cheats.on,Shown beside a debug switch that is on.,ON
@@ -190,8 +190,8 @@ cheat.reveal_map,Name of the reveal-map debug switch.,[show the whole map]
 cheat.blind_npcs,Name of the blind-NPCs debug switch.,[nobody can see you]
 cheat.invulnerable,Name of the invulnerability debug switch.,[you cannot be harmed]
 cheat.endless_ammo,Name of the endless-ammo debug switch.,[weapons never run dry]
-
-# --- item notes (what carrying a thing lets you do) ------------------------
+,,
+# --- item notes (what carrying a thing lets you do) ------------------------,,
 ui.mission.item.enables,"An item's verb. {action} is a palette label, {key} its key.",[enables {action} ({key})]
 ui.mission.item.invitation,Note on an invitation item.,[you are an invited guest]
 ui.mission.item.staff_pass,Note on a forged staff pass.,[counts as staff wherever you are]
@@ -199,8 +199,8 @@ ui.mission.item.master_key,Note on a key that opens everything.,[opens every loc
 ui.mission.item.one_lock,Note on a key that opens a single room's doors.,[opens one kind of locked door]
 ui.mission.item.charges,{count} uses remain.,[{count} left]
 ui.mission.item.no_use,Note on an item with no verb of its own.,[no use of its own]
-
-# --- tile inspection -------------------------------------------------------
+,,
+# --- tile inspection -------------------------------------------------------,,
 ui.mission.tile.unseen,Inspection of a tile the player has never seen.,unseen
 ui.mission.tile.nothing,Inspection of a tile with nothing worth naming.,[nothing of note]
 ui.mission.tile.room,"A room and its access tier. {room} name, {zone} venue label.",[{room} ({zone})]
@@ -223,8 +223,8 @@ ui.mission.tile.wardrobe_empty,Inspection of a wardrobe with nothing in it.,[war
 ui.mission.tile.machine,"An unused opportunity. {name}, {presentation} look, {risk} warning.",[{name} - {presentation} ({risk})]
 ui.mission.tile.machine_spent,An opportunity already used. {name} is the machine name.,[{name} (spent)]
 ui.mission.tile.machinery,Fallback for a machine with no opportunity spec.,machinery
-
-# --- targeting prompts -----------------------------------------------------
+,,
+# --- targeting prompts -----------------------------------------------------,,
 mission.prompt.garrote,Prompt asking which way to garrote.,[garrote - which direction?]
 mission.prompt.pickpocket,Prompt asking which way to pickpocket.,[pickpocket - which direction?]
 mission.prompt.disguise,Prompt asking where to take clothes from.,[take disguise - which direction?]
@@ -238,8 +238,8 @@ mission.prompt.use_machine,Prompt asking which machine to use.,[use - which dire
 mission.prompt.throw,Prompt while aiming a noisemaker throw.,"[aim the throw - Enter or click throws, Esc cancels]"
 mission.prompt.shoot,"Prompt while cycling shot targets. {name}, {n} of {total}.","[aim: {name} ({n}/{total}) - Enter or click fires, Esc cancels]"
 mission.confirm.abandon,Yes/no question guarding an abandoned run.,[abandon the run and walk away? y / n]
-
-# --- mission notices (shell-side
+,,
+# --- mission notices (shell-side,,
 mission.notice.entered,First log line of every mission.,[you slip in through the entrance]
 mission.notice.nothing_there,Refusal when a targeted action finds no valid target on that tile.,[nothing suitable there]
 mission.notice.no_path,Refusal when a click-to-move destination cannot be reached.,[no way through to there]
@@ -251,8 +251,8 @@ mission.notice.rejected,A command refused before the turn ran. {reason} says why
 mission.notice.fast_forward,The player held down waiting; the shell runs turns until something happens.,[you settle in and watch the room]
 mission.notice.floor_view,"The player paged the map to a storey they are not on. {floor} is the storey number, counting from one.",[you picture floor {floor} from what you have seen of it]
 mission.notice.floor_here,"The player paged the map back to their own storey. {floor} is the storey number, counting from one.","[back to floor {floor}, where you are standing]"
-
-# --- why an action is unavailable right now --------------------------------
+,,
+# --- why an action is unavailable right now --------------------------------,,
 mission.block.no_firearm_owned,Draw/holster is unavailable: no firearm carried.,[you have no firearm]
 mission.block.no_garrote,Garrote is unavailable: none carried.,[you carry no garrote]
 mission.block.no_garrote_target,Garrote is unavailable: nobody adjacent.,[no one to garrote]
@@ -271,8 +271,8 @@ mission.block.no_lockpicks,Pick lock is unavailable: none carried.,[you carry no
 mission.block.no_lock,Pick lock is unavailable: no locked door adjacent.,[no lock to pick]
 mission.block.no_charges,Noisemaker is unavailable: no charges left.,[no noisemaker charges]
 mission.block.nothing_to_use,Use is unavailable: no unused machine adjacent.,[nothing to use here]
-
-# --- pre-turn command rejections ------------------------------------------
+,,
+# --- pre-turn command rejections ------------------------------------------,,
 reject.occupied,A command was refused: someone stands on the target tile.,[someone is standing there]
 reject.door_locked,A command was refused: the door is locked.,[the door is locked]
 reject.door_open,A command was refused: the door is already open.,[the door is already open]
@@ -307,8 +307,8 @@ reject.blocked_terrain,Movement refused by impassable terrain.,[the way is block
 reject.blocked_furniture,Movement refused by furniture.,[the way is blocked by furniture]
 reject.blocked_body,Movement refused by a corpse on the tile.,[the way is blocked by a body]
 reject.no_throw_target,A throw was refused: nowhere for the noisemaker to land.,[nowhere to land a throw]
-
-# --- simulation event log --------------------------------------------------
+,,
+# --- simulation event log --------------------------------------------------,,
 log.draw,The player drew a firearm.,[you draw the pistol]
 log.holster,The player put a firearm away.,[you holster the pistol]
 log.noisemaker,A thrown noisemaker went off.,[a sharp crack echoes off the walls]
@@ -341,8 +341,8 @@ actor.backup_guard,Name given to a guard spawned by heat. {n} counts from one.,[
 log.paged,The paging desk summoned the target away to a private call. {name} is the target.,[the page goes out; {name} excuses themselves]
 log.cheat_on,A debug switch was turned on. {switch} names the switch.,[cheat on: {switch}]
 log.cheat_off,A debug switch was turned off. {switch} names the switch.,[cheat off: {switch}]
-
-# --- in-turn action failures ----------------------------------------------
+,,
+# --- in-turn action failures ----------------------------------------------,,
 fail.garrote_missed,The garrote attempt did not land.,[the garrote finds no purchase]
 fail.no_weapon,A shot was attempted with no weapon.,[no weapon to fire]
 fail.cannot_fire,A shot was attempted with an unusable weapon.,[the pistol cannot fire]
@@ -374,8 +374,8 @@ fail.blocked_person,Movement was blocked by another person.,[the way is blocked 
 fail.blocked_furniture,Movement was blocked by furniture or a wall.,[the way is blocked by furniture or a wall]
 fail.someone_first,Two actors moved for the same tile and the other won.,[someone got there first]
 fail.nothing_happens,An interaction that had no effect at all.,[nothing comes of it]
-
-# --- perception alarms -----------------------------------------------------
+,,
+# --- perception alarms -----------------------------------------------------,,
 perception.alarm.weapon,What an observer reacts to when they see a drawn weapon.,[a drawn weapon]
 perception.alarm.body_carry,What an observer reacts to when they see a body being moved.,[someone hauling a body]
 perception.body_found,Breach reason and log line when a corpse the player made is discovered.,[a body of your making was discovered]
@@ -391,8 +391,8 @@ perception.wants_no_part,An observer chose to flee rather than engage. {name} is
 perception.comes_to_look,An observer became suspicious enough to approach. {name} is the observer.,[{name} comes to take a look]
 perception.watching,An observer is suspicious but has not moved. {name} is the observer.,[{name} is watching you]
 perception.joins_hunt,An alerted guard spread the alarm to another. {name} is the recruit.,[{name} joins the hunt]
-
-# --- contract conditions ---------------------------------------------------
+,,
+# --- contract conditions ---------------------------------------------------,,
 contract.no_firearms.long,Full statement of the no-gunfire condition on the briefing.,"[no gunfire - the silenced pistol stays holstered (the garrote and ""accidents"" are still fair game)]"
 contract.no_firearms.short,Abbreviated no-gunfire condition for the board and sidebar.,[no gunfire]
 contract.no_firearms.breach,Breach reason when a firearm is fired.,[the pistol was fired]
@@ -411,8 +411,8 @@ contract.private_kill.open_floor,Names the place of death when it was not inside
 contract.exit_via.long,Full statement of the named-exit condition. {room} is the exit room.,[leave the way the client dictates: extract via the {room}]
 contract.exit_via.short,Abbreviated named-exit condition. {room} is the exit room.,[exit via {room}]
 contract.exit_via.breach,Breach reason for leaving by the wrong exit. {room} is the named one.,[you left by the wrong exit - the contract named the {room}]
-
-# --- key bindings: palette actions ----------------------------------------
+,,
+# --- key bindings: palette actions ----------------------------------------,,
 keymap.action.wait.label,Palette label for the wait key. Must fit 14 columns with brackets.,wait
 keymap.action.wait.help,Help line for the wait key.,[let a turn pass; Space does the same]
 keymap.action.crouch.label,Palette label for crouch.,crouch
@@ -443,8 +443,8 @@ keymap.action.machine.label,Palette label for using a machine.,[use machine]
 keymap.action.machine.help,Help line for using a machine.,[use an adjacent opportunity machine]
 keymap.action.look.label,Palette label for the free look cursor.,look
 keymap.action.look.help,Help line for the free look cursor.,[free look cursor; costs no time and pauses nothing you planned]
-
-# --- key bindings: non-palette controls ------------------------------------
+,,
+# --- key bindings: non-palette controls ------------------------------------,,
 keymap.control.move.short,Compact start-screen label for the arrow keys.,move
 keymap.control.move.help,Help line for the arrow keys.,"[move, or aim whatever you are currently pointing]"
 keymap.control.slot.short,Compact label for the inventory slot keys.,[read a slot]
@@ -467,22 +467,22 @@ keymap.control.contract.short,Compact label for the contract-recall key.,[the co
 keymap.control.contract.help,Help line for the contract-recall key.,[read the job again]
 keymap.control.cheats.short,Compact label for the debug panel key.,cheats
 keymap.control.cheats.help,Help line for the debug panel key.,[developer switches]
-
-# --- help overlay ----------------------------------------------------------
+,,
+# --- help overlay ----------------------------------------------------------,,
 keymap.category.stance,Help overlay heading for movement and stance verbs.,stance
 keymap.category.stealth,Help overlay heading for quiet verbs.,[quiet work]
 keymap.category.force,Help overlay heading for loud verbs.,force
 keymap.category.world,Help overlay heading for door and machine verbs.,[the room]
 keymap.category.controls,Help overlay heading for the non-palette controls.,[getting around]
 ui.mission.help.title,Title bar of the help overlay; also says how to leave it.,[help - any key returns to the mission]
-
-# --- pacing labels ---------------------------------------------------------
+,,
+# --- pacing labels ---------------------------------------------------------,,
 speed.slow,Presentation pacing label.,slow
 speed.normal,Presentation pacing label.,normal
 speed.fast,Presentation pacing label.,fast
 speed.instant,Presentation pacing label.,instant
-
-# --- NPC states ------------------------------------------------------------
+,,
+# --- NPC states ------------------------------------------------------------,,
 mood.relaxed,How an unaware NPC reads in the threat list.,unaware
 mood.suspicious,How a suspicious NPC reads.,suspicious
 mood.investigating,How an investigating NPC reads.,investigating
@@ -490,8 +490,8 @@ mood.alerted,How an alerted NPC reads.,alerted
 mood.escorting,How an escorting NPC reads.,escorting
 mood.combat,How an attacking NPC reads.,attacking
 mood.fleeing,How a fleeing NPC reads.,fleeing
-
-# --- roles and tiers -------------------------------------------------------
+,,
+# --- roles and tiers -------------------------------------------------------,,
 role.civilian,Role name shown in tile inspection.,civilian
 role.bartender,Role name shown in tile inspection.,bartender
 role.cleaner,Role name shown in tile inspection.,cleaner
@@ -505,8 +505,8 @@ zone.personal,Neutral access tier name.,personal
 approach.physical,Equipment catalogue play style.,[physical stealth]
 approach.social,Equipment catalogue play style.,[social stealth]
 approach.violence,Equipment catalogue play style.,violence
-
-# --- venues ----------------------------------------------------------------
+,,
+# --- venues ----------------------------------------------------------------,,
 venue.nightclub.name,Venue name on the contract board and briefing.,nightclub
 venue.nightclub.zone.public,What the nightclub calls its public tier.,public
 venue.nightclub.zone.staff,What the nightclub calls its staff tier.,staff
@@ -537,82 +537,82 @@ venue.port-authority.zone.staff,What the port calls its staff tier.,[the working
 venue.port-authority.zone.secure,What the port calls its secure tier.,[the bonded store]
 venue.port-authority.zone.personal,What the port calls its personal tier.,[the harbourmaster's offices]
 venue.port-authority.invitation,What the port calls its secure-tier invitation.,[a dock worker's chit]
-
-# --- disguises -------------------------------------------------------------
+,,
+# --- disguises -------------------------------------------------------------,,
 disguise.civilian.name,Disguise name in the sidebar and briefing.,[civilian clothes]
 disguise.staff.name,Disguise name in the sidebar and briefing.,[staff uniform]
 disguise.guard.name,Disguise name in the sidebar and briefing.,[guard uniform]
 disguise.manager.name,Disguise name in the sidebar and briefing.,[manager's suit]
-
-# --- items -----------------------------------------------------------------
-item.silenced-pistol.name,Item name in the shop and inventory.,[silenced pistol]
+,,
+# --- items -----------------------------------------------------------------,,
+item.silenced-pistol.name,Item name in the shop and inventory.,silenced pistol
 item.garrote.name,Item name in the shop and inventory.,garrote
 item.lockpicks.name,Item name in the shop and inventory.,lockpicks
-item.noisemaker.name,Item name in the shop and inventory.,[noisemaker charges]
-item.forged-pass.name,Item name in the shop and inventory.,[forged staff pass]
-item.counterfeit-invitation.name,Item name in the shop and inventory.,[counterfeit invitation]
-item.vip-invitation.name,Item name in the inventory; carried by tagged VIP guests.,[VIP invitation]
-item.office-key.name,Item name in the inventory.,[manager's office key]
-item.security-key.name,Item name in the inventory.,[security office key]
-item.service-master-key.name,Item name in the inventory; placed by the key cache.,[service master key]
-item.foreman-key.name,Item name in the inventory.,[foreman's key]
-
-# --- opportunity machines --------------------------------------------------
-opportunity.fuse-box.name,Machine name in tile inspection.,[fuse box]
-opportunity.fuse-box.risk,What using the fuse box costs you if seen.,[sparks fly; tampering in view of anyone is alarming]
-opportunity.fuse-box.presentation,What the fuse box looks like from across the room.,"[a humming fuse box, its panel hanging open]"
-opportunity.uniform-store.name,Machine name in tile inspection.,[uniform store]
-opportunity.uniform-store.risk,What using the uniform store costs you.,[changing clothes takes time you may not have]
-opportunity.uniform-store.presentation,What the uniform store looks like.,[a rack of pressed staff uniforms]
-opportunity.rigged-hoist.name,Machine name in tile inspection.,[loading hoist]
-opportunity.rigged-hoist.risk,What the rigged hoist does when triggered.,[the crate falls only on whoever stands beneath]
-opportunity.rigged-hoist.presentation,What the rigged hoist looks like.,"[a strained cargo hoist, its brake lever within reach]"
-opportunity.key-cache.name,Machine name in tile inspection.,[key cache]
-opportunity.key-cache.risk,What taking from the key cache risks.,[someone may notice the master key is missing]
-opportunity.key-cache.presentation,What the key cache looks like.,[a wall box of labelled duplicate keys]
-opportunity.fire-alarm.name,Machine name in tile inspection.,[fire alarm]
-opportunity.fire-alarm.risk,What pulling the fire alarm does.,[pulling it in view of anyone is alarming; the club will empty]
-opportunity.fire-alarm.presentation,What the fire alarm looks like.,[a red fire alarm pull station]
-opportunity.hint,"A discoverable machine on the briefing. {presentation} look, {room} where.",[{presentation} in {room}]
-opportunity.paging-desk.name,Name of the paging desk machine.,[paging desk]
-opportunity.paging-desk.risk,What using the paging desk risks.,[staff will remember who made the call]
-opportunity.paging-desk.presentation,How the paging desk appears on discovery.,[a house telephone with a staff directory beside it]
-
-# --- room names ------------------------------------------------------------
-room.entrance.name,Room name on the map panel and briefing.,[entrance hall]
-room.dance-floor.name,Room name on the map panel and briefing.,[dance floor]
+item.noisemaker.name,Item name in the shop and inventory.,noisemaker charges
+item.forged-pass.name,Item name in the shop and inventory.,forged staff pass
+item.counterfeit-invitation.name,Item name in the shop and inventory.,counterfeit invitation
+item.vip-invitation.name,Item name in the inventory; carried by tagged VIP guests.,VIP invitation
+item.office-key.name,Item name in the inventory.,manager's office key
+item.security-key.name,Item name in the inventory.,security office key
+item.service-master-key.name,Item name in the inventory; placed by the key cache.,service master key
+item.foreman-key.name,Item name in the inventory.,foreman's key
+,,
+# --- opportunity machines --------------------------------------------------,,
+opportunity.fuse-box.name,Machine name in tile inspection.,fuse box
+opportunity.fuse-box.risk,What using the fuse box costs you if seen.,sparks fly; tampering in view of anyone is alarming
+opportunity.fuse-box.presentation,What the fuse box looks like from across the room.,"a humming fuse box, its panel hanging open"
+opportunity.uniform-store.name,Machine name in tile inspection.,uniform store
+opportunity.uniform-store.risk,What using the uniform store costs you.,changing clothes takes time
+opportunity.uniform-store.presentation,What the uniform store looks like.,a rack of pressed staff uniforms
+opportunity.rigged-hoist.name,Machine name in tile inspection.,loading hoist
+opportunity.rigged-hoist.risk,What the rigged hoist does when triggered.,the crate falls only on whoever stands beneath
+opportunity.rigged-hoist.presentation,What the rigged hoist looks like.,"a strained cargo hoist, its brake lever within reach"
+opportunity.key-cache.name,Machine name in tile inspection.,key cache
+opportunity.key-cache.risk,What taking from the key cache risks.,someone may notice the master key is missing
+opportunity.key-cache.presentation,What the key cache looks like.,a wall box of labelled duplicate keys
+opportunity.fire-alarm.name,Machine name in tile inspection.,fire alarm
+opportunity.fire-alarm.risk,What pulling the fire alarm does.,pulling it in view of anyone is alarming; the building will empty
+opportunity.fire-alarm.presentation,What the fire alarm looks like.,a red fire alarm
+opportunity.hint,"A discoverable machine on the briefing. {presentation} look, {room} where.",{presentation} in {room}
+opportunity.paging-desk.name,Name of the paging desk machine.,paging desk
+opportunity.paging-desk.risk,What using the paging desk risks.,staff will remember who made the call
+opportunity.paging-desk.presentation,How the paging desk appears on discovery.,a telephone with a staff directory beside it
+,,
+# --- room names ------------------------------------------------------------,,
+room.entrance.name,Room name on the map panel and briefing.,entrance hall
+room.dance-floor.name,Room name on the map panel and briefing.,dance floor
 room.bar.name,Room name on the map panel and briefing.,bar
 room.bathroom.name,Room name on the map panel and briefing.,bathroom
-room.vip-lounge.name,Room name on the map panel and briefing.,[VIP lounge]
+room.vip-lounge.name,Room name on the map panel and briefing.,VIP lounge
 room.kitchen.name,Room name on the map panel and briefing.,kitchen
-room.storage.name,Room name on the map panel and briefing.,[storage room]
-room.maintenance.name,Room name on the map panel and briefing.,[maintenance room]
-room.manager-office.name,Room name on the map panel and briefing.,[manager's office]
-room.security-office.name,Room name on the map panel and briefing.,[security office]
-room.loading-bay.name,Room name on the map panel and briefing.,[loading bay]
+room.storage.name,Room name on the map panel and briefing.,storage room
+room.maintenance.name,Room name on the map panel and briefing.,maintenance room
+room.manager-office.name,Room name on the map panel and briefing.,manager's office
+room.security-office.name,Room name on the map panel and briefing.,security office
+room.loading-bay.name,Room name on the map panel and briefing.,loading bay
 room.reception.name,Room name on the map panel and briefing.,reception
-room.dispatch-office.name,Room name on the map panel and briefing.,[dispatch office]
-room.storage-floor.name,Room name on the map panel and briefing.,[storage floor]
-room.break-room.name,Room name on the map panel and briefing.,[break room]
-room.the-cage.name,Room name on the map panel and briefing.,[the cage]
-room.foreman-office.name,Room name on the map panel and briefing.,[foreman's office]
-room.dock.name,Room name on the map panel and briefing.,[loading dock]
-room.corridor.name,Stands in for a room name outside any room.,[the corridor]
-
-# --- districts (ordered pool; ids sort into campaign order) ----------------
+room.dispatch-office.name,Room name on the map panel and briefing.,dispatch office
+room.storage-floor.name,Room name on the map panel and briefing.,storage floor
+room.break-room.name,Room name on the map panel and briefing.,break room
+room.the-cage.name,Room name on the map panel and briefing.,the cage
+room.foreman-office.name,Room name on the map panel and briefing.,foreman's office
+room.dock.name,Room name on the map panel and briefing.,loading dock
+room.corridor.name,Stands in for a room name outside any room.,the corridor
+,,
+# --- districts (ordered pool; ids sort into campaign order) ----------------,,
 campaign.district.01,Campaign district name on the contract board.,Docklands
 campaign.district.02,Campaign district name on the contract board.,Midtown
-campaign.district.03,Campaign district name on the contract board.,[The Neon Mile]
-
-# --- why the target is marked (ordered pool
+campaign.district.03,Campaign district name on the contract board.,The Neon Mile
+,,
+# --- why the target is marked (ordered pool,,
 briefing.reason.01,Elimination reason clause; reads after 'the target'.,[launders syndicate money through the club's books]
 briefing.reason.02,Elimination reason clause; reads after 'the target'.,[sold the network's courier routes to a rival outfit]
 briefing.reason.03,Elimination reason clause; reads after 'the target'.,[is about to testify to the licensing board]
 briefing.reason.04,Elimination reason clause; reads after 'the target'.,[has been skimming protection payments for years]
 briefing.reason.05,Elimination reason clause; reads after 'the target'.,[brokered the deal that got our last operative caught]
 briefing.reason.06,Elimination reason clause; reads after 'the target'.,[keeps a ledger of names that must not surface]
-
-# --- generated person names (ordered pools) --------------------------------
+,,
+# --- generated person names (ordered pools) --------------------------------,,
 names.first.01,Given name for a generated actor.,Adri
 names.first.02,Given name for a generated actor.,Bruno
 names.first.03,Given name for a generated actor.,Cass
