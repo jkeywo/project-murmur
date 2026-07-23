@@ -24,6 +24,7 @@
 mod bodies;
 mod doors;
 mod interact;
+mod lead;
 mod movement;
 mod theft;
 mod violence;
@@ -101,6 +102,12 @@ pub enum Command {
     ThrowNoisemaker(Pos),
     /// Use an adjacent opportunity machine.
     Interact(FurnitureId),
+    /// Take an adjacent, calm, non-hostile person onto the player's leash,
+    /// or release them if they were already following. A toggle.
+    Lead(ActorId),
+    /// Plant a carried plantable item: `Some(person)` slips it into an
+    /// adjacent person's pockets; `None` leaves it on the player's tile.
+    Plant(Option<ActorId>),
     /// Flip a debug switch. A command like any other, so the record sees
     /// it and replay reproduces it.
     Cheat(Cheat),
@@ -135,6 +142,11 @@ pub enum ActionIntent {
     PickLock(DoorId),
     Throw(Pos),
     Interact(FurnitureId),
+    /// Toggle an adjacent person on or off the player's leash.
+    Lead(ActorId),
+    /// Plant a carried plantable item on a person (`Some`) or the player's
+    /// own tile (`None`).
+    Plant(Option<ActorId>),
     /// NPC-only in practice: turn on the spot to face a direction.
     TurnFacing(Dir4),
     /// NPC-only in practice: adjacent lethal melee.
@@ -178,6 +190,11 @@ pub enum RejectReason {
     NoNoisemaker,
     NothingToUse,
     MachineSpent,
+    /// The person cannot be led: a guard, someone already hostile, a body,
+    /// or not a living person standing beside the player.
+    NotLeadable,
+    /// The player carries nothing plantable.
+    NothingToPlant,
     MissionOver,
 }
 
@@ -214,6 +231,8 @@ impl RejectReason {
             RejectReason::NoNoisemaker => crate::tr!("reject.no_noisemaker"),
             RejectReason::NothingToUse => crate::tr!("reject.nothing_to_use"),
             RejectReason::MachineSpent => crate::tr!("reject.machine_spent"),
+            RejectReason::NotLeadable => crate::tr!("reject.not_leadable"),
+            RejectReason::NothingToPlant => crate::tr!("reject.nothing_to_plant"),
             RejectReason::MissionOver => crate::tr!("reject.mission_over"),
         }
     }
@@ -275,6 +294,10 @@ pub fn intent_duration(
         ActionIntent::DrawOrHolster => durations.draw_holster,
         ActionIntent::PickLock(_) => durations.pick_lock,
         ActionIntent::Throw(_) => durations.throw,
+        // A leash toggle is instant; a plant is a single deft motion, like
+        // the pickpocket it mirrors.
+        ActionIntent::Lead(_) => 1,
+        ActionIntent::Plant(_) => durations.pickpocket,
         ActionIntent::Interact(id) => world
             .furniture
             .iter()
@@ -320,6 +343,8 @@ pub fn translate(
         Command::PickLock(door) => doors::validate_pick_lock(world, data, door),
         Command::ThrowNoisemaker(pos) => interact::validate_throw(world, data, pos),
         Command::Interact(id) => interact::validate_interact(world, id),
+        Command::Lead(target) => lead::validate_lead(world, target),
+        Command::Plant(target) => theft::validate_plant(world, data, target),
     }
 }
 
@@ -419,6 +444,9 @@ pub fn resolve_turn(
             ActionIntent::Throw(pos) => {
                 interact::resolve_throw(world, data, &mut events, action.actor, pos)
             }
+            ActionIntent::Lead(target) => {
+                lead::resolve_lead(world, &mut events, action.actor, target)
+            }
             _ => {}
         }
     }
@@ -466,6 +494,9 @@ pub fn resolve_turn(
         match action.intent {
             ActionIntent::Pickpocket(target) => {
                 theft::resolve_pickpocket(world, data, &mut events, action.actor, target)
+            }
+            ActionIntent::Plant(target) => {
+                theft::resolve_plant(world, data, &mut events, action.actor, target)
             }
             ActionIntent::TakeDisguise(source) => {
                 theft::resolve_take_disguise(world, &mut events, action.actor, source)

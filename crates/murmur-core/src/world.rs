@@ -306,6 +306,21 @@ pub struct AiState {
     /// A standing assignment, independent of mood.
     #[serde(default)]
     pub detail: Option<DetailRole>,
+    /// Whom this person is following on a leash, if anyone. Set to the
+    /// player by the [`Lead`](crate::actions::Command::Lead) verb and read
+    /// only while the person is calm: like [`detail`](Self::detail) it is an
+    /// orthogonal assignment, not a [`Mood`], so fear outranks it and a
+    /// frightened follower simply does not act on the leash that turn —
+    /// resuming when perception calms them, exactly as an escort does.
+    ///
+    /// `skip_serializing_if` keeps a world where nobody is being led
+    /// byte-identical to one from before leashes existed: the empty state
+    /// serialises to nothing, so no existing mission's fingerprint moves,
+    /// while a world with an active leash still serialises the difference —
+    /// the determinism contract (equal fingerprint ⟺ identical simulation)
+    /// holds in both directions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub following: Option<ActorId>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

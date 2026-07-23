@@ -41,10 +41,18 @@ pub fn prepare_npc_actions(world: &mut World, data: &GameData) -> Vec<PreparedAc
         // no special handling. That is the whole reason the assignment is
         // orthogonal to mood rather than a mood of its own.
         let escorting = world.actor(id).ai.as_ref().and_then(|ai| ai.detail.clone());
+        // A leash is another orthogonal assignment, read only while calm.
+        // Fear outranks it exactly as it outranks a detail: a follower that
+        // was frightened falls through to its mood behaviour and does not
+        // act on the leash this turn, but the assignment is never cleared,
+        // so it resumes trailing the moment perception calms it.
+        let led_by_player =
+            world.actor(id).ai.as_ref().and_then(|ai| ai.following) == Some(world.player);
         let intent = match mood {
             Mood::Relaxed if escorting.is_some() => {
                 escort_intent(world, data, id, &escorting.unwrap())
             }
+            Mood::Relaxed if led_by_player => follow_intent(world, data, id),
             Mood::Relaxed => routine_intent(world, data, id),
             Mood::Suspicious => watch_intent(world, id),
             Mood::Investigating => investigate_intent(world, data, id),
@@ -87,6 +95,20 @@ fn routine_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionInte
         advance_schedule(ai);
         return ActionIntent::Wait;
     }
+    match first_step_towards(world, data, id, goal) {
+        Some(dir) => ActionIntent::Step(dir),
+        None => ActionIntent::Wait,
+    }
+}
+
+/// A person on the player's leash closes on the player and trails one tile
+/// behind. The goal is the player's own tile; NPCs never displace the
+/// player, so the follower settles on whichever adjacent tile its shortest
+/// path reaches and holds there, stepping again only once the player has
+/// moved away and opened a gap. Deterministic — a plain shortest-step
+/// toward a fixed goal, no RNG and nothing chosen by proximity.
+fn follow_intent(world: &mut World, data: &GameData, id: ActorId) -> ActionIntent {
+    let goal = world.actor(world.player).pos;
     match first_step_towards(world, data, id, goal) {
         Some(dir) => ActionIntent::Step(dir),
         None => ActionIntent::Wait,

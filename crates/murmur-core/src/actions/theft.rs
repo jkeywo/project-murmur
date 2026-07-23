@@ -91,6 +91,93 @@ pub(super) fn resolve_pickpocket(
     }
 }
 
+/// Whether the player carries anything plantable, and — for a person
+/// target — that the mark is a living person in reach. The reverse of a
+/// pickpocket: an item leaves the player's pockets rather than entering
+/// them.
+pub(super) fn validate_plant(
+    world: &World,
+    data: &GameData,
+    target: Option<ActorId>,
+) -> Result<ActionIntent, RejectReason> {
+    let has_plantable = world
+        .carried_items(world.player)
+        .any(|i| data.item(&i.spec).is_some_and(|s| s.plantable));
+    if !has_plantable {
+        return Err(RejectReason::NothingToPlant);
+    }
+    if let Some(person) = target {
+        let person_ref = world.actor(person);
+        if person_ref.is_player()
+            || !person_ref.alive()
+            || person_ref.hidden_in.is_some()
+            || world.is_carried(person)
+        {
+            return Err(RejectReason::TargetGone);
+        }
+        if !world.player_actor().pos.is_adjacent(person_ref.pos) {
+            return Err(RejectReason::NotAdjacent);
+        }
+    }
+    Ok(ActionIntent::Plant(target))
+}
+
+pub(super) fn resolve_plant(
+    world: &mut World,
+    data: &GameData,
+    events: &mut TurnEvents,
+    actor: ActorId,
+    target: Option<ActorId>,
+) {
+    // Settle the destination before the item moves, so a mark that slipped
+    // out of reach fails cleanly and the plant stays in the player's hands.
+    let dest = match target {
+        Some(person) => {
+            let person_ref = world.actor(person);
+            let reachable = world.actor(actor).pos.is_adjacent(person_ref.pos)
+                && person_ref.alive()
+                && person_ref.hidden_in.is_none()
+                && !world.is_carried(person);
+            if !reachable {
+                fail(world, events, actor, crate::tr!("fail.mark_slipped"));
+                return;
+            }
+            ItemLocation::CarriedBy(person)
+        }
+        None => ItemLocation::Ground(world.actor(actor).pos),
+    };
+    let planted = world
+        .items
+        .iter_mut()
+        .find(|i| {
+            i.location == ItemLocation::CarriedBy(actor)
+                && data.item(&i.spec).is_some_and(|s| s.plantable)
+        })
+        .map(|item| {
+            item.location = dest;
+            item.spec.clone()
+        });
+    match planted {
+        Some(spec) => {
+            let name = data.item(&spec).map(|s| s.name.clone()).unwrap_or(spec);
+            match target {
+                Some(person) => {
+                    let who = world.actor(person).name.clone();
+                    events.messages.push(crate::loc::fmt(
+                        "log.plant_person",
+                        &[("item", &name), ("name", &who)],
+                    ));
+                }
+                None => events
+                    .messages
+                    .push(crate::trf!("log.plant_ground", item = name)),
+            }
+            complete(world, events, actor);
+        }
+        None => fail(world, events, actor, crate::tr!("fail.nothing_to_plant")),
+    }
+}
+
 pub(super) fn validate_take_from_body(
     world: &World,
     target: ActorId,

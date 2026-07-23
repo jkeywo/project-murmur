@@ -128,4 +128,19 @@
         carried_by: Some(Manager),
         placed_in: None,
     ),
+    (
+        // Campaign gear a player brings to plant: purchasable so it enters
+        // only through the loadout, never generated into a venue. Carries
+        // no capability of its own — it exists to be left somewhere.
+        id: "listening-bug",
+        glyph: '*',
+        unlocks: None,
+        invitation: false,
+        weapon: false,
+        purchasable: true,
+        pickpocketable: true,
+        plantable: true,
+        carried_by: None,
+        placed_in: None,
+    ),
 ]

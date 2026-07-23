@@ -308,6 +308,8 @@ reject.blocked_terrain,Movement refused by impassable terrain.,[the way is block
 reject.blocked_furniture,Movement refused by furniture.,[the way is blocked by furniture]
 reject.blocked_body,Movement refused by a corpse on the tile.,[the way is blocked by a body]
 reject.no_throw_target,A throw was refused: nowhere for the noisemaker to land.,[nowhere to land a throw]
+reject.not_leadable,A command was refused: that person cannot be led (a guard or a hostile or not a living person beside you).,[you cannot lead them]
+reject.nothing_to_plant,A command was refused: the player carries nothing plantable.,[you carry nothing to plant]
 ,,
 # --- simulation event log --------------------------------------------------,,
 log.draw,The player drew a firearm.,[you draw the pistol]
@@ -318,6 +320,10 @@ log.shot,A firearm killed someone. {name} is the person shot.,[the pistol coughs
 log.shot_interposed,A firearm killed someone standing in the way of the intended target. {name} is the person hit.,[the pistol coughs; {name} steps into it and drops]
 log.arrest,Guards caught the player. Ends the mission.,[a hand clamps your shoulder: you are under arrest]
 log.pickpocket,An item was lifted from someone. {item} is the item name.,[you palm the {item}]
+log.lead_start,The player took a person onto their leash. {name} is that person.,[{name} falls in behind you]
+log.lead_release,The player released a person from their leash. {name} is that person.,[{name} stops following you]
+log.plant_person,The player planted an item on a person. {item} is the item; {name} is the person.,[you slip the {item} onto {name}]
+log.plant_ground,The player left a planted item on their own tile. {item} is the item.,[you leave the {item} here]
 log.disguise_taken,The player changed clothes. {disguise} is the new disguise.,[you change into the {disguise}]
 log.body_lifted,The player picked up a corpse.,[you heave the body up]
 log.body_dropped,The player put a corpse down.,[you set the body down]
@@ -353,6 +359,7 @@ fail.arrest_failed,An arrest attempt did not land.,[the arrest fails]
 fail.mark_slipped,The pickpocket target moved away first.,[the mark slipped away]
 fail.pockets_full,A pickpocket succeeded but there was no room to carry it.,[your pockets are full]
 fail.nothing_to_steal,The pickpocket target carried nothing takeable.,[nothing worth taking]
+fail.nothing_to_plant,A plant was attempted with nothing plantable in hand.,[nothing to plant]
 fail.hands_busy,An action needed free hands.,[your hands are not free]
 fail.clothes_far,The body being undressed is out of reach.,[the clothes are out of reach]
 fail.wardrobe_gone,The wardrobe is no longer there.,[the wardrobe is gone]
@@ -557,6 +564,7 @@ item.office-key.name,Item name in the inventory.,manager's office key
 item.security-key.name,Item name in the inventory.,security office key
 item.service-master-key.name,Item name in the inventory; placed by the key cache.,service master key
 item.foreman-key.name,Item name in the inventory.,foreman's key
+item.listening-bug.name,Item name in the shop and inventory; a plantable bug.,listening bug
 ,,
 # --- opportunity machines --------------------------------------------------,,
 opportunity.fuse-box.name,Machine name in tile inspection.,fuse box

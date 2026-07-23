@@ -285,6 +285,12 @@ pub struct ItemSpec {
     pub charges: u16,
     /// Whether the item can be pickpocketed from a carrying NPC.
     pub pickpocketable: bool,
+    /// Whether the item can be planted — left on the player's tile or
+    /// slipped into a person's pockets by the
+    /// [`Plant`](crate::actions::Command::Plant) verb. A later objective
+    /// checks where a planted item ends up.
+    #[serde(default)]
+    pub plantable: bool,
     /// Role that carries this item at generation, if any.
     pub carried_by: Option<Role>,
     /// Room template on whose floor this item is placed at generation,
