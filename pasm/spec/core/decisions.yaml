@@ -1123,3 +1123,75 @@ entities:
     implementation:
       status: declared
       paths: [data/loc/strings.csv, crates/murmur-shell/src/render.rs, crates/murmur-shell/src/screens.rs]
+
+  - decision: objective-completion-is-reach-a-position-with-a-capability
+    core:
+      status: implemented
+      confidence: confirmed
+      title: An Objective Is Reaching A Position With A Capability
+      summary: Milestone 4 turned the mission goal from the assumption "kill the target" into an explicit Objective and added four more kinds - steal an item, sabotage a machine, extract a captive alive, plant an item. The load-bearing question was whether the generation-time route planner's monotone capability closure would have to change to prove goals other than a kill. It did not, for any of the five. Each objective's completion is expressed as "reach a qualifying position with the required capability" - a vulnerable beat with a weapon in hand, a tile beside a machine, an item-holder's schedule stop, a captive reachable together with an exit, a plant destination while carrying the bug - all of which the closure's existing reachable set already answers. A new prove_completion seam dispatches on the objective; the closure itself is objective-agnostic.
+      rationale:
+        - The closure staying unchanged across five different objectives is the evidence that objective variety is sound at venue scale, which is the thing the roadmap gates the city milestone on. Had the closure needed per-objective special-casing, the model would have been the wrong shape and the finding worth having before committing to a city.
+        - Keeping the seam at prove_completion rather than inside the closure means a sixth objective is a new case, not a new engine, provided it too can be phrased as reach-a-position-with-a-capability. That phrasing is the real interface, and it is now written down as the test a future objective must pass.
+      references: [monotone-capability-closure-planner, milestone-4-objective-variety]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/objectives.rs
+        summary: A scripted end-to-end win for each of the four new objectives plus negatives, all proved against the unchanged closure through the prove_completion dispatch.
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/planner.rs, crates/murmur-core/src/world.rs]
+      symbols: [prove_completion]
+      tests: [crates/murmur-core/tests/objectives.rs]
+
+  - decision: the-getaway-grace-rewards-a-planned-exit
+    core:
+      status: implemented
+      confidence: confirmed
+      title: A Getaway Grace, Because The Exit Was Where Clean Kills Died
+      summary: After the onion venues and the body-fall thump landed, loss attribution put roughly three-eighths of all missions in one bucket - target dead, but the player caught or killed on the way out - and half of those were arrests after a silent kill, the venue reacting to a found body the instant it was seen. The owner's ruling was a getaway grace over softening the noise or the venue hardening. Completing the objective opens a short window during which a found body draws an investigator rather than the alarm and a glimpse of the leaving player accrues half suspicion, but a player caught in the act of violence is still caught. It rewards a fast planned exit without rescuing a firefight.
+      rationale:
+        - Measured rather than guessed - the fix followed loss attribution, and the same tool proved it - arrests fell from 156 to 59 permille and the getaway-arrest bucket from 118 to 21 while combat deaths were untouched, so the exit is fairer but a gunfight still kills. Corpus rose 528 to 618 permille.
+        - The grace never softens witnessed violence, so it eases the escape without turning off the game - being seen to kill, or shooting on the way out, is unaffected. That boundary is what keeps it a grace rather than an off switch.
+      references: [the-getaway-not-the-approach-was-the-loss]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/gameplay.rs
+        summary: a_body_found_inside_the_getaway_grace_only_draws_an_investigator pins that a body found during the window draws a look and does not hand the venue the player as a suspect.
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/perception.rs, crates/murmur-core/src/world.rs, crates/murmur-core/src/turn.rs, data/tuning.ron]
+      tests: [crates/murmur-core/tests/gameplay.rs]
+
+  - decision: two-new-verbs-over-reframing-the-tricky-objectives
+    core:
+      status: implemented
+      confidence: confirmed
+      title: Two New Verbs, Because The Model Genuinely Needed Them
+      summary: Of the four new objectives, steal and sabotage mapped onto verbs the game already had - pickpocket and machine interaction - and landed as pure data, which was the objective model's acceptance test. Extract-alive and plant did not - there was no way to lead a person or to place an item, only to loot one off an actor. Rather than reframe them onto existing verbs, the owner chose to add the two verbs, recorded honestly as the finding that the model had to be extended for these two rather than only configured. Lead is an orthogonal follow assignment mirroring the bodyguard detail, so a scare suspends the leash rather than dropping it; plant is a reverse pickpocket.
+      rationale:
+        - The spec framed needing engine code for an objective as a signal worth surfacing rather than a failure to hide, so the split - two objectives as data, two as new verbs - is reported as the outcome, not smoothed over.
+        - Making Lead orthogonal to mood, exactly as the bodyguard detail already was, meant fear could outrank the leash without the follower being abandoned, reusing a pattern the codebase had already proven rather than inventing a fragile new state.
+      references: [objective-completion-is-reach-a-position-with-a-capability]
+    evidence:
+      - kind: test
+        reference: crates/murmur-core/tests/verbs.rs
+        summary: Covers both verbs including a frightened follower that ignores the leash until it calms and then resumes, the regression guard for the orthogonality.
+    implementation:
+      status: declared
+      paths: [crates/murmur-core/src/actions/lead.rs, crates/murmur-core/src/actions/theft.rs, crates/murmur-core/src/ai.rs]
+      tests: [crates/murmur-core/tests/verbs.rs]
+
+  - decision: cheated-runs-still-pay-out
+    core:
+      status: accepted
+      confidence: confirmed
+      title: A Cheated Run Still Pays Out
+      summary: The four cheat switches - reveal map, blind NPCs, invulnerability, endless ammo - never touched the campaign economy, and the owner ruled they should not start. A mission finished with cheats enabled pays normally. Recorded as a decision because the alternative - voiding the payout of a cheated run - is the more common convention and its absence should be deliberate rather than an oversight.
+      rationale:
+        - The cheats exist to let the owner reach and inspect situations, not as a separate difficulty mode, so gating the economy on them would add a rule the code does not otherwise need for a case that only the owner triggers.
+      references: [cheats-are-commands]
+    evidence:
+      - kind: decision-record
+        reference: crates/murmur-campaign/src/lib.rs
+        summary: Mission payout is computed from the contract and outcome with no reference to the world's cheat switches, so a cheated run resolves and pays like any other.

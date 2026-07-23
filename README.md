@@ -3,14 +3,17 @@
 A turn-based ASCII social-stealth contract campaign. Take a job from the
 syndicate desk, buy your kit, slip into a generated venue — a heaving
 nightclub, a bonded warehouse, a layered hotel, an embassy villa, a
-working port — and eliminate a *protected* target under the contract's
-one hard condition. The mark walks a daily cycle with a bodyguard
-detail: surrounded in public, alone only during private beats behind
-locked doors. Shoot into the escort and a bodyguard takes the round;
-wait for the window, engineer it with the staff paging desk, or rig an
-accident that does not care who is standing guard. Then walk out
-unremarked. Arrest costs your carried kit and a fine; death ends the
-campaign.
+working port — and carry out the contract under its one hard condition.
+The job is not always a kill: the board deals assassinations, thefts,
+sabotage, a captive to lead out alive, and an item to plant. The classic
+mark walks a daily cycle with a bodyguard detail — surrounded in public,
+alone only during private beats behind locked doors; shoot into the
+escort and a bodyguard takes the round, so wait for the window, engineer
+it with the staff paging desk, or rig an accident that does not care who
+is standing guard. Whatever the job, the exit is its own act: finishing
+it opens a brief grace before the venue grasps what happened, rewarding a
+fast planned getaway over a lingering one. Then walk out unremarked.
+Arrest costs your carried kit and a fine; death ends the campaign.
 
 **Play in the browser:** <https://jkeywo.github.io/project-murmur/>
 
@@ -52,9 +55,12 @@ contract's condition with your actual loadout.
 
 ## The campaign
 
-Contracts on the board name a venue, a district, a payout, and exactly
-one condition (no gunfire, no collateral, no bodies found, kill in
-private, or a dictated exit); breaking it forfeits the pay. Cash buys
+Contracts on the board name a venue, a district, a job type — eliminate,
+steal, sabotage, extract alive, or plant — priced by the risk it carries,
+and exactly one condition (no gunfire, no collateral, no bodies found,
+kill in private, or a dictated exit); breaking it forfeits the pay. The
+condition reads the same whatever the job, save kill-in-private, which the
+desk only ever attaches to a killing. Cash buys
 equipment — lockpicks, noisemakers, a forged staff pass, a counterfeit
 invitation, a silenced pistol, a garrote — owned until an arrest
 confiscates what you carried. Crimes that witnesses observe heat up the
