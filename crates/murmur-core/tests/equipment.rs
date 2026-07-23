@@ -79,10 +79,8 @@ fn lockpicks_open_locked_doors_without_the_key() {
 
     // Find a locked door and a walkable tile beside it.
     let world = driver.world();
-    let (door_id, stand) = world
-        .map
-        .floor_positions(0)
-        .chain(world.map.floor_positions(1))
+    let (door_id, stand) = (0..world.map.floor_count())
+        .flat_map(|floor| world.map.floor_positions(floor))
         .find_map(|pos| {
             let TileKind::Door(id) = world.map.tile(pos) else {
                 return None;

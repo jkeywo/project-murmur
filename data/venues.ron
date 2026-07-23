@@ -4,9 +4,11 @@
 // Venue definitions. Every venue runs on the same contract, planner,
 // grammar, opportunity, heat, and campaign systems; only data differs.
 [
-    // A festival: one public spine, a staff branch deepening to the
-    // manager's office, and a secure floor above deepening again to the
-    // security office on the top storey.
+    // An onion: the public floor wraps the staff back-of-house, that
+    // wraps the secure tier one storey up, and the target's offices sit
+    // at the very centre one storey up again behind a locked door. Every
+    // tier's corridor lies between you and the next one inward, so the
+    // security gradient is the route, not a detail of it.
     (
         id: "nightclub",
         floor_width: 58,
@@ -27,38 +29,34 @@
         ],
         districts: (
             zone: Public,
-            rooms: ["entrance", "dance-floor", "bar"],
+            rooms: ["entrance", "dance-floor", "bar", "loading-bay"],
             children: [
                 (
                     zone: Staff,
-                    rooms: ["kitchen", "storage", "loading-bay"],
+                    rooms: ["kitchen", "storage"],
                     children: [
                         (
-                            zone: Personal,
-                            rooms: ["manager-office"],
-                            locked_by: Some("office-key"),
-                        ),
-                    ],
-                ),
-                (
-                    zone: Secure,
-                    rooms: ["vip-lounge", "bathroom", "maintenance"],
-                    own_storey: true,
-                    children: [
-                        (
-                            zone: Personal,
-                            rooms: ["security-office"],
+                            zone: Secure,
+                            rooms: ["vip-lounge", "bathroom", "maintenance"],
                             own_storey: true,
-                            locked_by: Some("security-key"),
+                            children: [
+                                (
+                                    zone: Personal,
+                                    rooms: ["manager-office", "security-office"],
+                                    own_storey: true,
+                                    locked_by: Some("office-key"),
+                                ),
+                            ],
                         ),
                     ],
                 ),
             ],
         ),
     ),
-    // A working yard: the public counter, one deep staff fortress
-    // ending in the foreman's office, and the bonded cage on its own
-    // storey above.
+    // A working yard as an onion: the public counter wraps the staff
+    // back-of-house, which wraps the bonded cage, and the foreman's
+    // office sits at the centre one storey up behind a lock. Reaching
+    // the target means passing every ring of the yard in turn.
     (
         id: "warehouse",
         floor_width: 56,
@@ -81,32 +79,35 @@
         ],
         districts: (
             zone: Public,
-            rooms: ["reception", "dispatch-office"],
+            rooms: ["reception", "dispatch-office", "dock"],
             children: [
                 (
                     zone: Staff,
-                    rooms: ["dock", "storage-floor", "storage", "break-room"],
+                    rooms: ["storage-floor", "storage", "break-room"],
                     children: [
                         (
-                            zone: Personal,
-                            rooms: ["foreman-office"],
-                            locked_by: Some("foreman-key"),
+                            zone: Secure,
+                            rooms: ["the-cage", "maintenance"],
+                            own_storey: true,
+                            children: [
+                                (
+                                    zone: Personal,
+                                    rooms: ["foreman-office"],
+                                    locked_by: Some("foreman-key"),
+                                ),
+                            ],
                         ),
                     ],
-                ),
-                (
-                    zone: Secure,
-                    rooms: ["the-cage", "maintenance"],
-                    own_storey: true,
                 ),
             ],
         ),
     ),
 
-    // A three-storey festival: a public spine with a staff branch that
-    // deepens into the manager's office, and a secure floor above that
-    // deepens again into the top-floor security office. Same engine as
-    // every other district venue; only the tree's shape differs.
+    // A three-storey onion: the public floor wraps the staff back-of-
+    // house, the secure tier sits one storey up inside it, and the
+    // manager's and security offices share the core on the top storey
+    // behind a locked door. Same engine as every other district venue;
+    // only the tree's shape differs.
     (
         id: "grand-hotel",
         floor_width: 58,
@@ -134,25 +135,20 @@
             children: [
                 (
                     zone: Staff,
-                    rooms: ["kitchen", "storage"],
+                    rooms: ["kitchen", "storage", "maintenance"],
                     children: [
                         (
-                            zone: Personal,
-                            rooms: ["manager-office"],
-                            locked_by: Some("office-key"),
-                        ),
-                    ],
-                ),
-                (
-                    zone: Secure,
-                    rooms: ["vip-lounge", "bathroom"],
-                    own_storey: true,
-                    children: [
-                        (
-                            zone: Personal,
-                            rooms: ["security-office", "maintenance"],
+                            zone: Secure,
+                            rooms: ["vip-lounge", "bathroom"],
                             own_storey: true,
-                            locked_by: Some("security-key"),
+                            children: [
+                                (
+                                    zone: Personal,
+                                    rooms: ["manager-office", "security-office"],
+                                    own_storey: true,
+                                    locked_by: Some("office-key"),
+                                ),
+                            ],
                         ),
                     ],
                 ),
