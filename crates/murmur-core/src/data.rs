@@ -560,6 +560,10 @@ pub struct Tuning {
     /// Noisemaker throw distance and how far its crack carries.
     pub noisemaker_range: i16,
     pub noise_radius: i16,
+    /// How far the dull thump of a body hitting the floor carries. Much
+    /// shorter than a gunshot or a thrown noisemaker: a nearby patrol
+    /// hears it even facing away, but the far end of the venue does not.
+    pub body_fall_radius: i16,
     /// Suspicion per turn an NPC watches the player pick a lock.
     pub gain_tampering: u16,
     /// Mission heat weights and tier thresholds.

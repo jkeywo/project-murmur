@@ -150,6 +150,7 @@ pub enum ActionIntent {
 pub enum RejectReason {
     PathBlocked(Blockage),
     OccupiedByActor,
+    StairsBlocked,
     DoorIsLocked,
     DoorAlreadyOpen,
     DoorAlreadyClosed,
@@ -185,6 +186,7 @@ impl RejectReason {
         match self {
             RejectReason::PathBlocked(what) => what.message(),
             RejectReason::OccupiedByActor => crate::tr!("reject.occupied"),
+            RejectReason::StairsBlocked => crate::tr!("reject.stairs_blocked"),
             RejectReason::DoorIsLocked => crate::tr!("reject.door_locked"),
             RejectReason::DoorAlreadyOpen => crate::tr!("reject.door_open"),
             RejectReason::DoorAlreadyClosed => crate::tr!("reject.door_closed"),
@@ -444,7 +446,7 @@ pub fn resolve_turn(
     for action in &applying {
         match action.intent {
             ActionIntent::Garrote(target) => {
-                violence::resolve_garrote(world, &mut events, action.actor, target)
+                violence::resolve_garrote(world, data, &mut events, action.actor, target)
             }
             ActionIntent::Shoot(target) => {
                 violence::resolve_shoot(world, data, &mut events, action.actor, target)
@@ -575,7 +577,13 @@ pub(crate) fn breach_constraint(world: &mut World, events: &mut TurnEvents, reas
 
 /// Kills `target` at the hand of `killer`: drops any carried body, records
 /// constraint breaches the death causes, and leaves witnessable evidence.
-pub(super) fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, target: ActorId) {
+pub(super) fn kill(
+    world: &mut World,
+    data: &GameData,
+    events: &mut TurnEvents,
+    killer: ActorId,
+    target: ActorId,
+) {
     // Dying drops any carried body on the spot.
     if let Hands::CarryingBody(body) = world.actor(target).hands {
         let pos = world.actor(target).pos;
@@ -603,6 +611,18 @@ pub(super) fn kill(world: &mut World, events: &mut TurnEvents, killer: ActorId, 
         kind: crate::world::IncidentKind::Violence,
         pos,
         radius: 0,
+        turn: world.turn,
+    });
+
+    // The body hitting the floor thumps. A short-range Noise incident, so a
+    // patrol close by turns to look even with its back to the kill — a
+    // silent takedown behind a line of guards no longer clears the whole
+    // line for free — while the far side of the venue hears nothing and no
+    // alarm is raised.
+    world.incidents.push(crate::world::Incident {
+        kind: crate::world::IncidentKind::Noise,
+        pos,
+        radius: data.tuning.body_fall_radius,
         turn: world.turn,
     });
 }

@@ -91,6 +91,40 @@ fn garrote_kills_silently_from_behind_only() {
 }
 
 #[test]
+fn a_falling_body_thumps_within_earshot() {
+    // A silent kill is silent to the eye, but the body still hits the
+    // floor: a short-range Noise incident so a patrol close by turns to
+    // look even with its back to the kill. Walking a garrote down a line
+    // of guards no longer clears the whole line for free.
+    let (data, mut driver) = setup(17);
+    quiet_all_npcs(driver.world_mut());
+    let victim = some_npc(driver.world(), Role::Civilian);
+    let (start, dir) = free_run(driver.world(), 3);
+    let player = driver.world().player;
+    place(driver.world_mut(), victim, start.step(dir), Some(dir));
+    place(driver.world_mut(), player, start, None);
+
+    driver.submit(&data, &Command::Garrote(victim)).unwrap();
+    assert!(!driver.world().actor(victim).alive());
+
+    let thump = driver
+        .world()
+        .incidents
+        .iter()
+        .find(|i| i.kind == IncidentKind::Noise)
+        .expect("the body hitting the floor raises a Noise incident");
+    assert_eq!(
+        thump.pos,
+        start.step(dir),
+        "the thump is where the body fell"
+    );
+    assert_eq!(
+        thump.radius, data.tuning.body_fall_radius,
+        "a body carries less far than a gunshot or a thrown noisemaker"
+    );
+}
+
+#[test]
 fn staff_disguise_from_a_body_legitimises_staff_areas() {
     let (data, mut driver) = setup(17);
     quiet_all_npcs(driver.world_mut());

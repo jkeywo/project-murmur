@@ -53,7 +53,14 @@ fn validate_step_destination(world: &World, dest: Pos, mover: ActorId) -> Result
         // Civilians and staff step aside (the mover swaps places with
         // them at resolution) — but not across a stairs transition, where
         // a swap would teleport the bystander between storeys.
-        if landing != dest || !world.is_displaceable_by(occupant.id, mover) {
+        if landing != dest {
+            // The blocker stands at the far end of the stairs, on a storey
+            // the player is not looking at: a generic "someone is standing
+            // there" points them at a tile they see as empty, so name the
+            // stairwell instead.
+            return Err(RejectReason::StairsBlocked);
+        }
+        if !world.is_displaceable_by(occupant.id, mover) {
             return Err(RejectReason::OccupiedByActor);
         }
     }

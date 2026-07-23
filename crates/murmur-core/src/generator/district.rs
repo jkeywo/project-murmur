@@ -29,7 +29,7 @@
 
 use crate::data::{DistrictPattern, GameData, RoomTemplate, VenueSpec};
 use crate::generator::layout::{Layout, LayoutError, finish_layout};
-use crate::geom::{FloorId, Pos};
+use crate::geom::{Dir4, FloorId, Pos};
 use crate::map::{DoorId, DoorState, GameMap, TileKind};
 use crate::rng::Pcg32;
 use crate::world::{Rect, Room, RoomId};
@@ -245,12 +245,24 @@ fn spine_free_tile(map: &GameMap, node: &Node, inset: i16) -> Option<Pos> {
     for dx in 0..node.rect.w {
         for y in [node.spine_y, node.spine_y + 1] {
             let pos = Pos::new(node.floor, node.rect.x + inset + dx, y);
-            if map.tile(pos) == TileKind::Floor {
+            // A stair tile teleports anyone who steps on it, so it must
+            // not sit on a doorway's only approach — a gateway door is
+            // punched in the far spine wall at spine_y + 2, directly south
+            // of the inner spine row, and anchoring there would strand the
+            // cell behind it. Skip any tile with a door for a neighbour.
+            if map.tile(pos) == TileKind::Floor && !adjacent_to_door(map, pos) {
                 return Some(pos);
             }
         }
     }
     None
+}
+
+/// Whether any orthogonal neighbour of `pos` is a door tile.
+fn adjacent_to_door(map: &GameMap, pos: Pos) -> bool {
+    Dir4::ALL
+        .iter()
+        .any(|&dir| matches!(map.tile(pos.step(dir)), TileKind::Door(_)))
 }
 
 /// Carves one district and everything below it.

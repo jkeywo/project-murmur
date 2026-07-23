@@ -27,6 +27,7 @@
 
     noisemaker_range: 8,         // throw distance in tiles
     noise_radius: 10,            // how far the crack is heard
+    body_fall_radius: 3,         // how far a body hitting the floor thumps
     gain_tampering: 40,          // suspicion per turn seen picking a lock
 
     heat_gunshot: 12,            // mission heat per heard gunshot

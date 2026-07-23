@@ -58,6 +58,7 @@ pub(super) fn validate_garrote(
 
 pub(super) fn resolve_garrote(
     world: &mut World,
+    data: &GameData,
     events: &mut TurnEvents,
     actor: ActorId,
     target: ActorId,
@@ -66,7 +67,7 @@ pub(super) fn resolve_garrote(
         fail(world, events, actor, crate::tr!("fail.garrote_missed"));
         return;
     }
-    kill(world, events, actor, target);
+    kill(world, data, events, actor, target);
     let name = world.actor(target).name.clone();
     events
         .messages
@@ -153,7 +154,7 @@ pub(super) fn resolve_shoot(
     // gunshot, a witnessed death, and leaves the principal alive.
     let hit = interposed_actor(world, shooter_pos, target_pos, target).unwrap_or(target);
 
-    kill(world, events, actor, hit);
+    kill(world, data, events, actor, hit);
     // Silenced, but still a local sound incident.
     world.incidents.push(crate::world::Incident {
         kind: crate::world::IncidentKind::Gunshot,
@@ -242,7 +243,7 @@ pub(super) fn resolve_melee(
     let target_mut = world.actor_mut(target);
     target_mut.hp = target_mut.hp.saturating_sub(damage);
     if target_mut.hp == 0 {
-        kill(world, events, actor, target);
+        kill(world, data, events, actor, target);
         let name = world.actor(target).name.clone();
         events
             .messages
