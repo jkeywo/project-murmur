@@ -377,19 +377,91 @@ pub struct Incident {
     pub turn: u32,
 }
 
+/// The mission's goal, named rather than assumed.
+///
+/// Until this type existed the contract was a single implicit sentence —
+/// "kill the target" — spread across the outcome checks, the getaway
+/// grace, the briefing facts, and the shell. Naming the goal lets
+/// completion be a function of the objective instead of a hardcoded "the
+/// target is dead", so later objectives (steal, extract alive, sabotage,
+/// plant) can be added as data over the same checks. For now the only
+/// variant is assassination, and it means exactly what the old assumption
+/// meant.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Objective {
+    /// Kill a specific actor. Complete once that actor is dead.
+    Assassinate { target: ActorId },
+}
+
+impl Default for Objective {
+    /// Only reached when deserialising a world saved before the objective
+    /// existed; such a world always still carries [`World::target`], so the
+    /// placeholder is immediately overwritten in practice. It exists solely
+    /// to satisfy `#[serde(default)]`.
+    fn default() -> Self {
+        Objective::Assassinate { target: ActorId(0) }
+    }
+}
+
+impl Objective {
+    /// The actor this objective centres on — the mark to kill, for now.
+    pub fn target(&self) -> ActorId {
+        match self {
+            Objective::Assassinate { target } => *target,
+        }
+    }
+
+    /// Whether the objective has been achieved in `world`.
+    pub fn is_complete(&self, world: &World) -> bool {
+        match self {
+            Objective::Assassinate { target } => {
+                world.actor(*target).condition == BodyCondition::Dead
+            }
+        }
+    }
+
+    /// Whether killing `victim` is the act that completes this objective —
+    /// what arms the getaway grace. Assassination completes when the mark
+    /// itself dies; other objectives will answer differently.
+    pub fn completed_by_kill(&self, victim: ActorId) -> bool {
+        match self {
+            Objective::Assassinate { target } => *target == victim,
+        }
+    }
+
+    /// Whether the objective has become unwinnable because its subject got
+    /// away alive. Assassination-specific today, but expressed on the
+    /// objective so the loss reads as goal-scoped rather than a universal
+    /// rule that every job must chase a fleeing person.
+    pub fn subject_escaped(&self, world: &World) -> bool {
+        match self {
+            Objective::Assassinate { target } => {
+                let mark = world.actor(*target);
+                mark.alive() && mark.departed
+            }
+        }
+    }
+}
+
 /// Why the mission ended.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MissionOutcome {
-    /// Target dead and the player left through an extraction exit.
+    /// The objective was completed and the player left through an
+    /// extraction exit.
     Extracted,
     PlayerKilled,
     Arrested,
-    /// The living target fled the premises through an exit: the job is
-    /// blown.
+    /// The Assassinate objective's target fled the premises through an
+    /// exit: the job is blown.
     TargetEscaped,
 }
 
 /// Raw facts derived from the generated world for the briefing.
+///
+/// The named subject and its locations describe the mission's
+/// [`Objective`] — for assassination, the mark and where it will be — and
+/// are built from the objective at generation rather than from a bare "the
+/// target actor" assumption.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MissionFacts {
     pub target_name: String,
@@ -463,6 +535,14 @@ pub struct World {
     pub actors: Vec<Actor>,
     pub player: ActorId,
     pub target: ActorId,
+    /// The mission's goal. For now always [`Objective::Assassinate`] of
+    /// [`World::target`]; completion and the assassination-specific loss are
+    /// read from here rather than being hardcoded as "the target is dead".
+    /// `#[serde(default)]` so worlds serialised before objectives existed
+    /// still load — they carry `target`, and the default is overwritten the
+    /// moment such a world is regenerated or replayed.
+    #[serde(default)]
+    pub objective: Objective,
     /// Tiles that count as extraction exits when stepped on.
     pub extraction_tiles: Vec<Pos>,
     /// Incidents from the current turn's resolution.

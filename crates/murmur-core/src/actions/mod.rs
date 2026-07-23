@@ -539,18 +539,17 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
             .push(crate::tr!("log.player_killed").to_string());
         return;
     }
-    // The target escaping alive ends the mission: there is no completing
-    // the contract once they are gone.
-    let target = world.actor(world.target);
-    if target.alive() && target.departed {
+    // The Assassinate objective's subject escaping alive ends the mission:
+    // there is no completing that contract once the mark is gone.
+    if world.objective.subject_escaped(world) {
         world.outcome = Some(MissionOutcome::TargetEscaped);
         events
             .messages
             .push(crate::tr!("log.target_escaped").to_string());
         return;
     }
-    let target_dead = world.actor(world.target).condition == BodyCondition::Dead;
-    if target_dead && world.extraction_tiles.contains(&player.pos) {
+    let objective_complete = world.objective.is_complete(world);
+    if objective_complete && world.extraction_tiles.contains(&player.pos) {
         let player_pos = player.pos;
         if let Some(constraint) = world.constraint.clone()
             && let Some(reason) = constraint.on_exit(world, player_pos)
@@ -606,10 +605,11 @@ pub(super) fn kill(
         breach_constraint(world, events, &reason);
     }
 
-    // Completing the objective — for now, the target's death — opens the
-    // getaway grace: a short window in which the venue is slow to grasp
-    // the hit, so a fast planned exit is rewarded rather than punished.
-    if player_kill && is_target {
+    // Completing the objective opens the getaway grace: a short window in
+    // which the venue is slow to grasp what happened, so a fast planned
+    // exit is rewarded rather than punished. For an Assassinate objective
+    // that is the moment the player kills the mark.
+    if player_kill && world.objective.completed_by_kill(target) {
         world.getaway_grace = data.tuning.getaway_grace_turns;
     }
 

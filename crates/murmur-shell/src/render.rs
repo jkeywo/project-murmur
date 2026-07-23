@@ -719,10 +719,11 @@ fn draw_sidebar(
     };
     lines.push(Line::styled(alert_label, Style::default().fg(alert_color)));
 
-    // Target intel: the schedule state the whole mission turns on. Your
-    // handler feeds you this — it is briefing-grade knowledge, not
-    // something the player must deduce from pixels.
-    let target = world.actor(world.target);
+    // Objective-subject intel: the schedule state the whole mission turns
+    // on. Your handler feeds you this — it is briefing-grade knowledge, not
+    // something the player must deduce from pixels. Read through the
+    // objective rather than assuming the mark is always `world.target`.
+    let target = world.actor(world.objective.target());
     let (intel, intel_color) = if !target.alive() {
         (tr!("ui.mission.target.down").to_string(), Color::DarkGray)
     } else {
@@ -894,7 +895,7 @@ fn draw_sidebar(
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
     }
-    let target = world.actor(world.target);
+    let target = world.actor(world.objective.target());
     if !target.alive() {
         lines.push(Line::styled(
             tr!("ui.mission.target_dead"),

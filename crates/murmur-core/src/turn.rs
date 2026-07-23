@@ -505,6 +505,47 @@ mod tests {
     }
 
     #[test]
+    fn extraction_is_gated_on_the_objective_not_the_bare_target() {
+        // Same setup as the extraction test, but assert the *objective*
+        // drives it: standing on an exit while the Assassinate objective is
+        // incomplete must not win, and completing it must.
+        let (data, mut driver) = driver(3);
+        let objective = driver.world().objective.clone();
+        let target = objective.target();
+        assert_eq!(
+            target,
+            driver.world().target,
+            "the seed's objective centres on the mission target"
+        );
+        assert!(
+            driver
+                .world()
+                .extraction_tiles
+                .contains(&driver.world().player_actor().pos),
+            "seed 3 spawns the player on the entrance exit"
+        );
+
+        // Objective incomplete (target alive): sitting on the exit is not a win.
+        assert!(!objective.is_complete(driver.world()));
+        driver.submit(&data, &Command::Wait).unwrap();
+        assert_eq!(
+            driver.world().outcome,
+            None,
+            "an incomplete objective must not let extraction end the mission"
+        );
+
+        // Complete the objective; now the same exit resolves as a win.
+        driver.world.actor_mut(target).condition = crate::world::BodyCondition::Dead;
+        assert!(objective.is_complete(driver.world()));
+        driver.submit(&data, &Command::Wait).unwrap();
+        assert_eq!(
+            driver.world().outcome,
+            Some(crate::world::MissionOutcome::Extracted),
+            "a completed objective on an exit must end the mission"
+        );
+    }
+
+    #[test]
     fn carrying_a_body_halves_movement_cadence() {
         let (data, mut driver) = frozen_driver(3);
         // Kill an adjacent-ish NPC via the world, carry it, and time a step.

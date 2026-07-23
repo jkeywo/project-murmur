@@ -112,7 +112,14 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         )?);
     }
 
-    let mut facts = build_facts(data, &layout, &population, &mut rng);
+    // The goal, named. Derived deterministically from the seed's generated
+    // population, so a replay from the same seed rebuilds the same
+    // objective and the record needs to carry nothing extra.
+    let objective = crate::world::Objective::Assassinate {
+        target: population.target,
+    };
+
+    let mut facts = build_facts(data, &layout, &population, &objective, &mut rng);
     facts.opportunities = opportunity_lines;
 
     Ok(World {
@@ -127,6 +134,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         actors: population.actors,
         player: population.player,
         target: population.target,
+        objective,
         extraction_tiles: layout.extraction_tiles,
         incidents: Vec::new(),
         player_violence_witnessed: false,
@@ -151,9 +159,12 @@ fn build_facts(
     data: &GameData,
     layout: &layout::Layout,
     population: &populate::Population,
+    objective: &crate::world::Objective,
     rng: &mut Pcg32,
 ) -> MissionFacts {
-    let target = &population.actors[population.target.0 as usize];
+    // The named subject of the job, not an assumed "the target actor":
+    // whom the briefing describes falls out of the objective.
+    let target = &population.actors[objective.target().0 as usize];
 
     let mut target_locations = Vec::new();
     if let Some(ai) = &target.ai {
