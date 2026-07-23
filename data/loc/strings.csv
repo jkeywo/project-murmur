@@ -63,6 +63,10 @@ ui.briefing.subtitle,"Briefing byline. {seed} is the mission seed, {venue} and {
 ui.briefing.target,{name} is the generated target's full name.,[Target: {name}]
 ui.briefing.reason,Why the client wants them dead. {hook} is a reason clause.,[Reason: the target {hook}]
 ui.briefing.locations,Rooms the target's routine visits. {rooms} is a comma-joined list.,[Likely locations: {rooms}]
+ui.briefing.objective.steal,Briefing line for a theft job. {name} is the item to lift.,[Steal: {name}]
+ui.briefing.objective.sabotage,Briefing line for a sabotage job. {name} is the machine to spend.,[Sabotage: {name}]
+ui.briefing.objective.rescue,Briefing line for a rescue job. {name} is the person to lead out.,[Get out alive: {name}]
+ui.briefing.objective.plant,Briefing line for a plant job. {name} is the mark to bug.,[Plant the bug on: {name}]
 ui.briefing.locations_unknown,Stands in for the room list when the target's routine is unknown.,unknown
 ui.briefing.condition,The contract's hard condition in full. {condition} is the long form.,[Condition: {condition}]
 ui.briefing.payout,{payout} is the money paid for a clean job.,[Payout on a clean job: {payout}]
@@ -154,6 +158,11 @@ ui.mission.insight.more,{count} further visible people the panel has no room for
 ui.mission.hunting,Alarm count over the whole venue. {count} people are hunting you.,[!! {count} hunting you]
 ui.mission.target_dead,Sidebar line once the target has been eliminated.,[target eliminated]
 ui.mission.reach_exit,Sidebar line telling the player to extract.,[reach an X exit]
+ui.mission.objective_done,Sidebar line when the objective is complete.,[objective complete]
+ui.mission.objective.steal,Sidebar objective line for a theft. {name} is the item.,[steal {name}]
+ui.mission.objective.sabotage,Sidebar objective line for a sabotage. {name} is the machine.,[sabotage {name}]
+ui.mission.objective.rescue,Sidebar objective line for a rescue. {name} is the person.,[get {name} out alive]
+ui.mission.objective.plant,Sidebar objective line for a plant. {name} is the mark.,[plant the bug on {name}]
 ui.mission.actions.title,Underlined heading above the clickable action palette.,[actions (click or key)]
 ui.mission.footer.move,Sidebar footer: movement and hover.,[arrows move - hover inspects]
 ui.mission.footer.speed,Sidebar footer. {speed} is the current pacing label.,[Esc cancel - [ ] speed: {speed}]
@@ -235,6 +244,8 @@ mission.prompt.open_door,Prompt asking which door to open.,[open - which directi
 mission.prompt.close_door,Prompt asking which door to close.,[close - which direction?]
 mission.prompt.pick_lock,Prompt asking which lock to pick.,[pick lock - which direction?]
 mission.prompt.use_machine,Prompt asking which machine to use.,[use - which direction?]
+mission.prompt.lead,Prompt asking which adjacent person to lead or release.,[lead - which direction?]
+mission.prompt.plant,Prompt asking where to plant: a person or your own tile.,[plant - which direction?]
 mission.prompt.throw,Prompt while aiming a noisemaker throw.,"[aim the throw - Enter or click throws, Esc cancels]"
 mission.prompt.shoot,"Prompt while cycling shot targets. {name}, {n} of {total}.","[aim: {name} ({n}/{total}) - Enter or click fires, Esc cancels]"
 mission.confirm.abandon,Yes/no question guarding an abandoned run.,[abandon the run and walk away? y / n]
@@ -271,6 +282,8 @@ mission.block.no_lockpicks,Pick lock is unavailable: none carried.,[you carry no
 mission.block.no_lock,Pick lock is unavailable: no locked door adjacent.,[no lock to pick]
 mission.block.no_charges,Noisemaker is unavailable: no charges left.,[no noisemaker charges]
 mission.block.nothing_to_use,Use is unavailable: no unused machine adjacent.,[nothing to use here]
+mission.block.no_lead_target,Lead is unavailable: no adjacent person can be led.,[no one to lead here]
+mission.block.no_plantable,Plant is unavailable: nothing plantable is carried.,[you carry nothing to plant]
 ,,
 # --- pre-turn command rejections ------------------------------------------,,
 reject.occupied,A command was refused: someone stands on the target tile.,[someone is standing there]
@@ -449,6 +462,10 @@ keymap.action.noise.label,Palette label for the noisemaker.,noisemaker
 keymap.action.noise.help,Help line for the noisemaker.,[throw a noisemaker at a tile to pull people towards it]
 keymap.action.machine.label,Palette label for using a machine.,[use machine]
 keymap.action.machine.help,Help line for using a machine.,[use an adjacent opportunity machine]
+keymap.action.lead.label,Palette label for leading a person.,[lead]
+keymap.action.lead.help,Help line for leading a person.,[take an adjacent person onto your leash; press again to release]
+keymap.action.plant.label,Palette label for planting an item.,[plant]
+keymap.action.plant.help,Help line for planting an item.,[plant a carried item on a person or on your own tile]
 keymap.action.look.label,Palette label for the free look cursor.,look
 keymap.action.look.help,Help line for the free look cursor.,[free look cursor; costs no time and pauses nothing you planned]
 ,,
@@ -565,6 +582,7 @@ item.security-key.name,Item name in the inventory.,security office key
 item.service-master-key.name,Item name in the inventory; placed by the key cache.,service master key
 item.foreman-key.name,Item name in the inventory.,foreman's key
 item.listening-bug.name,Item name in the shop and inventory; a plantable bug.,listening bug
+item.secret-ledger.name,Item name; the ledger a theft contract lifts.,secret ledger
 ,,
 # --- opportunity machines --------------------------------------------------,,
 opportunity.fuse-box.name,Machine name in tile inspection.,fuse box

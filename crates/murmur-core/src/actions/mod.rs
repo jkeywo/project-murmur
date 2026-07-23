@@ -570,9 +570,10 @@ fn check_outcomes(world: &mut World, events: &mut TurnEvents) {
             .push(crate::tr!("log.player_killed").to_string());
         return;
     }
-    // The Assassinate objective's subject escaping alive ends the mission:
-    // there is no completing that contract once the mark is gone.
-    if world.objective.subject_escaped(world) {
+    // The objective's subject being lost ends the mission: there is no
+    // completing an assassination once the mark has fled, nor a rescue once
+    // the captive is dead.
+    if world.objective.subject_lost(world) {
         world.outcome = Some(MissionOutcome::TargetEscaped);
         events
             .messages

@@ -3,7 +3,7 @@
 
 use murmur_campaign::{CampaignState, ResolutionSummary};
 use murmur_core::data::GameData;
-use murmur_core::world::MissionFacts;
+use murmur_core::world::{MissionFacts, ObjectiveKind};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -545,12 +545,16 @@ pub fn draw_briefing(
         ),
         Line::raw(""),
     ];
-    push_wrapped(
-        &mut lines,
-        trf!("ui.briefing.target", name = facts.target_name),
-        plain,
-        width,
-    );
+    let subject_line = match facts.objective_kind {
+        ObjectiveKind::Assassinate => trf!("ui.briefing.target", name = facts.target_name),
+        ObjectiveKind::Steal => trf!("ui.briefing.objective.steal", name = facts.target_name),
+        ObjectiveKind::Sabotage => {
+            trf!("ui.briefing.objective.sabotage", name = facts.target_name)
+        }
+        ObjectiveKind::Rescue => trf!("ui.briefing.objective.rescue", name = facts.target_name),
+        ObjectiveKind::Plant => trf!("ui.briefing.objective.plant", name = facts.target_name),
+    };
+    push_wrapped(&mut lines, subject_line, plain, width);
     push_wrapped(
         &mut lines,
         trf!("ui.briefing.reason", hook = offer.hook),

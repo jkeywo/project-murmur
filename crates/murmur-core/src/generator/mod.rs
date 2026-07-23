@@ -9,6 +9,7 @@
 
 pub mod district;
 pub mod layout;
+pub mod objective;
 pub mod opportunities;
 pub mod populate;
 pub mod proof;
@@ -16,6 +17,7 @@ pub mod schedule;
 
 use crate::contract::MissionConfig;
 use crate::data::GameData;
+use crate::geom::Pos;
 use crate::rng::{Pcg32, Stream};
 use crate::world::{FurnitureKind, MissionFacts, World};
 
@@ -67,22 +69,35 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let venue = data.venue(&config.venue).expect("checked by generate");
     let mut rng = Pcg32::new(seed, ATTEMPT_STREAM_BASE + attempt);
 
-    if config.loadout.len() > crate::contract::LOADOUT_SLOTS {
+    // A plant contract brings its bug in the loadout; every other mission
+    // carries exactly what the config asked for, so default (assassination)
+    // missions pass the identical loadout to `populate` and stay unchanged.
+    let mut loadout = config.loadout.clone();
+    if config.objective_kind == crate::world::ObjectiveKind::Plant
+        && !loadout.iter().any(|i| i == "listening-bug")
+    {
+        if loadout.len() >= crate::contract::LOADOUT_SLOTS {
+            return Err("plant loadout has no room for the listening bug".to_string());
+        }
+        loadout.push("listening-bug".to_string());
+    }
+
+    if loadout.len() > crate::contract::LOADOUT_SLOTS {
         return Err("loadout exceeds the three-item limit".to_string());
     }
-    for spec_id in &config.loadout {
+    for spec_id in &loadout {
         if data.item(spec_id).is_none() {
             return Err(format!("loadout item '{spec_id}' is unknown"));
         }
     }
 
     let mut layout = district::build_layout(data, venue, &mut rng).map_err(|e| e.0)?;
-    let population = populate::populate(
+    let mut population = populate::populate(
         data,
         &layout,
         venue,
         config.constraint.as_ref(),
-        &config.loadout,
+        &loadout,
         config.heat,
         &mut rng,
     )
@@ -101,10 +116,15 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     // The goal, named. Derived deterministically from the seed's generated
     // population, so a replay from the same seed rebuilds the same
     // objective and the record needs to carry nothing extra. Built before
-    // the route proofs because the planner now certifies *this objective's*
-    // completion rather than an assumed kill.
-    let objective = crate::world::Objective::Assassinate {
-        target: population.target,
+    // the route proofs because the planner certifies *this objective's*
+    // completion rather than an assumed kill. Assassination is built inline
+    // and draws no RNG, so default missions are byte-identical; the other
+    // kinds designate their entity only on their own branch.
+    let objective = match config.objective_kind {
+        crate::world::ObjectiveKind::Assassinate => crate::world::Objective::Assassinate {
+            target: population.target,
+        },
+        kind => objective::build_objective(kind, data, &layout, &mut population, &mut rng)?,
     };
 
     // Every mission must be completable three ways: social stealth,
@@ -166,20 +186,9 @@ fn build_facts(
     objective: &crate::world::Objective,
     rng: &mut Pcg32,
 ) -> MissionFacts {
-    // The named subject of the job, not an assumed "the target actor":
-    // whom the briefing describes falls out of the objective.
-    let target = &population.actors[objective.target().0 as usize];
-
-    let mut target_locations = Vec::new();
-    if let Some(ai) = &target.ai {
-        for step in &ai.routine {
-            if let Some(room) = layout.room_at(step.pos)
-                && !target_locations.contains(&room.name)
-            {
-                target_locations.push(room.name.clone());
-            }
-        }
-    }
+    // The named subject of the job and the rooms the briefing points at fall
+    // out of the objective, not an assumed "the target actor".
+    let (target_name, target_locations) = objective_briefing(data, layout, population, objective);
 
     let mut available_disguises: Vec<String> = Vec::new();
     for actor in &population.actors {
@@ -215,7 +224,8 @@ fn build_facts(
 
     let role_of = |actor: &crate::world::Actor| actor.role;
     MissionFacts {
-        target_name: target.name.clone(),
+        objective_kind: objective.kind(),
+        target_name,
         target_reason: rng.pick(&data.briefing.reasons).clone(),
         target_locations,
         guard_count: population
@@ -247,6 +257,95 @@ fn build_facts(
             .map(|r| r.name.clone())
             .collect(),
         opportunities: Vec::new(),
+    }
+}
+
+/// The subject name and the rooms the briefing should name, per objective.
+/// Draws no RNG, so the assassination branch is byte-identical to the old
+/// hardcoded computation.
+fn objective_briefing(
+    data: &GameData,
+    layout: &layout::Layout,
+    population: &populate::Population,
+    objective: &crate::world::Objective,
+) -> (String, Vec<String>) {
+    use crate::world::{Objective, PlantTarget};
+
+    // Distinct room names for a set of positions, in encounter order.
+    let rooms_of = |positions: &[Pos]| -> Vec<String> {
+        let mut names = Vec::new();
+        for pos in positions {
+            if let Some(room) = layout.room_at(*pos)
+                && !names.contains(&room.name)
+            {
+                names.push(room.name.clone());
+            }
+        }
+        names
+    };
+    let routine_positions = |id: crate::world::ActorId| -> Vec<Pos> {
+        population.actors[id.0 as usize]
+            .ai
+            .as_ref()
+            .map(|ai| ai.routine.iter().map(|s| s.pos).collect())
+            .unwrap_or_default()
+    };
+    let item_name = |item: crate::world::ItemId| -> String {
+        population
+            .items
+            .iter()
+            .find(|i| i.id == item)
+            .and_then(|i| data.item(&i.spec))
+            .map(|s| s.name.clone())
+            .unwrap_or_default()
+    };
+
+    match objective {
+        Objective::Assassinate { target } => (
+            population.actors[target.0 as usize].name.clone(),
+            rooms_of(&routine_positions(*target)),
+        ),
+        Objective::Steal { item } => {
+            let holder = population
+                .items
+                .iter()
+                .find(|i| i.id == *item)
+                .and_then(|i| match i.location {
+                    crate::world::ItemLocation::CarriedBy(h) => Some(h),
+                    crate::world::ItemLocation::Ground(_) => None,
+                });
+            let locations = holder.map(routine_positions).unwrap_or_default();
+            (item_name(*item), rooms_of(&locations))
+        }
+        Objective::Sabotage { machine } => {
+            let furniture = layout.furniture.iter().find(|f| f.id == *machine);
+            let name = furniture
+                .and_then(|f| f.machine.as_deref())
+                .and_then(|s| data.opportunity(s))
+                .map(|s| s.name.clone())
+                .unwrap_or_default();
+            let rooms = furniture.map(|f| rooms_of(&[f.pos])).unwrap_or_default();
+            (name, rooms)
+        }
+        Objective::Rescue { person } => {
+            let actor = &population.actors[person.0 as usize];
+            (actor.name.clone(), rooms_of(&[actor.pos]))
+        }
+        Objective::Plant { item: _, on } => match on {
+            PlantTarget::Person(p) => {
+                let actor = &population.actors[p.0 as usize];
+                (actor.name.clone(), rooms_of(&[actor.pos]))
+            }
+            PlantTarget::Room(r) => {
+                let name = layout
+                    .rooms
+                    .iter()
+                    .find(|room| room.id == *r)
+                    .map(|room| room.name.clone())
+                    .unwrap_or_default();
+                (name.clone(), vec![name])
+            }
+        },
     }
 }
 

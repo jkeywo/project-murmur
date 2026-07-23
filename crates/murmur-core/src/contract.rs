@@ -286,6 +286,11 @@ pub struct MissionConfig {
     /// guard count (capped) and, at two or more, its baseline wariness.
     #[serde(default)]
     pub heat: u8,
+    /// Which kind of objective to generate. Defaults to `Assassinate`, so
+    /// every existing config — the corpus, the golden fixtures, saved
+    /// records — keeps generating the same kill missions.
+    #[serde(default)]
+    pub objective_kind: crate::world::ObjectiveKind,
 }
 
 impl MissionConfig {
@@ -296,7 +301,13 @@ impl MissionConfig {
             constraint: None,
             loadout: vec!["garrote".to_string(), "silenced-pistol".to_string()],
             heat: 0,
+            objective_kind: crate::world::ObjectiveKind::Assassinate,
         }
+    }
+
+    pub fn with_objective(mut self, kind: crate::world::ObjectiveKind) -> Self {
+        self.objective_kind = kind;
+        self
     }
 
     pub fn with_heat(mut self, heat: u8) -> Self {

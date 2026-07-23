@@ -171,6 +171,172 @@ fn prove_completion(
         Objective::Assassinate { target } => {
             prove_assassination(data, layout, population, outcome, class, filters, *target)
         }
+        Objective::Steal { item } => prove_steal(data, layout, population, outcome, *item),
+        Objective::Sabotage { machine } => prove_sabotage(data, layout, outcome, *machine),
+        Objective::Rescue { person } => prove_rescue(layout, population, outcome, *person),
+        Objective::Plant { item, on } => prove_plant(layout, population, outcome, *item, on),
+    }
+}
+
+/// Positions at which a carried item can be lifted: an item on the ground is
+/// its tile; an item on a person is that person's schedule — the mark's
+/// *alone* beats when it is the escorted target (a bullet-or-garrote-grade
+/// restriction the pickpocket shares, since a ring of guards denies the
+/// adjacency), and any schedule stop for anyone else.
+fn liftable_positions(population: &Population, holder: crate::world::ActorId) -> Vec<Pos> {
+    let actor = &population.actors[holder.0 as usize];
+    if holder == population.target {
+        vulnerable_positions(actor)
+    } else {
+        schedule_positions(actor)
+    }
+}
+
+/// Completion proof for [`Objective::Steal`]: reach a position where the
+/// item can be lifted. No capability beyond adjacency — a pickpocket needs
+/// only to stand next to the mark — so the closure's reachable set decides
+/// it outright.
+fn prove_steal(
+    data: &GameData,
+    layout: &Layout,
+    population: &Population,
+    outcome: &ClosureOutcome,
+    item: crate::world::ItemId,
+) -> Result<Completion, String> {
+    let instance = population
+        .items
+        .iter()
+        .find(|i| i.id == item)
+        .ok_or_else(|| "the item to steal does not exist".to_string())?;
+    let positions = match instance.location {
+        ItemLocation::Ground(pos) => vec![pos],
+        ItemLocation::CarriedBy(holder) => liftable_positions(population, holder),
+    };
+    let room = positions
+        .iter()
+        .filter(|pos| outcome.seen.contains(**pos))
+        .find_map(|pos| layout.room_at(*pos))
+        .ok_or_else(|| "no reachable spot to lift the item".to_string())?;
+    let name = data
+        .item(&instance.spec)
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| instance.spec.clone());
+    Ok(Completion {
+        step: format!("lift the {name} in {}", room.name),
+        site_room: room.name.clone(),
+    })
+}
+
+/// Completion proof for [`Objective::Sabotage`]: reach a tile adjacent to
+/// the machine so it can be used.
+fn prove_sabotage(
+    data: &GameData,
+    layout: &Layout,
+    outcome: &ClosureOutcome,
+    machine: crate::world::FurnitureId,
+) -> Result<Completion, String> {
+    let furniture = layout
+        .furniture
+        .iter()
+        .find(|f| f.id == machine)
+        .ok_or_else(|| "the machine to sabotage does not exist".to_string())?;
+    let adjacent_reachable = crate::geom::Dir4::ALL
+        .into_iter()
+        .any(|d| outcome.seen.contains(furniture.pos.step(d)));
+    if !adjacent_reachable {
+        return Err("the machine to sabotage is not reachable".to_string());
+    }
+    let room = layout
+        .room_at(furniture.pos)
+        .ok_or_else(|| "the machine is in no room".to_string())?;
+    let name = furniture
+        .machine
+        .as_deref()
+        .and_then(|s| data.opportunity(s))
+        .map(|s| s.name.clone())
+        .unwrap_or_else(|| "machine".to_string());
+    Ok(Completion {
+        step: format!("sabotage the {name} in {}", room.name),
+        site_room: room.name.clone(),
+    })
+}
+
+/// Completion proof for [`Objective::Rescue`]: the captive is reachable (the
+/// player can get to them) and an extraction tile is reachable (the captive
+/// can be led out along the same reachable tiles).
+fn prove_rescue(
+    layout: &Layout,
+    population: &Population,
+    outcome: &ClosureOutcome,
+    person: crate::world::ActorId,
+) -> Result<Completion, String> {
+    let captive = &population.actors[person.0 as usize];
+    if !schedule_positions(captive)
+        .iter()
+        .any(|pos| outcome.seen.contains(*pos))
+    {
+        return Err("the person to rescue is not reachable".to_string());
+    }
+    if !layout
+        .extraction_tiles
+        .iter()
+        .any(|tile| outcome.seen.contains(*tile))
+    {
+        return Err("no reachable extraction to lead the person to".to_string());
+    }
+    let room = layout
+        .room_at(captive.pos)
+        .map(|r| r.name.clone())
+        .unwrap_or_else(|| "the floor".to_string());
+    Ok(Completion {
+        step: format!("lead {} out from {room}", captive.name),
+        site_room: room,
+    })
+}
+
+/// Completion proof for [`Objective::Plant`]: reach the destination while
+/// carrying the bug. The bug is a loadout item, always held, so no
+/// capability is needed beyond reaching the mark or the target room.
+fn prove_plant(
+    layout: &Layout,
+    population: &Population,
+    outcome: &ClosureOutcome,
+    _item: crate::world::ItemId,
+    on: &crate::world::PlantTarget,
+) -> Result<Completion, String> {
+    use crate::world::PlantTarget;
+    match on {
+        PlantTarget::Person(p) => {
+            let mark = &population.actors[p.0 as usize];
+            let positions = liftable_positions(population, *p);
+            let room = positions
+                .iter()
+                .filter(|pos| outcome.seen.contains(**pos))
+                .find_map(|pos| layout.room_at(*pos))
+                .ok_or_else(|| "cannot reach the person to plant on".to_string())?;
+            Ok(Completion {
+                step: format!("plant the bug on {} in {}", mark.name, room.name),
+                site_room: room.name.clone(),
+            })
+        }
+        PlantTarget::Room(r) => {
+            let room = layout
+                .rooms
+                .iter()
+                .find(|room| room.id == *r)
+                .ok_or_else(|| "the room to plant in does not exist".to_string())?;
+            let b = room.bounds;
+            let reachable = (b.y..b.y + b.h)
+                .flat_map(|y| (b.x..b.x + b.w).map(move |x| Pos::new(room.floor, x, y)))
+                .any(|pos| outcome.seen.contains(pos));
+            if !reachable {
+                return Err("the room to plant in is not reachable".to_string());
+            }
+            Ok(Completion {
+                step: format!("plant the bug in {}", room.name),
+                site_room: room.name.clone(),
+            })
+        }
     }
 }
 

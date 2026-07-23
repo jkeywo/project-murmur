@@ -143,4 +143,17 @@
         carried_by: None,
         placed_in: None,
     ),
+    (
+        // The prize of a theft contract: placed on the mark by the objective
+        // generator, never auto-generated (no carried_by, no placed_in), so
+        // it only ever appears in a steal mission.
+        id: "secret-ledger",
+        glyph: '&',
+        unlocks: None,
+        invitation: false,
+        weapon: false,
+        pickpocketable: true,
+        carried_by: None,
+        placed_in: None,
+    ),
 ]

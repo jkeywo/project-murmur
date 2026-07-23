@@ -392,20 +392,60 @@ pub struct Incident {
     pub turn: u32,
 }
 
+/// Which kind of goal a mission is generated around. Carried on the
+/// [`MissionConfig`](crate::contract::MissionConfig) so the generator knows
+/// which [`Objective`] to build; defaults to [`Assassinate`](Self::Assassinate)
+/// so every existing config, save, and the corpus keep generating the
+/// same kill missions they always did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ObjectiveKind {
+    #[default]
+    Assassinate,
+    Steal,
+    Sabotage,
+    Rescue,
+    Plant,
+}
+
+impl ObjectiveKind {
+    /// Whether this is the default kill objective. Used as a
+    /// `skip_serializing_if` so the field is absent from every existing
+    /// mission's serialisation and no assassination fingerprint moves.
+    pub fn is_assassinate(&self) -> bool {
+        matches!(self, ObjectiveKind::Assassinate)
+    }
+}
+
+/// Where a [`Plant`](Objective::Plant) objective wants its item to end up:
+/// on a specific person, or anywhere within a specific room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PlantTarget {
+    Person(ActorId),
+    Room(RoomId),
+}
+
 /// The mission's goal, named rather than assumed.
 ///
-/// Until this type existed the contract was a single implicit sentence —
-/// "kill the target" — spread across the outcome checks, the getaway
-/// grace, the briefing facts, and the shell. Naming the goal lets
-/// completion be a function of the objective instead of a hardcoded "the
-/// target is dead", so later objectives (steal, extract alive, sabotage,
-/// plant) can be added as data over the same checks. For now the only
-/// variant is assassination, and it means exactly what the old assumption
-/// meant.
+/// Naming the goal lets completion be a function of the objective instead
+/// of a hardcoded "the target is dead", so each job type is data over the
+/// same outcome checks and the same capability-closure planner. Every
+/// variant answers exactly one question — [`is_complete`](Self::is_complete)
+/// — as "an entity reached a required state at a reachable position", which
+/// is why none of them needed the closure to change.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Objective {
     /// Kill a specific actor. Complete once that actor is dead.
     Assassinate { target: ActorId },
+    /// Lift a specific item into the player's own hands.
+    Steal { item: ItemId },
+    /// Use (spend) a specific opportunity machine.
+    Sabotage { machine: FurnitureId },
+    /// Get a specific person out alive: complete once they are alive on an
+    /// extraction tile, which the player achieves by leading them there.
+    Rescue { person: ActorId },
+    /// Leave a specific item at a designated destination — a person's
+    /// pockets or a room's floor.
+    Plant { item: ItemId, on: PlantTarget },
 }
 
 impl Default for Objective {
@@ -419,41 +459,88 @@ impl Default for Objective {
 }
 
 impl Objective {
-    /// The actor this objective centres on — the mark to kill, for now.
-    pub fn target(&self) -> ActorId {
+    /// Which kind this is, for briefing text and shell verbs.
+    pub fn kind(&self) -> ObjectiveKind {
         match self {
-            Objective::Assassinate { target } => *target,
+            Objective::Assassinate { .. } => ObjectiveKind::Assassinate,
+            Objective::Steal { .. } => ObjectiveKind::Steal,
+            Objective::Sabotage { .. } => ObjectiveKind::Sabotage,
+            Objective::Rescue { .. } => ObjectiveKind::Rescue,
+            Objective::Plant { .. } => ObjectiveKind::Plant,
         }
     }
 
-    /// Whether the objective has been achieved in `world`.
+    /// The live actor a mission centres on, when it has one — the mark, the
+    /// captive, or a plant's person. `None` for item/machine/room goals.
+    /// The shell reads this for its subject intel and target glyph.
+    pub fn focus_actor(&self) -> Option<ActorId> {
+        match self {
+            Objective::Assassinate { target } => Some(*target),
+            Objective::Rescue { person } => Some(*person),
+            Objective::Plant {
+                on: PlantTarget::Person(p),
+                ..
+            } => Some(*p),
+            _ => None,
+        }
+    }
+
+    /// Whether the objective has been achieved in `world`. Each arm is a
+    /// pure state query — no capability, no reachability — because
+    /// reachability was already discharged by the planner at generation.
     pub fn is_complete(&self, world: &World) -> bool {
         match self {
             Objective::Assassinate { target } => {
                 world.actor(*target).condition == BodyCondition::Dead
             }
+            Objective::Steal { item } => world
+                .item(*item)
+                .is_some_and(|i| i.location == ItemLocation::CarriedBy(world.player)),
+            Objective::Sabotage { machine } => world
+                .furniture
+                .iter()
+                .find(|f| f.id == *machine)
+                .is_some_and(|f| f.used),
+            Objective::Rescue { person } => {
+                let captive = world.actor(*person);
+                captive.alive() && world.extraction_tiles.contains(&captive.pos)
+            }
+            Objective::Plant { item, on } => {
+                let Some(instance) = world.item(*item) else {
+                    return false;
+                };
+                match on {
+                    PlantTarget::Person(p) => instance.location == ItemLocation::CarriedBy(*p),
+                    PlantTarget::Room(r) => match instance.location {
+                        ItemLocation::Ground(pos) => {
+                            world.room_at(pos).is_some_and(|room| room.id == *r)
+                        }
+                        ItemLocation::CarriedBy(_) => false,
+                    },
+                }
+            }
         }
     }
 
     /// Whether killing `victim` is the act that completes this objective —
-    /// what arms the getaway grace. Assassination completes when the mark
-    /// itself dies; other objectives will answer differently.
+    /// what arms the getaway grace. Only assassination is completed by a
+    /// kill; the other jobs are completed by their own verbs.
     pub fn completed_by_kill(&self, victim: ActorId) -> bool {
-        match self {
-            Objective::Assassinate { target } => *target == victim,
-        }
+        matches!(self, Objective::Assassinate { target } if *target == victim)
     }
 
-    /// Whether the objective has become unwinnable because its subject got
-    /// away alive. Assassination-specific today, but expressed on the
+    /// Whether the objective has become permanently unwinnable — the mark
+    /// fled alive, or the person to be rescued is dead. Expressed on the
     /// objective so the loss reads as goal-scoped rather than a universal
-    /// rule that every job must chase a fleeing person.
-    pub fn subject_escaped(&self, world: &World) -> bool {
+    /// rule. Item, machine, and plant goals cannot be lost this way.
+    pub fn subject_lost(&self, world: &World) -> bool {
         match self {
             Objective::Assassinate { target } => {
                 let mark = world.actor(*target);
                 mark.alive() && mark.departed
             }
+            Objective::Rescue { person } => world.actor(*person).condition == BodyCondition::Dead,
+            _ => false,
         }
     }
 }
@@ -466,8 +553,10 @@ pub enum MissionOutcome {
     Extracted,
     PlayerKilled,
     Arrested,
-    /// The Assassinate objective's target fled the premises through an
-    /// exit: the job is blown.
+    /// The objective's subject was lost: the mark fled the premises alive,
+    /// or the person to be rescued died. The job can no longer be
+    /// completed. (Named for its original assassination meaning; it now
+    /// covers any objective whose subject becomes unreachable.)
     TargetEscaped,
 }
 
@@ -479,6 +568,13 @@ pub enum MissionOutcome {
 /// target actor" assumption.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MissionFacts {
+    /// What kind of job this is, so the briefing and overlay pick the right
+    /// verb. `skip_serializing_if` keeps it absent for assassination, so no
+    /// existing mission's fingerprint moves.
+    #[serde(default, skip_serializing_if = "ObjectiveKind::is_assassinate")]
+    pub objective_kind: ObjectiveKind,
+    /// The subject the briefing names: the mark, the item to steal, the
+    /// machine to sabotage, the person to rescue, or the plant's mark.
     pub target_name: String,
     pub target_reason: String,
     /// Room names the target's schedule visits.
@@ -630,6 +726,11 @@ impl World {
 
     pub fn door_mut(&mut self, id: DoorId) -> &mut DoorState {
         &mut self.doors[id.0 as usize]
+    }
+
+    /// The item instance with this id, if it still exists.
+    pub fn item(&self, id: ItemId) -> Option<&ItemInstance> {
+        self.items.iter().find(|i| i.id == id)
     }
 
     pub fn furniture_at(&self, pos: Pos) -> Option<&Furniture> {

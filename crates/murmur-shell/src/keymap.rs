@@ -167,6 +167,18 @@ pub const ACTIONS: &[ActionKey] = &[
         category: Category::World,
     },
     ActionKey {
+        key: 'e',
+        label_id: "keymap.action.lead.label",
+        help_id: "keymap.action.lead.help",
+        category: Category::Stealth,
+    },
+    ActionKey {
+        key: 'n',
+        label_id: "keymap.action.plant.label",
+        help_id: "keymap.action.plant.help",
+        category: Category::Stealth,
+    },
+    ActionKey {
         key: ';',
         label_id: "keymap.action.look.label",
         help_id: "keymap.action.look.help",

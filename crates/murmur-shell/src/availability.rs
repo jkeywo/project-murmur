@@ -134,6 +134,15 @@ pub fn action_block(world: &World, data: &GameData, key: char) -> Option<&'stati
                 .is_some_and(|f| f.kind == FurnitureKind::Machine && !f.used)
         }))
         .then_some(tr!("mission.block.nothing_to_use")),
+        'e' => {
+            let leadable = |p: Pos| {
+                world.standing_actor_at(p).is_some_and(|a| {
+                    !a.is_player() && a.alive() && a.role != Some(murmur_core::data::Role::Guard)
+                })
+            };
+            (!near(&leadable)).then_some(tr!("mission.block.no_lead_target"))
+        }
+        'n' => (!carries(&|s| s.plantable)).then_some(tr!("mission.block.no_plantable")),
         _ => None,
     }
 }

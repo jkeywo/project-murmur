@@ -14,7 +14,7 @@ use murmur_core::data::{GameData, Zone};
 use murmur_core::geom::Pos;
 use murmur_core::map::TileKind;
 use murmur_core::perception::npc_visible_tiles;
-use murmur_core::world::{Actor, FurnitureKind, Hands, Mood, World};
+use murmur_core::world::{Actor, FurnitureKind, Hands, Mood, Objective, World};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -719,29 +719,53 @@ fn draw_sidebar(
     };
     lines.push(Line::styled(alert_label, Style::default().fg(alert_color)));
 
-    // Objective-subject intel: the schedule state the whole mission turns
-    // on. Your handler feeds you this — it is briefing-grade knowledge, not
-    // something the player must deduce from pixels. Read through the
-    // objective rather than assuming the mark is always `world.target`.
-    let target = world.actor(world.objective.target());
-    let (intel, intel_color) = if !target.alive() {
-        (tr!("ui.mission.target.down").to_string(), Color::DarkGray)
-    } else {
-        match target
-            .ai
-            .as_ref()
-            .and_then(|ai| ai.schedule.as_ref())
-            .and_then(|s| s.current())
-            .map(|b| b.protection)
-        {
-            Some(murmur_core::world::Protection::Alone) => (
-                trf!("ui.mission.target.alone", name = target.name),
-                Color::LightGreen,
-            ),
-            _ => (
-                trf!("ui.mission.target.escorted", name = target.name),
-                Color::LightRed,
-            ),
+    // Objective intel: for an assassination the schedule state the whole
+    // mission turns on; for the other jobs, the goal in one line. Your
+    // handler feeds you this — briefing-grade knowledge, not something the
+    // player must deduce from pixels.
+    let (intel, intel_color) = match &world.objective {
+        Objective::Assassinate { target } => {
+            let mark = world.actor(*target);
+            if !mark.alive() {
+                (tr!("ui.mission.target.down").to_string(), Color::DarkGray)
+            } else {
+                match mark
+                    .ai
+                    .as_ref()
+                    .and_then(|ai| ai.schedule.as_ref())
+                    .and_then(|s| s.current())
+                    .map(|b| b.protection)
+                {
+                    Some(murmur_core::world::Protection::Alone) => (
+                        trf!("ui.mission.target.alone", name = mark.name),
+                        Color::LightGreen,
+                    ),
+                    _ => (
+                        trf!("ui.mission.target.escorted", name = mark.name),
+                        Color::LightRed,
+                    ),
+                }
+            }
+        }
+        other => {
+            if world.objective.is_complete(world) {
+                (
+                    tr!("ui.mission.objective_done").to_string(),
+                    Color::LightGreen,
+                )
+            } else {
+                let name = world.facts.target_name.clone();
+                let line = match other {
+                    Objective::Steal { .. } => trf!("ui.mission.objective.steal", name = name),
+                    Objective::Sabotage { .. } => {
+                        trf!("ui.mission.objective.sabotage", name = name)
+                    }
+                    Objective::Rescue { .. } => trf!("ui.mission.objective.rescue", name = name),
+                    Objective::Plant { .. } => trf!("ui.mission.objective.plant", name = name),
+                    Objective::Assassinate { .. } => unreachable!("assassinate handled above"),
+                };
+                (line, Color::LightYellow)
+            }
         }
     };
     lines.push(Line::styled(intel, Style::default().fg(intel_color)));
@@ -895,10 +919,21 @@ fn draw_sidebar(
             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
         ));
     }
-    let target = world.actor(world.objective.target());
-    if !target.alive() {
+    let assassination_down = matches!(
+        &world.objective,
+        Objective::Assassinate { target } if !world.actor(*target).alive()
+    );
+    let other_done = !matches!(world.objective, Objective::Assassinate { .. })
+        && world.objective.is_complete(world);
+    if assassination_down {
         lines.push(Line::styled(
             tr!("ui.mission.target_dead"),
+            Style::default().fg(Color::LightGreen),
+        ));
+        lines.push(Line::from(tr!("ui.mission.reach_exit")));
+    } else if other_done {
+        lines.push(Line::styled(
+            tr!("ui.mission.objective_done"),
             Style::default().fg(Color::LightGreen),
         ));
         lines.push(Line::from(tr!("ui.mission.reach_exit")));

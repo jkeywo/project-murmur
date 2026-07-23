@@ -37,6 +37,8 @@ pub enum PendingAction {
     CloseDoor,
     PickLock,
     UseMachine,
+    Lead,
+    Plant,
 }
 
 impl PendingAction {
@@ -52,6 +54,8 @@ impl PendingAction {
             PendingAction::CloseDoor => tr!("mission.prompt.close_door"),
             PendingAction::PickLock => tr!("mission.prompt.pick_lock"),
             PendingAction::UseMachine => tr!("mission.prompt.use_machine"),
+            PendingAction::Lead => tr!("mission.prompt.lead"),
+            PendingAction::Plant => tr!("mission.prompt.plant"),
         }
     }
 }
@@ -564,6 +568,8 @@ impl Mission {
             ShellInput::Char('k') => self.mode = InputMode::Pending(PendingAction::CloseDoor),
             ShellInput::Char('l') => self.mode = InputMode::Pending(PendingAction::PickLock),
             ShellInput::Char('u') => self.mode = InputMode::Pending(PendingAction::UseMachine),
+            ShellInput::Char('e') => self.mode = InputMode::Pending(PendingAction::Lead),
+            ShellInput::Char('n') => self.mode = InputMode::Pending(PendingAction::Plant),
             ShellInput::Char('t') => {
                 self.mode = InputMode::ThrowTarget(self.world().player_actor().pos);
             }
@@ -709,6 +715,17 @@ impl Mission {
             PendingAction::UseMachine => world.furniture_at(pos).and_then(|f| {
                 (f.kind == FurnitureKind::Machine).then_some(Command::Interact(f.id))
             }),
+            PendingAction::Lead => world
+                .standing_actor_at(pos)
+                .filter(|a| !a.is_player())
+                .map(|a| Command::Lead(a.id)),
+            // Aiming at a person plants on them; aiming at the player's own
+            // tile plants on the ground.
+            PendingAction::Plant => match world.standing_actor_at(pos) {
+                Some(a) if !a.is_player() => Some(Command::Plant(Some(a.id))),
+                _ if pos == world.player_actor().pos => Some(Command::Plant(None)),
+                _ => None,
+            },
             PendingAction::DropBody => {
                 // Handled directly in handle_pending; unreachable here.
                 None

@@ -512,7 +512,9 @@ mod tests {
         // incomplete must not win, and completing it must.
         let (data, mut driver) = driver(3);
         let objective = driver.world().objective.clone();
-        let target = objective.target();
+        let target = objective
+            .focus_actor()
+            .expect("assassination has a focus actor");
         assert_eq!(
             target,
             driver.world().target,
