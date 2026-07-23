@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use murmur_core::contract::{Constraint, MissionConfig};
 use murmur_core::data::{GameData, ItemSpecId, VenueId};
 use murmur_core::rng::Pcg32;
-use murmur_core::world::MissionOutcome;
+use murmur_core::world::{MissionOutcome, ObjectiveKind};
 
 /// Bump when [`CampaignState`] changes incompatibly; older saves are
 /// rejected as stale rather than misread.
@@ -50,6 +50,10 @@ pub struct ContractOffer {
     /// District heat at offer time; rides into generation.
     pub heat: u8,
     pub constraint: Constraint,
+    /// What kind of job this is. `#[serde(default)]` → Assassinate, so any
+    /// serialised offer from before mixed boards reads as a kill.
+    #[serde(default)]
+    pub objective_kind: ObjectiveKind,
     pub seed: u64,
 }
 
@@ -181,10 +185,15 @@ impl CampaignState {
             let district = rng.pick(&data.campaign.districts).clone();
             let venue = rng.pick(&data.venues).id.clone();
             let heat = self.heat_in(&district);
-            let constraint = pick_constraint(data, &venue, &mut rng);
-            let payout = data.campaign.payout_base
+            // The job type, drawn in generation order like everything else on
+            // the slot. Assassination stays the common case (60%); the four
+            // Milestone-4 jobs share the rest evenly.
+            let objective_kind = pick_objective_kind(&mut rng);
+            let constraint = pick_constraint(data, &venue, objective_kind, &mut rng);
+            let base = data.campaign.payout_base
                 + data.campaign.payout_per_heat * i64::from(heat)
                 + data.campaign.payout_constraint_bonus;
+            let payout = base * data.campaign.objective_payout.factor(objective_kind) / 1000;
             let hook = rng.pick(&data.briefing.reasons).clone();
             let seed = (u64::from(rng.next_u32()) << 32) | u64::from(rng.next_u32());
             offers.push(ContractOffer {
@@ -194,6 +203,7 @@ impl CampaignState {
                 payout,
                 heat,
                 constraint,
+                objective_kind,
                 seed,
             });
         }
@@ -238,7 +248,8 @@ impl CampaignState {
         Ok(MissionConfig::new(offer.seed, offer.venue.clone())
             .with_constraint(offer.constraint.clone())
             .with_loadout(loadout)
-            .with_heat(offer.heat))
+            .with_heat(offer.heat)
+            .with_objective(offer.objective_kind))
     }
 
     /// Buys a catalogue item into the stash.
@@ -350,15 +361,42 @@ impl CampaignState {
     }
 }
 
+/// Rolls the job type for one offer. Assassination is the common case; the
+/// four Milestone-4 jobs split the remainder evenly. A pure function of the
+/// draw, so the board stays deterministic.
+fn pick_objective_kind(rng: &mut Pcg32) -> ObjectiveKind {
+    match rng.below(10) {
+        0..=5 => ObjectiveKind::Assassinate,
+        6 => ObjectiveKind::Steal,
+        7 => ObjectiveKind::Sabotage,
+        8 => ObjectiveKind::Rescue,
+        _ => ObjectiveKind::Plant,
+    }
+}
+
 /// Picks a constraint an offer's venue can actually host. SpecificExit
 /// names one of the venue's external-exit room templates.
-fn pick_constraint(data: &GameData, venue: &str, rng: &mut Pcg32) -> Constraint {
+///
+/// Constraints are orthogonal to the job — no-firearms and no-collateral
+/// read the same against a theft as a kill — with one exception:
+/// [`Constraint::PrivateKill`] names *where the target must die*, which is
+/// meaningless when the job is not a kill, so it is only ever paired with an
+/// assassination.
+fn pick_constraint(
+    data: &GameData,
+    venue: &str,
+    objective_kind: ObjectiveKind,
+    rng: &mut Pcg32,
+) -> Constraint {
     let choice = rng.below(5);
     match choice {
         0 => Constraint::NoFirearms,
         1 => Constraint::NoCivilianCasualties,
         2 => Constraint::NoBodiesFound,
-        3 => Constraint::PrivateKill,
+        3 if objective_kind == ObjectiveKind::Assassinate => Constraint::PrivateKill,
+        // A non-kill job cannot carry a private-kill condition; fall back to
+        // the always-applicable no-firearms rule.
+        3 => Constraint::NoFirearms,
         _ => {
             let exits: Vec<&String> = data
                 .venue(venue)
@@ -436,6 +474,93 @@ mod tests {
         state.refresh_offers();
         let c = state.offers(&data);
         assert_ne!(a, c, "declining rolls a fresh board");
+    }
+
+    #[test]
+    fn the_board_offers_a_mix_of_job_types() {
+        let data = data();
+        let mut state = CampaignState::new(7, &data);
+        let mut seen: Vec<ObjectiveKind> = Vec::new();
+        // Over a long run of boards every kind shows up, with assassination
+        // the common case.
+        for _ in 0..300 {
+            for offer in state.offers(&data) {
+                if !seen.contains(&offer.objective_kind) {
+                    seen.push(offer.objective_kind);
+                }
+            }
+            state.refresh_offers();
+        }
+        for kind in [
+            ObjectiveKind::Assassinate,
+            ObjectiveKind::Steal,
+            ObjectiveKind::Sabotage,
+            ObjectiveKind::Rescue,
+            ObjectiveKind::Plant,
+        ] {
+            assert!(seen.contains(&kind), "{kind:?} never appeared on the board");
+        }
+    }
+
+    #[test]
+    fn payout_is_priced_by_objective_kind() {
+        let data = data();
+        let mut state = CampaignState::new(3, &data);
+        for _ in 0..300 {
+            for offer in state.offers(&data) {
+                let base = data.campaign.payout_base
+                    + data.campaign.payout_per_heat * i64::from(offer.heat)
+                    + data.campaign.payout_constraint_bonus;
+                let expected =
+                    base * data.campaign.objective_payout.factor(offer.objective_kind) / 1000;
+                assert_eq!(
+                    offer.payout, expected,
+                    "{:?} is priced by its factor",
+                    offer.objective_kind
+                );
+            }
+            state.refresh_offers();
+        }
+        // The authored relative worth: a rescue pays more than a plant.
+        assert!(data.campaign.objective_payout.rescue > data.campaign.objective_payout.plant);
+    }
+
+    #[test]
+    fn a_private_kill_condition_is_never_paired_with_a_non_kill_job() {
+        let data = data();
+        let mut state = CampaignState::new(11, &data);
+        for _ in 0..300 {
+            for offer in state.offers(&data) {
+                if offer.constraint == Constraint::PrivateKill {
+                    assert_eq!(
+                        offer.objective_kind,
+                        ObjectiveKind::Assassinate,
+                        "private-kill only rides an assassination"
+                    );
+                }
+            }
+            state.refresh_offers();
+        }
+    }
+
+    #[test]
+    fn accept_carries_the_objective_kind_into_the_config() {
+        let data = data();
+        let mut state = CampaignState::new(7, &data);
+        let the_offer = offer(&state, &data);
+        let config = state
+            .accept(&the_offer, state.default_loadout(&data))
+            .unwrap();
+        assert_eq!(config.objective_kind, the_offer.objective_kind);
+    }
+
+    #[test]
+    fn an_offer_serialised_before_mixed_boards_reads_as_assassination() {
+        // A ContractOffer from before the job type existed has no
+        // `objective_kind`; `#[serde(default)]` makes it an assassination.
+        let json = r#"{"district":"Docklands","venue":"nightclub","hook":"skimmed the take","payout":400,"heat":0,"constraint":"NoFirearms","seed":42}"#;
+        let offer: ContractOffer = serde_json::from_str(json).expect("legacy offer parses");
+        assert_eq!(offer.objective_kind, ObjectiveKind::Assassinate);
     }
 
     #[test]

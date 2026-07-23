@@ -613,6 +613,37 @@ pub struct CampaignData {
     pub hot_mission_threshold: u16,
     pub district_heat_max: u8,
     pub offers_per_batch: u8,
+    /// Per-objective payout multipliers. Kept in data so the relative worth
+    /// of each job type is tunable, not a magic number in the board code.
+    pub objective_payout: ObjectivePayoutFactors,
+}
+
+/// Per-objective payout multipliers, in permille of the base assassination
+/// payout (1000 = the same money as a kill). Theft and sabotage sit at the
+/// kill; a rescue pays more for the escort risk of leading a body out; a
+/// plant pays a little less as the lowest-exposure drop.
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObjectivePayoutFactors {
+    pub assassinate: i64,
+    pub steal: i64,
+    pub sabotage: i64,
+    pub rescue: i64,
+    pub plant: i64,
+}
+
+impl ObjectivePayoutFactors {
+    /// The multiplier (permille) for one objective kind.
+    pub fn factor(&self, kind: crate::world::ObjectiveKind) -> i64 {
+        use crate::world::ObjectiveKind;
+        match kind {
+            ObjectiveKind::Assassinate => self.assassinate,
+            ObjectiveKind::Steal => self.steal,
+            ObjectiveKind::Sabotage => self.sabotage,
+            ObjectiveKind::Rescue => self.rescue,
+            ObjectiveKind::Plant => self.plant,
+        }
+    }
 }
 
 /// All authored data, cross-validated.

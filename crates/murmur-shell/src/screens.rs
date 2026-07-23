@@ -15,6 +15,19 @@ use murmur_core::{tr, trf};
 use crate::keymap;
 use crate::{DebriefHeadline, ScreenLayout, ShellInput, Tone};
 
+/// The one-word job-type label for a contract's objective kind, shown on
+/// the board so choosing a contract is a choice of what kind of evening to
+/// have.
+fn job_label(kind: ObjectiveKind) -> &'static str {
+    match kind {
+        ObjectiveKind::Assassinate => tr!("ui.hub.job.assassinate"),
+        ObjectiveKind::Steal => tr!("ui.hub.job.steal"),
+        ObjectiveKind::Sabotage => tr!("ui.hub.job.sabotage"),
+        ObjectiveKind::Rescue => tr!("ui.hub.job.rescue"),
+        ObjectiveKind::Plant => tr!("ui.hub.job.plant"),
+    }
+}
+
 fn centered(area: Rect, width: u16, height: u16) -> Rect {
     let w = width.min(area.width);
     let h = height.min(area.height);
@@ -393,6 +406,7 @@ pub fn draw_hub(
                 murmur_core::loc::fmt(
                     "ui.hub.offer.line",
                     &[
+                        ("job", job_label(offer.objective_kind)),
                         ("venue", &offer.venue),
                         ("district", &offer.district),
                         ("payout", &offer.payout.to_string()),

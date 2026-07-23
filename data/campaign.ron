@@ -12,4 +12,14 @@
     hot_mission_threshold: 30,         // mission heat at/above this raises district heat
     district_heat_max: 5,
     offers_per_batch: 2,
+    // Payout multipliers in permille of the base assassination payout.
+    // Retunable: theft/sabotage at the kill, rescue paid up for escort
+    // risk, plant paid down as the lowest-exposure job.
+    objective_payout: (
+        assassinate: 1000,
+        steal:       1000,
+        sabotage:    1050,
+        rescue:      1250,
+        plant:        900,
+    ),
 )

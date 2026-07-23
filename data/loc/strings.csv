@@ -41,7 +41,12 @@ ui.hub.loadout.title,Heading while picking a loadout. {venue} and {district} nam
 ui.hub.loadout.prompt.take,Loadout prompt: accept the contract and go to the briefing.,Enter: take the job]
 ui.hub.loadout.prompt.back,Loadout prompt: return to the contract board.,Esc: back to the board
 ui.hub.offers.title,Heading above the list of available contracts.,CONTRACTS ON OFFER
-ui.hub.offer.line,"One contract row. {venue}, {district}, {payout} money, {heat} 0-5.",{venue} in {district} - pays {payout}  (heat {heat})
+ui.hub.offer.line,"One contract row. {job} is the job type; {venue} {district} {payout} money; {heat} 0-5.",{job} - {venue} in {district} - pays {payout}  (heat {heat})
+ui.hub.job.assassinate,Board label for a kill contract.,eliminate
+ui.hub.job.steal,Board label for a theft contract.,steal
+ui.hub.job.sabotage,Board label for a sabotage contract.,sabotage
+ui.hub.job.rescue,Board label for an extract-alive contract.,extract
+ui.hub.job.plant,Board label for a plant contract.,plant
 ui.hub.offer.hook,Why the target is marked. {hook} is a briefing reason clause.,the target {hook}
 ui.hub.offer.condition,"The contract's hard condition, abbreviated. {condition} is the short form.",condition: {condition}
 ui.hub.offer.pass,Hub row: decline the whole board and roll a new one.,let this board pass

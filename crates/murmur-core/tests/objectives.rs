@@ -4,8 +4,8 @@
 //! objective is complete and the player extracts.
 
 use murmur_core::actions::{Command, RejectReason};
-use murmur_core::contract::MissionConfig;
-use murmur_core::data::GameData;
+use murmur_core::contract::{Constraint, MissionConfig};
+use murmur_core::data::{GameData, Role};
 use murmur_core::generator::generate;
 use murmur_core::replay::world_fingerprint;
 use murmur_core::turn::TurnDriver;
@@ -14,7 +14,9 @@ use murmur_core::world::{
 };
 
 mod common;
-use common::{data, park_npcs_far, place, quiet_all_npcs, setup_config, stand_beside};
+use common::{
+    data, free_run, park_npcs_far, place, quiet_all_npcs, setup_config, some_npc, stand_beside,
+};
 
 const VENUE: &str = "nightclub";
 const SEED: u64 = 1;
@@ -237,4 +239,40 @@ fn plant_is_rejected_without_the_bug_on_a_non_plant_mission() {
         driver.submit(&data, &Command::Plant(None)),
         Err(RejectReason::NothingToPlant)
     ));
+}
+
+// --- Constraints stay orthogonal -------------------------------------------
+
+#[test]
+fn a_constraint_breaches_on_a_non_assassination_mission() {
+    // Constraints are orthogonal to the job: a no-collateral condition
+    // breaches on a theft exactly as it would on a kill.
+    let (data, mut driver) = setup_config(
+        MissionConfig::new(SEED, VENUE)
+            .with_objective(ObjectiveKind::Steal)
+            .with_constraint(Constraint::NoCivilianCasualties),
+    );
+    let civilian = some_npc(driver.world(), Role::Civilian);
+    let player = driver.world().player;
+    park_npcs_far(driver.world_mut(), &[player, civilian]);
+    quiet_all_npcs(driver.world_mut());
+
+    // Stand directly behind the civilian and garrote it (default loadout
+    // carries a garrote). A civilian death by the player's hand breaks the
+    // no-collateral condition, theft or not.
+    let (start, dir) = free_run(driver.world(), 3);
+    place(driver.world_mut(), civilian, start.step(dir), Some(dir));
+    place(driver.world_mut(), player, start, None);
+    driver.submit(&data, &Command::Garrote(civilian)).unwrap();
+    while driver.player_busy() {
+        driver.continue_busy(&data);
+    }
+    assert!(
+        !driver.world().actor(civilian).alive(),
+        "the garrote should have killed the civilian"
+    );
+    assert!(
+        driver.world().constraint_breach.is_some(),
+        "no-collateral breaches on a theft mission just as on a kill"
+    );
 }
