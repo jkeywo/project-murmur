@@ -15,15 +15,26 @@
 //! invitation) decides reachability exactly; schedule windows appear as
 //! abstract availability (any room the target's routine touches is a
 //! potential kill site), not a temporal model.
+//!
+//! What a route must *complete* is not baked into the search: [`prove_route`]
+//! computes the closure, then hands it to an [`Objective`]-dispatched
+//! completion proof (see [`prove_completion`]) that answers "can this
+//! objective be completed at a position the closure reaches, with the
+//! capabilities it grants?" — after which extraction is proved from the same
+//! closure. Today the only objective is assassination, whose completion is a
+//! weapon kill at a vulnerable beat or a rigged accident on the schedule; the
+//! closure itself is objective-agnostic and did not have to learn about kills.
 
 use serde::{Deserialize, Serialize};
 
 use crate::data::GameData;
 use crate::generator::layout::Layout;
 use crate::generator::populate::Population;
-use crate::generator::proof::{capability_closure, schedule_positions, vulnerable_positions};
+use crate::generator::proof::{
+    ClosureOutcome, capability_closure, schedule_positions, vulnerable_positions,
+};
 use crate::geom::Pos;
-use crate::world::ItemLocation;
+use crate::world::{ItemLocation, Objective};
 
 /// The three route postures every mission must support.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,25 +138,56 @@ fn is_silent(spec: &str) -> bool {
     spec != "pistol-loud"
 }
 
-/// Proves one route class against the generated venue.
-pub fn prove_route(
+/// Where and how the mission's objective is completed on the venue, proven
+/// against a capability closure. `site_room` is the room the completion
+/// happens in — extraction is then proved from the closure, since
+/// capabilities only grow — and `step` is the narration line for the route.
+///
+/// `kill_room` on the emitted [`RouteProof`] is this `site_room`; the field
+/// keeps its assassination-era name until a later slice generalises the
+/// report's shape, so that the Assassinate content stays byte-identical.
+struct Completion {
+    site_room: String,
+    step: String,
+}
+
+/// Proves the mission's [`Objective`] is completable under `class`/`filters`
+/// against an already-computed capability closure, and reports where it
+/// completes. This is the seam: [`prove_route`] no longer knows the goal is a
+/// kill — it asks the objective. Completion is always phrased as "reach a
+/// qualifying position with the required capabilities", which is exactly what
+/// the closure's `seen` set answers, so no objective needs the closure to
+/// change.
+fn prove_completion(
     data: &GameData,
     layout: &Layout,
     population: &Population,
-    start: Pos,
+    outcome: &ClosureOutcome,
     class: RouteClass,
     filters: &RouteFilters,
-) -> Result<RouteProof, String> {
-    let zone_free = !matches!(class, RouteClass::Social);
-    let outcome = capability_closure(
-        data,
-        layout,
-        population,
-        start,
-        zone_free,
-        filters.assume_catalogue,
-    );
+    objective: &Objective,
+) -> Result<Completion, String> {
+    match objective {
+        Objective::Assassinate { target } => {
+            prove_assassination(data, layout, population, outcome, class, filters, *target)
+        }
+    }
+}
 
+/// Completion proof for [`Objective::Assassinate`]: a weapon kill at a
+/// vulnerable beat, or a rigged accident on the schedule when no usable
+/// weapon is reachable. This is the exact logic the planner ran when a kill
+/// was the only shape a route could take — now reachable through the
+/// objective dispatch rather than being hardcoded into `prove_route`.
+fn prove_assassination(
+    data: &GameData,
+    layout: &Layout,
+    population: &Population,
+    outcome: &ClosureOutcome,
+    class: RouteClass,
+    filters: &RouteFilters,
+    target: crate::world::ActorId,
+) -> Result<Completion, String> {
     // Kill capabilities appropriate to the class (an empty set may
     // still be rescued by a rigged accident below).
     let weapons = player_weapons(data, population, filters);
@@ -162,7 +204,7 @@ pub fn prove_route(
     // window), honouring any kill-room restriction. Weapon kills need a
     // usable weapon; a reachable rigged accident above a schedule stop
     // kills without one.
-    let target = &population.actors[population.target.0 as usize];
+    let target = &population.actors[target.0 as usize];
     let stops = schedule_positions(target);
     // A weapon needs the target alone; an accident does not, which is why
     // the two proofs read different position sets. This is the whole
@@ -214,7 +256,41 @@ pub fn prove_route(
         )
     })?;
 
-    // Extraction after the kill: capabilities only grow, so the same
+    Ok(Completion {
+        step: format!("kill the target in {kill_room} with the {kill_method}"),
+        site_room: kill_room,
+    })
+}
+
+/// Proves one route class against the generated venue: complete the
+/// mission's objective, then extract.
+pub fn prove_route(
+    data: &GameData,
+    layout: &Layout,
+    population: &Population,
+    start: Pos,
+    class: RouteClass,
+    filters: &RouteFilters,
+    objective: &Objective,
+) -> Result<RouteProof, String> {
+    let zone_free = !matches!(class, RouteClass::Social);
+    let outcome = capability_closure(
+        data,
+        layout,
+        population,
+        start,
+        zone_free,
+        filters.assume_catalogue,
+    );
+
+    // Objective completion, dispatched on the objective. For an Assassinate
+    // mission this proves the kill; the closure it is handed is the same one
+    // that then decides extraction.
+    let completion = prove_completion(
+        data, layout, population, &outcome, class, filters, objective,
+    )?;
+
+    // Extraction after completion: capabilities only grow, so the same
     // closure decides it.
     let exit = layout
         .extraction_tiles
@@ -231,14 +307,12 @@ pub fn prove_route(
         .unwrap_or_else(|| "the street".to_string());
 
     let mut steps = outcome.events;
-    steps.push(format!(
-        "kill the target in {kill_room} with the {kill_method}"
-    ));
+    steps.push(completion.step);
     steps.push(format!("extract via {exit_room}"));
 
     Ok(RouteProof {
         class,
-        kill_room,
+        kill_room: completion.site_room,
         exit_room,
         steps,
     })
@@ -253,6 +327,7 @@ pub fn prove_constraint(
     population: &Population,
     start: Pos,
     constraint: &crate::contract::Constraint,
+    objective: &Objective,
 ) -> Result<RouteProof, String> {
     let filters = constraint.certify_filters(data, layout, population, start)?;
     prove_route(
@@ -262,6 +337,7 @@ pub fn prove_constraint(
         start,
         RouteClass::Physical,
         &filters,
+        objective,
     )
 }
 
@@ -273,6 +349,7 @@ pub fn prove_base_routes(
     layout: &Layout,
     population: &Population,
     start: Pos,
+    objective: &Objective,
 ) -> Result<RouteReport, String> {
     let venue_potential = RouteFilters {
         assume_catalogue: true,
@@ -291,6 +368,7 @@ pub fn prove_base_routes(
             start,
             class,
             &venue_potential,
+            objective,
         )?);
     }
     // And this specific run, with what the player actually carries.
@@ -301,6 +379,7 @@ pub fn prove_base_routes(
         start,
         RouteClass::Violence,
         &RouteFilters::default(),
+        objective,
     )
     .map_err(|e| format!("loadout cannot complete the mission: {e}"))?;
     Ok(RouteReport {
@@ -315,6 +394,14 @@ mod tests {
     use super::*;
     use crate::generator::{ATTEMPT_STREAM_BASE, MAX_ATTEMPTS, populate, proof};
     use crate::rng::Pcg32;
+
+    /// The mission objective for a staged population — assassination of the
+    /// generated target, exactly as the generator builds it.
+    fn objective(population: &Population) -> Objective {
+        Objective::Assassinate {
+            target: population.target,
+        }
+    }
 
     /// Mirrors the generator's front half: a proven venue plus its
     /// population, before world assembly. Streams and retry budget come
@@ -347,8 +434,9 @@ mod tests {
     fn all_three_route_classes_certify_on_generated_venues() {
         for seed in 0..12u64 {
             let (data, layout, population, start) = staged(seed);
-            let report = prove_base_routes(&data, &layout, &population, start)
-                .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+            let report =
+                prove_base_routes(&data, &layout, &population, start, &objective(&population))
+                    .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
             for class in [
                 RouteClass::Social,
                 RouteClass::Physical,
@@ -378,7 +466,16 @@ mod tests {
             RouteClass::Violence,
         ] {
             assert!(
-                prove_route(&data, &layout, &population, start, class, &filters).is_err(),
+                prove_route(
+                    &data,
+                    &layout,
+                    &population,
+                    start,
+                    class,
+                    &filters,
+                    &objective(&population)
+                )
+                .is_err(),
                 "{} route cannot certify without any weapon",
                 class.name()
             );
@@ -399,6 +496,7 @@ mod tests {
             start,
             RouteClass::Violence,
             &filters,
+            &objective(&population),
         )
         .expect("garrote-only violence route");
         assert!(
@@ -418,6 +516,7 @@ mod tests {
             start,
             RouteClass::Physical,
             &RouteFilters::default(),
+            &objective(&population),
         )
         .unwrap();
 
@@ -434,6 +533,7 @@ mod tests {
             start,
             RouteClass::Physical,
             &filters,
+            &objective(&population),
         )
         .unwrap();
         assert_eq!(bound.kill_room, base.kill_room);
@@ -450,7 +550,8 @@ mod tests {
                 &population,
                 start,
                 RouteClass::Physical,
-                &filters
+                &filters,
+                &objective(&population)
             )
             .is_err()
         );

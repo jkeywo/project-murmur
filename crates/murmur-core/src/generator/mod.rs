@@ -98,10 +98,20 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
     let report = proof::prove_progression(data, &mut layout, &population, player_start, &mut rng)
         .map_err(|e| e.0)?;
 
+    // The goal, named. Derived deterministically from the seed's generated
+    // population, so a replay from the same seed rebuilds the same
+    // objective and the record needs to carry nothing extra. Built before
+    // the route proofs because the planner now certifies *this objective's*
+    // completion rather than an assumed kill.
+    let objective = crate::world::Objective::Assassinate {
+        target: population.target,
+    };
+
     // Every mission must be completable three ways: social stealth,
     // physical stealth, and violence, each with extraction — and, under
     // contract, in at least one constraint-compliant way.
-    let mut routes = crate::planner::prove_base_routes(data, &layout, &population, player_start)?;
+    let mut routes =
+        crate::planner::prove_base_routes(data, &layout, &population, player_start, &objective)?;
     if let Some(constraint) = &config.constraint {
         routes.constraint_proof = Some(crate::planner::prove_constraint(
             data,
@@ -109,15 +119,9 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
             &population,
             player_start,
             constraint,
+            &objective,
         )?);
     }
-
-    // The goal, named. Derived deterministically from the seed's generated
-    // population, so a replay from the same seed rebuilds the same
-    // objective and the record needs to carry nothing extra.
-    let objective = crate::world::Objective::Assassinate {
-        target: population.target,
-    };
 
     let mut facts = build_facts(data, &layout, &population, &objective, &mut rng);
     facts.opportunities = opportunity_lines;

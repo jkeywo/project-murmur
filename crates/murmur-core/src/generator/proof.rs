@@ -102,6 +102,11 @@ impl TileSet {
 /// Every position an actor's schedule touches (spawn plus routine stops).
 /// Where this actor can actually be attacked.
 ///
+/// These position sets are what the Assassinate objective's completion proof
+/// (in `planner.rs`) tests against the capability closure: a weapon kill must
+/// reach a `vulnerable_positions` beat, a rigged accident a `schedule_positions`
+/// stop. They live here beside the closure they are queried against.
+///
 /// For a target with a schedule that is exactly its *alone* beats —
 /// never the escorted ones, because a ring of bodyguards denies the
 /// adjacency a garrote needs and a bullet finds a bodyguard first, and
