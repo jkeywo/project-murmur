@@ -606,6 +606,13 @@ pub(super) fn kill(
         breach_constraint(world, events, &reason);
     }
 
+    // Completing the objective — for now, the target's death — opens the
+    // getaway grace: a short window in which the venue is slow to grasp
+    // the hit, so a fast planned exit is rewarded rather than punished.
+    if player_kill && is_target {
+        world.getaway_grace = data.tuning.getaway_grace_turns;
+    }
+
     // A kill in the open is witnessable evidence this turn.
     world.incidents.push(crate::world::Incident {
         kind: crate::world::IncidentKind::Violence,

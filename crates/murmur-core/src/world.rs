@@ -482,6 +482,15 @@ pub struct World {
     /// The heat tier whose response has already been applied.
     #[serde(default)]
     pub heat_tier: u8,
+    /// Turns left in the getaway grace: a window opened by completing the
+    /// mission's objective, during which the venue is slow to grasp what
+    /// happened — a body found now draws an investigator rather than the
+    /// alarm, and a glimpse of the leaving player accrues less suspicion.
+    /// It rewards a fast, planned exit without softening a player caught
+    /// red-handed. Zero when no objective has been completed or the window
+    /// has closed.
+    #[serde(default)]
+    pub getaway_grace: u16,
     pub facts: MissionFacts,
     /// What the generated reachability proof established.
     pub proof: crate::generator::proof::ProofReport,

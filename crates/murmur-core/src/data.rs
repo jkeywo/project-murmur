@@ -564,6 +564,11 @@ pub struct Tuning {
     /// shorter than a gunshot or a thrown noisemaker: a nearby patrol
     /// hears it even facing away, but the far end of the venue does not.
     pub body_fall_radius: i16,
+    /// Turns of grace after the mission's objective is completed, during
+    /// which the venue is slow to react to the leaving player. Long enough
+    /// to reward a quick planned exit, short enough that dawdling forfeits
+    /// it.
+    pub getaway_grace_turns: u16,
     /// Suspicion per turn an NPC watches the player pick a lock.
     pub gain_tampering: u16,
     /// Mission heat weights and tier thresholds.

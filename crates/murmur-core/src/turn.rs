@@ -140,6 +140,9 @@ impl TurnDriver {
         };
         if self.world.outcome.is_none() {
             apply_heat_tiers(&mut self.world, data, &mut perception_messages);
+            // The getaway grace ticks down once the venue has had this
+            // turn's chance to react under it.
+            self.world.getaway_grace = self.world.getaway_grace.saturating_sub(1);
         }
         // Prepare the next turn's AI actions; in-progress multi-turn
         // actions (the player's, and any NPC's) carry over.

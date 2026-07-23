@@ -317,6 +317,50 @@ fn guards_alert_on_bodies_and_propagate_to_guards_in_sight() {
 }
 
 #[test]
+fn a_body_found_inside_the_getaway_grace_only_draws_an_investigator() {
+    // With the objective done, the venue is briefly slow to grasp the hit:
+    // a guard who finds a body during the grace goes to look rather than
+    // raising the alarm, which is what lets a fast, planned exit succeed.
+    let (data, mut driver) = setup(17);
+    quiet_all_npcs(driver.world_mut());
+    let victim = some_npc(driver.world(), Role::Civilian);
+    let guard = some_npc(driver.world(), Role::Guard);
+    let player = driver.world().player;
+    let (start, dir) = free_run(driver.world(), 4);
+    let at = |n: i16| {
+        let mut pos = start;
+        for _ in 0..n {
+            pos = pos.step(dir);
+        }
+        pos
+    };
+    // Body at 0; guard at 2 facing the body; player far and unseen.
+    driver.world_mut().actor_mut(victim).condition = BodyCondition::Dead;
+    place(driver.world_mut(), victim, at(0), None);
+    place(driver.world_mut(), guard, at(2), Some(dir.opposite()));
+    place(driver.world_mut(), player, at(4), None);
+
+    // Inside the grace, the find is a matter for investigation, not alarm.
+    driver.world_mut().getaway_grace = 5;
+    driver.submit(&data, &Command::Wait).unwrap();
+    assert_eq!(
+        driver.world().actor(guard).ai.as_ref().unwrap().mood,
+        Mood::Investigating,
+        "a body found during the getaway grace only draws a look"
+    );
+    assert!(
+        !driver
+            .world()
+            .actor(guard)
+            .ai
+            .as_ref()
+            .unwrap()
+            .knows_player_hostile,
+        "the grace does not hand the venue the player as a suspect"
+    );
+}
+
+#[test]
 fn alerted_guard_arrests_the_nonviolent_player() {
     let (data, mut driver) = setup(17);
     quiet_all_npcs(driver.world_mut());

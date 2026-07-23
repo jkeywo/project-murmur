@@ -276,12 +276,30 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
         let name = world.actor(id).name.clone();
         let tuning = &data.tuning;
         let is_guard = role == Role::Guard;
+        // The getaway grace softens what a *found body* and a *glimpse* of
+        // the leaving player provoke, but never what witnessing an act of
+        // violence does: caught in the act is caught, grace or no.
+        let grace = world.getaway_grace > 0;
 
         let actor = world.actor_mut(id);
         let ai = actor.ai.as_mut().unwrap();
 
         if let Some(pos) = violence_pos.or(evidence_pos) {
-            if is_guard {
+            let witnessed_violence = violence_pos.is_some();
+            if is_guard && grace && !witnessed_violence {
+                // A body found inside the getaway window draws an
+                // investigator, not the alarm — the room has not grasped
+                // the hit yet, which is the whole point of the grace.
+                if matches!(ai.mood, Mood::Relaxed | Mood::Suspicious) {
+                    ai.mood = Mood::Investigating;
+                    ai.suspicion = ai.suspicion.max(tuning.suspicion_investigate_at);
+                }
+                ai.focus = Some(pos);
+                note(
+                    &mut messages,
+                    crate::trf!("perception.investigates", name = name),
+                );
+            } else if is_guard {
                 if ai.mood != Mood::Combat {
                     ai.mood = Mood::Alerted;
                 }
@@ -346,6 +364,10 @@ pub fn update(world: &mut World, data: &GameData) -> Vec<String> {
                 );
             }
         } else if gain > 0 {
+            // A glimpse of the leaving player accrues less suspicion during
+            // the getaway grace, so briefly crossing a guard's view on the
+            // way out does not by itself trip a full alert.
+            let gain = if grace { gain.div_ceil(2) } else { gain };
             ai.suspicion = (ai.suspicion + gain).min(tuning.suspicion_max);
             ai.focus = ai_focus_default.or(ai.focus);
             if ai.suspicion >= tuning.suspicion_max {

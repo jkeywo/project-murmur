@@ -133,6 +133,7 @@ fn try_generate(data: &GameData, config: &MissionConfig, attempt: u64) -> Result
         player_tampering: false,
         mission_heat: 0,
         heat_tier: 0,
+        getaway_grace: 0,
         facts,
         proof: report,
         routes,
