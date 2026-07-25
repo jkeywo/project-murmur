@@ -66,7 +66,7 @@ entities:
       status: accepted
       confidence: confirmed
       title: Deterministic RNG and Integer Math
-      summary: The core carries its own PCG32 implementation with named streams (generation, resolution) forked from the mission seed, and all simulation geometry is integer-only. No floating point, platform randomness, or third-party RNG crates participate in simulation results.
+      summary: PCG32 with named streams (generation, resolution) forked from the mission seed, and all simulation geometry is integer-only. Since the fleet RNG unification (vellum's rng-unification-breaks-saves, share-code format MUR2-) the generator is vellum-rng's Pcg32 — the fleet construction with a SplitMix64 premix, Lemire draw, stored as the shared type — behind a transparent vocabulary wrapper; format-1 codes are refused rather than misread, and every fixture was re-blessed in the migration. No floating point, platform randomness, or third-party RNG crates participate in simulation results.
       rationale:
         - Replay must reproduce results bit-for-bit on x86_64 and wasm32 across compiler and dependency upgrades; owning the generator removes every external drift source.
         - Separate streams keep command rejection from consuming tie-breaker randomness, which the queue rejection rules require.

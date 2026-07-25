@@ -133,14 +133,17 @@ pub fn world_fingerprint(world: &World) -> u64 {
 
 /// The share-code format for a recorded mission.
 ///
-/// `MUR1-` is project-murmur, share-code format 1. Missions were already
+/// `MUR2-` is project-murmur, share-code format 2. Missions were already
 /// reproducible from a [`MissionRecord`]; this only makes one small enough to
 /// paste, which is what turns "it reproduces" into "here, try it yourself".
 ///
 /// The prefix is what stops a code from the other game decoding into something
-/// plausible, and the version in it is what will let a future format change
-/// refuse an old code instead of misreading it.
-pub const MISSION_CODEC: vellum_digest::ShareCodec = vellum_digest::ShareCodec::new("MUR1-");
+/// plausible, and the version in it is what refuses an old code instead of
+/// misreading it — exactly what format 2 does to every `MUR1-` code: the
+/// fleet RNG unification (vellum's `rng-unification-breaks-saves`) changed
+/// what every mission seed generates, so a format-1 code would decode into a
+/// mission that never existed.
+pub const MISSION_CODEC: vellum_digest::ShareCodec = vellum_digest::ShareCodec::new("MUR2-");
 
 impl MissionRecord {
     /// A pasteable code for this mission.

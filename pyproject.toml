@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 # Pinned to a rev: the scanner's findings are a gate, so which version produced
 # them matters.
 dependencies = [
-  "pasm @ git+https://github.com/jkeywo/vellum@0d47f4e6d1203e63e5a019cae8736868bc958cc9#subdirectory=pasm",
+  "pasm @ git+https://github.com/jkeywo/vellum@fad2d71f1d6cf99e089631e4c8e53180538db433#subdirectory=pasm",
 ]
 
 # This project ships no Python of its own any more; it exists so that `uv run
