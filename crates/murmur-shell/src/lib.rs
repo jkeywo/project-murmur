@@ -830,9 +830,16 @@ mod tests {
         // `contains` rather than `ends_with`: the repeat marker is itself a
         // catalogue string, so what trails the count is up to the text.
         assert!(last.display().contains("(x3)"));
-        // A different message still starts a new entry.
+        // A different message still starts a new entry. Which force action is
+        // blocked depends on the generated mission — the fleet RNG migration
+        // moved seed 1234's world under a hard-coded 'g', which had stopped
+        // refusing — so probe for a blocked one instead of naming it.
         let entries = log.len();
-        shell.handle_input(ShellInput::Char('g'));
+        let blocked = ['g', 'f', 'r']
+            .into_iter()
+            .find(|&key| !mission(&shell).action_available(&data, key))
+            .expect("some force action is unavailable with the default loadout");
+        shell.handle_input(ShellInput::Char(blocked));
         assert!(mission(&shell).log().len() > entries);
     }
 

@@ -6,16 +6,17 @@
 //! small PCG32 rather than the `rand` ecosystem, and all randomness flows from
 //! a mission seed through named streams (see [`Stream`]).
 //!
-//! The arithmetic lives in `vellum-rng`, shared with the other game that wrote
-//! the same generator for the same reason. The *layout* stays here: this type
-//! is a field of [`World`](crate::world::World), and `World`'s RON text is the
-//! mission fingerprint, so its shape is part of the save format. The shared
-//! crate is borrowed a draw at a time rather than stored.
+//! The generator is the fleet's unified construction from `vellum-rng` —
+//! `Pcg32::seeded` (canonical PCG warm-up over a SplitMix64-mixed seed, with
+//! this game's named streams as the stream selectors) and the Lemire bounded
+//! draw — and the shared `Pcg32` type is stored directly, so the serialised
+//! generator inside `World` (whose RON text is the mission fingerprint) is
+//! the same `{ state, inc }` shape across the fleet.
 //!
-//! Note that the bounded draw is Lemire's multiply-and-shift, and the other
-//! game's is a remainder. They compute the same rejection threshold, which
-//! makes them look interchangeable in a diff; they are not, and swapping them
-//! would change every value every mission draws.
+//! This replaced the pre-unification construction (canonical seeding without
+//! the SplitMix pass) under the fleet decision `rng-unification-breaks-saves`:
+//! every fixture in this repository was re-blessed, and the share-code prefix
+//! bumped to `MUR2-` so format-1 codes are refused rather than misread.
 
 use serde::{Deserialize, Serialize};
 
@@ -42,11 +43,16 @@ impl Stream {
     }
 }
 
-/// A PCG32 (XSH-RR) generator: 64-bit state, 63-bit stream selector.
+/// The simulation's PCG32, stored as the fleet's shared generator type.
+///
+/// A thin vocabulary wrapper: the type, seeding, and draws are `vellum-rng`'s;
+/// the helper names (`pick`, `take`, `chance`) are this game's.
+/// `serde(transparent)` keeps the serialised shape exactly the inner
+/// `{ state, inc }` — which is part of the mission fingerprint.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Pcg32 {
-    state: u64,
-    inc: u64,
+    inner: vellum_rng::Pcg32,
 }
 
 impl Pcg32 {
@@ -57,66 +63,45 @@ impl Pcg32 {
 
     /// Creates a generator from a seed and an arbitrary stream selector.
     pub fn new(seed: u64, stream: u64) -> Self {
-        let (state, inc) = vellum_rng::Pcg32::canonical(seed, stream).into_parts();
-        Self { state, inc }
+        Self {
+            inner: vellum_rng::Pcg32::seeded(seed, stream),
+        }
     }
 
     /// Returns the next 32 uniformly distributed bits.
     pub fn next_u32(&mut self) -> u32 {
-        self.borrow(vellum_rng::Pcg32::next_u32)
+        self.inner.next_u32()
     }
 
     /// Returns a uniform value in `0..bound` (`bound` must be non-zero).
-    ///
-    /// Uses Lemire-style multiply-and-shift. Not interchangeable with the
-    /// remainder-based draw the other game uses: for the same state the two
-    /// return different values, which is why the shared crate keeps both under
-    /// their own names rather than offering one `below`.
     pub fn below(&mut self, bound: u32) -> u32 {
         debug_assert!(bound > 0, "Pcg32::below requires a non-zero bound");
-        self.borrow(|rng| rng.below_lemire(bound))
-    }
-
-    /// Run one draw on the shared generator and take the advanced state back.
-    ///
-    /// The fields stay here rather than being replaced by
-    /// `vellum_rng::Pcg32`, because this struct is a field of `World` and
-    /// `World`'s RON text *is* the mission fingerprint. The layout is part of
-    /// the save format; only the arithmetic is shared.
-    fn borrow<T>(&mut self, draw: impl FnOnce(&mut vellum_rng::Pcg32) -> T) -> T {
-        let mut rng = vellum_rng::Pcg32::from_parts(self.state, self.inc);
-        let result = draw(&mut rng);
-        (self.state, self.inc) = rng.into_parts();
-        result
+        self.inner.below(bound)
     }
 
     /// Returns a uniform value in the inclusive range `lo..=hi`.
     pub fn range_inclusive(&mut self, lo: u32, hi: u32) -> u32 {
-        debug_assert!(lo <= hi);
-        lo + self.below(hi - lo + 1)
+        self.inner.range_inclusive(lo, hi)
     }
 
     /// Returns true with probability `numerator / denominator`.
     pub fn chance(&mut self, numerator: u32, denominator: u32) -> bool {
-        self.below(denominator) < numerator
+        self.inner.chance(numerator, denominator)
     }
 
     /// Picks one element of a non-empty slice.
     pub fn pick<'a, T>(&mut self, items: &'a [T]) -> &'a T {
-        &items[self.below(items.len() as u32) as usize]
+        &items[self.inner.pick_index(items.len())]
     }
 
     /// Removes and returns one element of a non-empty vector.
     pub fn take<T>(&mut self, items: &mut Vec<T>) -> T {
-        items.remove(self.below(items.len() as u32) as usize)
+        items.remove(self.inner.pick_index(items.len()))
     }
 
     /// Fisher-Yates shuffle with deterministic order.
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
-        for i in (1..items.len()).rev() {
-            let j = self.below(i as u32 + 1) as usize;
-            items.swap(i, j);
-        }
+        self.inner.shuffle(items);
     }
 }
 
@@ -148,22 +133,16 @@ mod tests {
         assert_ne!(generation_values, resolution_values);
     }
 
+    /// Pinned to the fleet construction (`seeded(42, 1)`), the same constants
+    /// vellum-rng pins, so a drift fails in both places. The published PCG
+    /// reference vector lives with `vellum_rng::Pcg32::canonical`; this game
+    /// seeds through the fleet's SplitMix pass and deliberately does not
+    /// reproduce it.
     #[test]
-    fn pcg32_matches_reference_vector() {
-        // Reference values for PCG32 XSH-RR with seed=42, stream selector=54,
-        // from the canonical pcg32-demo output.
-        let mut rng = Pcg32::new(42, 54);
-        let expected = [
-            0xa15c02b7u32,
-            0x7b47f409,
-            0xba1d3330,
-            0x83d2f293,
-            0xbfa4784b,
-            0xcbed606e,
-        ];
-        for value in expected {
-            assert_eq!(rng.next_u32(), value);
-        }
+    fn sequence_is_pinned_to_the_fleet_construction() {
+        let mut rng = Pcg32::new(42, 1);
+        let first: Vec<u32> = (0..4).map(|_| rng.next_u32()).collect();
+        assert_eq!(first, [4176028549, 3950285441, 2197104919, 1103863609]);
     }
 
     #[test]

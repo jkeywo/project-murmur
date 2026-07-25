@@ -28,7 +28,7 @@ fn a_real_mission_survives_the_round_trip() {
         commands: report.commands,
     };
     let code = record.share_code();
-    assert!(code.starts_with("MUR1-"), "unexpected code: {code}");
+    assert!(code.starts_with("MUR2-"), "unexpected code: {code}");
 
     let back = MissionRecord::from_share_code(&code).expect("the code decodes");
     assert_eq!(back, record, "the code did not carry the whole record");
