@@ -32,7 +32,7 @@ wheels = [
 [[package]]
 name = "pasm"
 version = "0.1.0"
-source = { git = "https://github.com/jkeywo/vellum?subdirectory=pasm&rev=bf877d3ee69f1be2b38f0a5c4d4ece99f942f280#bf877d3ee69f1be2b38f0a5c4d4ece99f942f280" }
+source = { git = "https://github.com/jkeywo/vellum?subdirectory=pasm&rev=fad2d71f1d6cf99e089631e4c8e53180538db433#fad2d71f1d6cf99e089631e4c8e53180538db433" }
 dependencies = [
     { name = "pyyaml" },
 ]
@@ -60,7 +60,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pasm", git = "https://github.com/jkeywo/vellum?subdirectory=pasm&rev=bf877d3ee69f1be2b38f0a5c4d4ece99f942f280" }]
+requires-dist = [{ name = "pasm", git = "https://github.com/jkeywo/vellum?subdirectory=pasm&rev=fad2d71f1d6cf99e089631e4c8e53180538db433" }]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8.0" }]
