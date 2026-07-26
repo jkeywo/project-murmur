@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   fleet:
-    uses: jkeywo/vellum/.github/workflows/fleet-ci.yml@42db1797a0e5b8e1e6e073760a89f1d94677c85f
+    uses: jkeywo/vellum/.github/workflows/fleet-ci.yml@65f65917adb8cad15a782bb1cde61d2448e3b731
     with:
       # murmur-web is Ratzilla and only ever compiles for wasm32, so the lint
       # takes two passes: the host workspace without it, then it alone on its

@@ -33,11 +33,11 @@ ron = "0.12"
 # touches nothing but this file and Cargo.lock; anything else means the
 # engine changed behaviour. For local work against a checkout, use a
 # gitignored .cargo/config.toml [patch] -- see vellum's README.
-vellum-digest = { git = "https://github.com/jkeywo/vellum", rev = "fad2d71f1d6cf99e089631e4c8e53180538db433", features = ["ron-digest"] }
-vellum-grid = { git = "https://github.com/jkeywo/vellum", rev = "fad2d71f1d6cf99e089631e4c8e53180538db433" }
-vellum-replay = { git = "https://github.com/jkeywo/vellum", rev = "fad2d71f1d6cf99e089631e4c8e53180538db433" }
-vellum-rng = { git = "https://github.com/jkeywo/vellum", rev = "fad2d71f1d6cf99e089631e4c8e53180538db433" }
-vellum-strings = { git = "https://github.com/jkeywo/vellum", rev = "fad2d71f1d6cf99e089631e4c8e53180538db433" }
+vellum-digest = { git = "https://github.com/jkeywo/vellum", rev = "65f65917adb8cad15a782bb1cde61d2448e3b731", features = ["ron-digest"] }
+vellum-grid = { git = "https://github.com/jkeywo/vellum", rev = "65f65917adb8cad15a782bb1cde61d2448e3b731" }
+vellum-replay = { git = "https://github.com/jkeywo/vellum", rev = "65f65917adb8cad15a782bb1cde61d2448e3b731" }
+vellum-rng = { git = "https://github.com/jkeywo/vellum", rev = "65f65917adb8cad15a782bb1cde61d2448e3b731" }
+vellum-strings = { git = "https://github.com/jkeywo/vellum", rev = "65f65917adb8cad15a782bb1cde61d2448e3b731" }
 ratatui = { version = "0.30", default-features = false }
 clap = { version = "4", features = ["derive"] }
 
