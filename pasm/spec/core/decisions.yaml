@@ -648,7 +648,7 @@ entities:
     implementation:
       status: declared
       paths: [crates/murmur-core/src/loc.rs, crates/murmur-core/src/data.rs, data/loc/strings.csv]
-      symbols: [Catalogue, with_prefix]
+      symbols: [catalogue, resolve_text, pool, text_ids]
       tests: [crates/murmur-core/src/loc.rs]
 
   - decision: agent-text-is-bracketed-placeholder

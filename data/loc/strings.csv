@@ -1,4 +1,4 @@
-id,context,english
+id,context,text
 # ---------------------------------------------------------------------------,,
 # Project Murmur string table. Three columns: a stable id,,
 # the string appears and what fills its slots,,

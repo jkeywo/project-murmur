@@ -778,17 +778,57 @@ impl GameData {
         for room in &mut self.rooms {
             room.name = loc::text(&format!("room.{}.name", room.id)).to_string();
         }
-        let pool = |prefix: &str| -> Vec<String> {
-            loc::catalogue()
-                .with_prefix(prefix)
-                .into_iter()
-                .map(str::to_string)
-                .collect()
-        };
-        self.names.first = pool("names.first.");
-        self.names.last = pool("names.last.");
-        self.briefing.reasons = pool("briefing.reason.");
-        self.campaign.districts = pool("campaign.district.");
+        self.names.first = loc::pool("names.first.");
+        self.names.last = loc::pool("names.last.");
+        self.briefing.reasons = loc::pool("briefing.reason.");
+        self.campaign.districts = loc::pool("campaign.district.");
+    }
+
+    /// Every string ID this data set reaches without a literal: the per-spec
+    /// text [`resolve_text`](Self::resolve_text) derives from a structural
+    /// id, and the pools read by prefix.
+    ///
+    /// The coverage test takes this instead of a list of id *prefixes*, and
+    /// the difference is the point. A prefix allowlist says `item.` is
+    /// covered, so a deleted item's abandoned row stays "used" forever, and a
+    /// new item whose row was never written is only found when a mission
+    /// prints `!!MISSING STRING!!`. Expanded from the loaded data, both are
+    /// caught at test time — an orphan and an undefined id respectively.
+    ///
+    /// Kept beside `resolve_text` because the two must name the same ids; a
+    /// lookup that drifts out of this list shows up as an orphaned row.
+    pub fn text_ids(&self) -> Vec<String> {
+        let mut ids = Vec::new();
+        for venue in &self.venues {
+            ids.push(format!("venue.{}.name", venue.id));
+            ids.push(format!("venue.{}.invitation", venue.id));
+            for zone in ["public", "staff", "secure", "personal"] {
+                ids.push(format!("venue.{}.zone.{zone}", venue.id));
+            }
+        }
+        for disguise in &self.disguises {
+            ids.push(format!("disguise.{}.name", disguise.id));
+        }
+        for item in &self.items {
+            ids.push(format!("item.{}.name", item.id));
+        }
+        for spec in &self.opportunities {
+            ids.push(format!("opportunity.{}.name", spec.id));
+            ids.push(format!("opportunity.{}.risk", spec.id));
+            ids.push(format!("opportunity.{}.presentation", spec.id));
+        }
+        for room in &self.rooms {
+            ids.push(format!("room.{}.name", room.id));
+        }
+        for prefix in [
+            "names.first.",
+            "names.last.",
+            "briefing.reason.",
+            "campaign.district.",
+        ] {
+            ids.extend(loc::pool_ids(prefix));
+        }
+        ids
     }
 
     pub fn venue(&self, id: &str) -> Option<&VenueSpec> {
