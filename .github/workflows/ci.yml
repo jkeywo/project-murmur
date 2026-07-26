@@ -1,77 +1,36 @@
-# Continuous integration and Pages release.
-#
-# Every push runs the required checks (format, lints, tests, PASM model
-# validation) and builds the WebAssembly artifact. A successful push to the
-# default branch deploys that artifact to GitHub Pages; failed checks never
-# deploy.
-
+# Fleet CI caller — the workflow itself lives in vellum, pinned to a rev like
+# every other vellum dependency; a bump PR moves this rev together with the
+# Cargo and pyproject pins. Jobs: pasm validate + scan (gates), fmt / clippy
+# -D warnings / tests, Trunk web build, Pages deploy on main pushes.
 name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+# The deploy job inside fleet-ci needs pages + id-token; a called workflow can
+# only narrow what the caller grants.
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
-env:
-  CARGO_TERM_COLOR: always
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  checks:
-    name: Required checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - name: Format
-        run: cargo fmt --all --check
-      - name: Clippy (native crates)
-        run: cargo clippy --workspace --exclude murmur-web --all-targets -- -D warnings
-      - name: Clippy (web crate, wasm32)
-        run: cargo clippy -p murmur-web --target wasm32-unknown-unknown -- -D warnings
-      - name: Tests
-        run: cargo test --workspace --exclude murmur-web
-      - uses: astral-sh/setup-uv@v6
-      - name: PASM model validation
-        run: uv run pasm validate
-      - name: PASM implementation scan
-        run: uv run pasm scan --json > /dev/null
-
-  web:
-    name: Web artifact
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - uses: jetli/trunk-action@v0.5.1
-        with:
-          version: "latest"
-      - name: Build WebAssembly site
-        run: trunk build --release --public-url /project-murmur/
-        working-directory: crates/murmur-web
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: crates/murmur-web/dist
-
-  deploy:
-    name: Deploy GitHub Pages
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [checks, web]
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+  fleet:
+    uses: jkeywo/vellum/.github/workflows/fleet-ci.yml@65f65917adb8cad15a782bb1cde61d2448e3b731
+    with:
+      # murmur-web is Ratzilla and only ever compiles for wasm32, so the lint
+      # takes two passes: the host workspace without it, then it alone on its
+      # own target.
+      rust-targets: wasm32-unknown-unknown
+      clippy-command: |
+        cargo clippy --workspace --exclude murmur-web --all-targets -- -D warnings
+        cargo clippy -p murmur-web --target wasm32-unknown-unknown -- -D warnings
+      test-command: cargo test --workspace --exclude murmur-web
+      wasm-mode: trunk
+      trunk-working-directory: crates/murmur-web
